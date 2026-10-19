@@ -4,7 +4,8 @@ import { retryDelayMs } from "../src/agents/debug.js";
 import { normaliseIdea } from "../src/agents/etsyPod.js";
 import { moneyToCents } from "../src/integrations/etsy.js";
 import { usageCostUsdCents } from "../src/lib/claude.js";
-import { sanitizeSvg } from "../src/lib/design.js";
+import { DesignLayoutError, prepareDesign, sanitizeSvg } from "../src/lib/design.js";
+import sharp from "sharp";
 import { startOfDay, startOfMonth } from "../src/lib/money.js";
 import { splitMessage } from "../src/lib/telegram.js";
 import { allGuides, diagnose } from "../src/lib/troubleshoot.js";
@@ -59,9 +60,14 @@ describe("sanitizeSvg", () => {
   it("allows internal gradient references", () => {
     expect(() => sanitizeSvg('<svg><linearGradient id="g"/><rect fill="url(#g)"/></svg>')).not.toThrow();
   });
+  it("allows reusing a shape within the file (design printed twice)", () => {
+    expect(() => sanitizeSvg('<svg><g id="d"><text>Hi</text></g><use href="#d" x="1350"/><use xlink:href="#d"/></svg>')).not.toThrow();
+  });
   it.each([
     "<svg><script>alert(1)</script></svg>",
     '<svg><image href="http://x/y.png"/></svg>',
+    '<svg><use href="https://evil.example/x.svg#a"/></svg>',
+    "<svg><use xlink:href='data:image/svg+xml,abc'/></svg>",
     '<svg><rect onload="x()"/></svg>',
     '<svg><rect fill="url(http://evil)"/></svg>',
     "<svg><foreignObject/></svg>",
@@ -70,6 +76,27 @@ describe("sanitizeSvg", () => {
   });
   it("rejects output without svg", () => {
     expect(() => sanitizeSvg("sorry")).toThrow();
+  });
+});
+
+describe("prepareDesign", () => {
+  const svg = (inner: string) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1350 1050">${inner}</svg>`;
+
+  it("lays a clean design out twice on the full print canvas", async () => {
+    const png = await prepareDesign(svg('<rect x="500" y="400" width="350" height="250" fill="#123"/>'));
+    const meta = await sharp(png).metadata();
+    expect([meta.width, meta.height]).toEqual([2700, 1050]);
+    const { data, info } = await sharp(png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const alphaAt = (x: number, y: number) => data[(y * info.width + x) * 4 + 3];
+    expect(alphaAt(675, 525)).toBeGreaterThan(200); // left copy
+    expect(alphaAt(2025, 525)).toBeGreaterThan(200); // right copy
+    expect(alphaAt(1350, 525)).toBe(0); // gap between them
+  });
+
+  it("rejects text that runs off the canvas, naming the edge", async () => {
+    const wide = svg('<text x="-200" y="525" font-family="sans-serif" font-size="300">WAY TOO LONG FOR ONE SIDE</text>');
+    await expect(prepareDesign(wide)).rejects.toBeInstanceOf(DesignLayoutError);
+    await expect(prepareDesign(wide)).rejects.toThrow(/left/);
   });
 });
 

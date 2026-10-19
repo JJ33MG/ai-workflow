@@ -9,7 +9,8 @@
     "test": "vitest run",
     "db:migrate": "prisma migrate dev",
     "agent:run": "tsx src/cli.ts",
-    "printful:catalog": "tsx src/scripts/printfulCatalog.ts"
+    "printful:catalog": "tsx src/scripts/printfulCatalog.ts",
+    "launch-pack": "tsx src/scripts/exportLaunchPack.ts"
   },
   "license": "UNLICENSED",
   "dependencies": {

@@ -8,7 +8,7 @@ import * as printful from "../integrations/printful.js";
 import { registerApprovalExecutor, requestApproval } from "../lib/approvals.js";
 import { recordCost } from "../lib/budget.js";
 import { askJson, askText } from "../lib/claude.js";
-import { designUrl, designsDir, renderDesign, sanitizeSvg } from "../lib/design.js";
+import { DesignLayoutError, designUrl, designsDir, prepareDesign, sanitizeSvg, saveDesign, sideSize } from "../lib/design.js";
 import { toEurCents } from "../lib/money.js";
 import { enqueue } from "../lib/tasks.js";
 import type { AgentDefinition, TaskContext } from "./types.js";
@@ -85,20 +85,7 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
   for (const raw of ideas.slice(0, count)) {
     const idea = normaliseIdea(raw);
     try {
-      const svg = sanitizeSvg(
-        await askText({
-          agentId: ID,
-          purpose: "pod_design_svg",
-          effort: "medium",
-          system:
-            "You are a typography designer. Output one standalone SVG document and nothing else. " +
-            `Use viewBox="0 0 ${config.pod.designWidth} ${config.pod.designHeight}", a transparent background, ` +
-            "only <text>, <tspan>, <path>, <rect>, <circle>, <line>, <polygon>, <g> and gradients. " +
-            "Use only generic font families (serif, sans-serif, monospace). No images, links, scripts or external references. " +
-            "Dark ink colours that print well on a white mug. Keep all content inside the viewBox with generous margins.",
-          prompt: `Slogan: "${idea.slogan}"\nNiche: ${idea.niche}\nBrief: ${idea.designBrief}`,
-        }),
-      );
+      const { svg, png } = await designWithRetry(idea);
       const listing = await db.listing.create({
         data: {
           niche: idea.niche,
@@ -112,7 +99,7 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
           printfulVariant: config.printful.variantId || null,
         },
       });
-      const { file } = await renderDesign(svg, listing.id);
+      const file = await saveDesign(png, listing.id);
       await db.listing.update({ where: { id: listing.id }, data: { designFile: file } });
       created.push(listing.id);
       await log.info(`Draft design created: ${idea.title}`, { listingId: listing.id, niche: idea.niche }, taskId);
@@ -123,6 +110,47 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
 
   if (created.length > 0) await enqueue(ID, "upload_listings", { listingIds: created });
   return { created: created.length };
+}
+
+const DESIGN_ATTEMPTS = 2;
+
+/**
+ * Asks Claude for one side of the mug, renders it and checks nothing is cut off.
+ * Claude can't measure rendered text, so a layout miss is sent back once as feedback.
+ */
+async function designWithRetry(idea: Idea): Promise<{ svg: string; png: Buffer }> {
+  const side = sideSize();
+  const mx = Math.round(side.width * 0.08);
+  const my = Math.round(side.height * 0.08);
+  let feedback = "";
+  for (let attempt = 1; ; attempt++) {
+    const svg = sanitizeSvg(
+      await askText({
+        agentId: ID,
+        purpose: "pod_design_svg",
+        effort: "medium",
+        system:
+          "You are a typography designer. Output one standalone SVG document and nothing else. " +
+          `It is one side of a mug: use viewBox="0 0 ${side.width} ${side.height}" and a transparent background; ` +
+          "the same design is printed on the other side automatically, so draw it once. " +
+          "Use only <text>, <tspan>, <path>, <rect>, <circle>, <line>, <polygon>, <g>, <defs>, <use href=\"#id\"> and gradients. " +
+          "Use only generic font families (serif, sans-serif, monospace). No images, links, scripts or external references. " +
+          "Dark ink colours that print well on a white mug. Keep icons and ornaments clear of the letters, never on top of them. " +
+          `Keep every element inside x ${mx}–${side.width - mx} and y ${my}–${side.height - my}. ` +
+          "You cannot measure text, so size it conservatively: a line of N characters needs a font-size of at most " +
+          `${Math.round(((side.width - 2 * mx) / 0.62) / 10)}0/N for sans-serif capitals; split long slogans over more lines.`,
+        prompt: `Slogan: "${idea.slogan}"\nNiche: ${idea.niche}\nBrief: ${idea.designBrief}${feedback}`,
+      }),
+    );
+    try {
+      return { svg, png: await prepareDesign(svg) };
+    } catch (err) {
+      if (!(err instanceof DesignLayoutError) || attempt >= DESIGN_ATTEMPTS) throw err;
+      feedback =
+        `\n\nYour previous version was cut off at the ${err.edges.join(" and ")} edge. ` +
+        "Make the text smaller or split it over more lines, and keep clear of the margins.";
+    }
+  }
 }
 
 async function uploadListings(payload: Record<string, unknown>, { log, taskId }: TaskContext) {
