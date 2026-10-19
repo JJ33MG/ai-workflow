@@ -124,13 +124,7 @@ describe.skipIf(!url)("with database", async () => {
 
   it("refuses chat without a Claude key", async () => {
     const { sendChat, ChatUnavailableError } = await import("../src/chat.js");
-    const saved = process.env.ANTHROPIC_API_KEY;
-    delete process.env.ANTHROPIC_API_KEY;
-    try {
-      await expect(sendChat("ceo", "hi")).rejects.toBeInstanceOf(ChatUnavailableError);
-    } finally {
-      if (saved) process.env.ANTHROPIC_API_KEY = saved;
-    }
+    await expect(sendChat("ceo", "hi")).rejects.toBeInstanceOf(ChatUnavailableError);
   });
 
   it("summarises businesses, including planned ones", async () => {
