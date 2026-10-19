@@ -28,6 +28,18 @@ const RULES: Rule[] = [
     ],
   },
   {
+    id: "claude-credits",
+    match: /credit balance is too low/i,
+    area: "Claude",
+    title: "Anthropic account has no credit",
+    why: "The API key is valid, but the Anthropic account behind it has no prepaid credit left, so every Claude call is refused.",
+    fix: [
+      "Go to console.anthropic.com → Settings → Billing and buy credits (or turn on auto-reload).",
+      "Calls work again within a minute; press Retry on the failed tasks.",
+      "Keep DAILY_API_BUDGET_EUR set so a busy day can't use up the balance.",
+    ],
+  },
+  {
     id: "claude-auth",
     match: /(authentication_error|invalid x-api-key|Could not resolve authentication|ANTHROPIC_API_KEY|401[^\n]*anthropic)/i,
     area: "Claude",

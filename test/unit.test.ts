@@ -13,6 +13,7 @@ describe("diagnose", () => {
   it.each([
     ["Daily API budget reached: spent 500 of 500 EUR cents", "budget-reached"],
     ['401 {"type":"error","error":{"type":"authentication_error"}}', "claude-auth"],
+    ["400 Your credit balance is too low to access the Anthropic API.", "claude-credits"],
     ["Etsy is not connected. Open /auth/etsy/start to authorise the shop.", "etsy-not-connected"],
     ['Etsy POST /shops/1/listings failed: 400 {"error":"shipping_profile_id"}', "etsy-bad-listing"],
     ["Etsy GET /shops/1/receipts?x=1 failed: 401 invalid token", "etsy-token"],
