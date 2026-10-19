@@ -104,6 +104,10 @@ describe.skipIf(!url)("with database", async () => {
     const queued = await db.task.findFirstOrThrow({ where: { agentId: "etsy-pod", type: "create_listings" } });
     expect(queued.payload).toEqual({ count: 20 }); // capped
 
+    await start("etsy-pod").run({ agent: "etsy-pod", task: "create_listings", count: 1, instructions: "  dentists  " });
+    const directed = await db.task.findFirstOrThrow({ where: { type: "create_listings" }, orderBy: { createdAt: "desc" } });
+    expect(directed.payload).toEqual({ count: 1, instructions: "dentists" });
+
     await expect(start("etsy-pod").run({ agent: "etsy-pod", task: "publish_listings" })).rejects.toThrow(/Not allowed/);
     await expect(start("etsy-pod").run({ agent: "ceo", task: "briefing" })).rejects.toThrow(/Not allowed/);
     // The CEO works company-wide and may start other agents' jobs.

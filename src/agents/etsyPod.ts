@@ -61,6 +61,7 @@ async function knowledgeDigest(): Promise<string> {
 
 async function createListings(payload: Record<string, unknown>, { log, taskId }: TaskContext) {
   const count = Number(payload.count ?? config.pod.listingsPerRun);
+  const instructions = typeof payload.instructions === "string" ? payload.instructions.slice(0, 500) : "";
   const digest = await knowledgeDigest();
 
   const { ideas } = await askJson({
@@ -74,7 +75,8 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
       "Never use trademarks, brand names, celebrities, song lyrics, film quotes or copyrighted characters. " +
       "Write titles and descriptions for real buyers, not keyword lists. Descriptions must state that the mug is printed on demand by a production partner.",
     prompt:
-      `${digest}\n\nPropose ${count} new mug designs. For each give: niche, slogan (the exact text printed on the mug, max ~8 words), ` +
+      `${digest}\n\n${instructions ? `Jarne's direction for this batch (follow it): ${instructions}\n\n` : ""}` +
+      `Propose ${count} new mug designs. For each give: niche, slogan (the exact text printed on the mug, max ~8 words), ` +
       "designBrief (layout and typographic style), title (≤140 chars), description (3 short paragraphs including size 11oz, dishwasher and microwave safe), " +
       "and 13 Etsy tags (each ≤20 chars).",
   });

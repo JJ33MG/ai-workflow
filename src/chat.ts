@@ -45,6 +45,10 @@ export function toolsFor(agentId: string): ChatTool[] {
             agent: { type: "string", description: "Agent id, e.g. etsy-pod" },
             task: { type: "string", description: "Job name, e.g. create_listings" },
             count: { type: "integer", description: "Optional: how many items, for jobs that create several" },
+            instructions: {
+              type: "string",
+              description: "Optional: Jarne's direction for this run, e.g. the theme or niche to design for",
+            },
           },
           required: ["agent", "task"],
         },
@@ -56,7 +60,11 @@ export function toolsFor(agentId: string): ChatTool[] {
           throw new Error(`Not allowed from chat: ${target}:${task}. Allowed: ${startable.join(", ")}`);
         }
         const count = Number(input.count);
-        const payload = Number.isInteger(count) && count > 0 ? { count: Math.min(count, 20) } : {};
+        const payload: Record<string, unknown> = {};
+        if (Number.isInteger(count) && count > 0) payload.count = Math.min(count, 20);
+        if (typeof input.instructions === "string" && input.instructions.trim()) {
+          payload.instructions = input.instructions.trim().slice(0, 500);
+        }
         const queued = await enqueue(target, task, payload);
         await log.info(`Chat: queued ${target}:${task}`, payload);
         return `Queued ${target}:${task} (task ${queued.id}). It starts within 15 seconds.`;
