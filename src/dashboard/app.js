@@ -32,7 +32,7 @@ function saveToken(v) {
 function render() {
   const d = state.data;
   if (!d) return;
-  $("mode-badge").textContent = window.AGENCY_PREVIEW ? "Example data" : d.dryRun ? "Dry run" : "Live";
+  $("mode-badge").textContent = window.AGENCY_PREVIEW ? (window.AGENCY_PREVIEW.label ?? "Example data") : d.dryRun ? "Dry run" : "Live";
   $("mode-badge").dataset.live = String(!d.dryRun && !window.AGENCY_PREVIEW);
   $("updated").textContent = `Updated ${new Date(d.generatedAt).toLocaleTimeString()}`;
   const count = $("problem-count");
