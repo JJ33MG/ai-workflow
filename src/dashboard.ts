@@ -1,4 +1,5 @@
 import { agents as registry } from "./agents/index.js";
+import { BUSINESSES, businessById } from "./businesses.js";
 import { MONTHLY_GOAL_CENTS } from "./agents/ceo.js";
 import { config } from "./config.js";
 import { db } from "./db.js";
@@ -123,7 +124,8 @@ export async function buildDashboard(now = new Date()) {
         id: row.id,
         name: row.name,
         phase: row.phase,
-        business: def?.business ?? "Unknown",
+        businessId: def?.businessId ?? null,
+        business: businessById(def?.businessId)?.name ?? "Whole company",
         description: def?.description ?? "",
         enabled: row.enabled,
         health,
@@ -215,6 +217,50 @@ export async function buildDashboard(now = new Date()) {
     else bucket.failed++;
   }
 
+  // ---- Businesses ----
+  const since30d = new Date(now.getTime() - 30 * DAY);
+  const businesses = await Promise.all(
+    BUSINESSES.map(async (b) => {
+      const team = agents.filter((a) => a.businessId === b.id);
+      const ids = team.map((a) => a.id);
+      const inMonth = (rows: { agentId: string; amountCents: number; currency: string }[]) =>
+        sum(rows.filter((r) => ids.includes(r.agentId)));
+      const recentSales = ids.length
+        ? await db.sale.count({ where: { agentId: { in: ids }, occurredAt: { gte: since30d } } })
+        : 0;
+      const products = b.products && ids.length ? await b.products() : [];
+      const productsByStatus: Record<string, number> = {};
+      for (const p of products) productsByStatus[p.status] = (productsByStatus[p.status] ?? 0) + 1;
+      const worst = team.some((a) => a.severity === "error") ? "error" : team.some((a) => a.severity === "warn") ? "warn" : "ok";
+      const revenueMonth = inMonth(salesMonth);
+      const costsMonthB = inMonth(costsMonth);
+      return {
+        id: b.id,
+        name: b.name,
+        kind: b.kind,
+        description: b.description,
+        plan: b.plan,
+        phase: b.phase,
+        channels: b.channels,
+        stage: ids.length === 0 ? "planned" : recentSales > 0 ? "earning" : "setting-up",
+        health: (ids.length === 0 ? "off" : worst) as CheckStatus,
+        agents: team.map((a) => ({ id: a.id, name: a.name, health: a.health, severity: a.severity })),
+        revenueToday: inMonth(salesToday),
+        revenueMonth,
+        costsMonth: costsMonthB,
+        profitMonth: revenueMonth - costsMonthB,
+        salesMonth: salesMonth.filter((s) => ids.includes(s.agentId)).length,
+        targetCents: b.targetCents,
+        products: { total: products.length, byStatus: productsByStatus },
+        openProblems: problems.filter((p) => ids.includes(p.agentId)).length,
+      };
+    }),
+  );
+  const companyIds = agents.filter((a) => a.businessId === null).map((a) => a.id);
+  const overheadMonth = sum(costsMonth.filter((c) => companyIds.includes(c.agentId)));
+
+  const knowledge = await db.knowledge.findMany({ orderBy: [{ updatedAt: "desc" }], take: 100 });
+
   // ---- Overall verdict ----
   const errorChecks = checks.filter((c) => c.status === "error");
   const failingAgents = agents.filter((a) => a.severity === "error");
@@ -242,7 +288,8 @@ export async function buildDashboard(now = new Date()) {
     serverStartedAt: schedulerState.startedAt,
     overall,
     checks,
-    money,
+    money: { ...money, overheadMonth },
+    businesses,
     agents,
     problems,
     recentIssues,
@@ -250,6 +297,61 @@ export async function buildDashboard(now = new Date()) {
     activity,
     chart: [...days.values()],
     guides: allGuides(),
+    knowledge: knowledge.map((k) => ({
+      id: k.id,
+      agentId: k.agentId,
+      agentName: nameOf(k.agentId),
+      kind: k.kind,
+      title: k.title,
+      body: k.body,
+      tags: k.tags,
+      updatedAt: k.updatedAt,
+    })),
+  };
+}
+
+/** Everything about one business: money over time, products, sales, team. */
+export async function buildBusinessDetail(id: string, now = new Date()) {
+  const def = businessById(id);
+  if (!def) return null;
+  const team = [...registry.values()].filter((a) => a.businessId === id).map((a) => a.id);
+  const from = startOfDay(new Date(now.getTime() - 29 * DAY), config.timezone);
+  const [sales, costs, recentSales, costBreakdown] = await Promise.all([
+    db.sale.findMany({ where: { agentId: { in: team }, occurredAt: { gte: from } } }),
+    db.cost.findMany({ where: { agentId: { in: team }, occurredAt: { gte: from } } }),
+    db.sale.findMany({ where: { agentId: { in: team } }, orderBy: { occurredAt: "desc" }, take: 25 }),
+    db.cost.findMany({ where: { agentId: { in: team }, occurredAt: { gte: startOfMonth(now, config.timezone) } } }),
+  ]);
+  const days = new Map<string, { date: string; revenue: number; costs: number }>();
+  for (let i = 29; i >= 0; i--) {
+    const key = dayKey(new Date(now.getTime() - i * DAY));
+    days.set(key, { date: key, revenue: 0, costs: 0 });
+  }
+  for (const s of sales) {
+    const b = days.get(dayKey(s.occurredAt));
+    if (b) b.revenue += toEurCents(s.amountCents, s.currency);
+  }
+  for (const c of costs) {
+    const b = days.get(dayKey(c.occurredAt));
+    if (b) b.costs += toEurCents(c.amountCents, c.currency);
+  }
+  const byCategory: Record<string, number> = {};
+  for (const c of costBreakdown) byCategory[c.category] = (byCategory[c.category] ?? 0) + toEurCents(c.amountCents, c.currency);
+
+  return {
+    id,
+    series: [...days.values()].map((d) => ({ ...d, revenue: Math.round(d.revenue), costs: Math.round(d.costs) })),
+    costsByCategory: byCategory,
+    products: def.products && team.length ? await def.products() : [],
+    sales: recentSales.map((s) => ({
+      id: s.id,
+      source: s.source,
+      externalId: s.externalId,
+      amountCents: s.amountCents,
+      currency: s.currency,
+      occurredAt: s.occurredAt,
+      items: ((s.data as { transactions?: { quantity: number }[] } | null)?.transactions ?? []).reduce((n, t) => n + t.quantity, 0),
+    })),
   };
 }
 

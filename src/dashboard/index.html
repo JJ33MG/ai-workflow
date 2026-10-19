@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Agency Brain Dashboard</title>
+    <title>Agency Brain</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="styles.css" />
   </head>
@@ -18,31 +18,41 @@
       </form>
     </div>
 
-    <div id="app" hidden>
-      <header class="topbar">
+    <div id="app" class="shell" hidden>
+      <aside class="sidebar">
         <div class="brand">
           <span class="brand-mark" aria-hidden="true">◆</span>
           <span>Agency Brain</span>
           <span id="mode-badge" class="badge"></span>
         </div>
-        <nav class="tabs" role="tablist">
-          <button role="tab" data-tab="overview" aria-selected="true">Overview</button>
-          <button role="tab" data-tab="agents">Agents</button>
-          <button role="tab" data-tab="problems">Problems <span id="problem-count" class="count" hidden></span></button>
-          <button role="tab" data-tab="guide">Fix guide</button>
-          <button role="tab" data-tab="activity">Activity</button>
+        <div id="side-status" class="side-status"></div>
+        <nav class="nav" aria-label="Sections">
+          <button data-section="overview" aria-current="true">Overview</button>
+          <button data-section="businesses">Businesses</button>
+          <button data-section="agents">Agents</button>
+          <button data-section="chat">Chat</button>
+          <button data-section="problems">Problems <span id="problem-count" class="count" hidden></span></button>
+          <button data-section="brain">Shared brain</button>
+          <button data-section="activity">Activity</button>
+          <button data-section="guide">Fix guide</button>
         </nav>
-        <div class="topbar-actions">
+        <div class="side-foot">
           <span id="updated" class="muted"></span>
-          <button id="refresh" class="btn" title="Refresh now">↻ Refresh</button>
-          <button id="logout" class="btn btn-ghost" title="Forget the token on this device">Sign out</button>
+          <div class="side-actions">
+            <button id="refresh" class="btn btn-sm">↻ Refresh</button>
+            <button id="logout" class="btn btn-sm btn-ghost">Sign out</button>
+          </div>
         </div>
-      </header>
+      </aside>
 
       <main>
-        <section id="tab-overview" class="tab" role="tabpanel">
+        <section id="section-overview" class="section">
           <div id="banner" class="banner"></div>
           <div id="kpis" class="kpis"></div>
+          <div class="panel">
+            <h2>Businesses</h2>
+            <div id="overview-businesses" class="biz-grid"></div>
+          </div>
           <div class="grid-2">
             <div class="panel">
               <h2>Systems</h2>
@@ -50,7 +60,7 @@
             </div>
             <div class="panel">
               <h2>Agents</h2>
-              <div id="agent-summary" class="agent-summary"></div>
+              <div id="agent-summary"></div>
             </div>
           </div>
           <div class="grid-2">
@@ -65,11 +75,30 @@
           </div>
         </section>
 
-        <section id="tab-agents" class="tab" role="tabpanel" hidden>
-          <div id="agents" class="agent-cards"></div>
+        <section id="section-businesses" class="section" hidden>
+          <div id="business-picker" class="picker" role="group" aria-label="Business"></div>
+          <div id="business-detail" class="stack"></div>
         </section>
 
-        <section id="tab-problems" class="tab" role="tabpanel" hidden>
+        <section id="section-agents" class="section" hidden>
+          <div id="agents" class="stack"></div>
+        </section>
+
+        <section id="section-chat" class="section" hidden>
+          <div class="chat">
+            <div id="chat-agents" class="chat-list" role="group" aria-label="Agents"></div>
+            <div class="chat-main panel">
+              <div id="chat-head" class="chat-head"></div>
+              <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
+              <form id="chat-form" class="chat-form">
+                <textarea id="chat-input" rows="2" placeholder="Message the agent… (Enter to send, Shift+Enter for a new line)" aria-label="Message"></textarea>
+                <button id="chat-send" type="submit" class="btn btn-primary">Send</button>
+              </form>
+            </div>
+          </div>
+        </section>
+
+        <section id="section-problems" class="section" hidden>
           <div class="panel">
             <h2>Failed tasks</h2>
             <p class="muted">Each failure shows the exact error, what it means and how to fix it. "Retrying" ones are handled automatically; "Needs you" ones gave up.</p>
@@ -81,22 +110,23 @@
           </div>
         </section>
 
-        <section id="tab-guide" class="tab" role="tabpanel" hidden>
-          <div class="panel">
-            <h2>Setup checklist</h2>
-            <p class="muted">What still has to be set up or fixed for everything to run.</p>
-            <div id="setup"></div>
-          </div>
+        <section id="section-brain" class="section" hidden>
           <div class="panel">
             <div class="panel-head">
-              <h2>Troubleshooting guide</h2>
-              <input id="guide-search" type="search" placeholder="Search errors, e.g. Etsy 401" />
+              <div>
+                <h2>Shared brain</h2>
+                <p class="muted flush">What the agents have learned: winning niches, hooks, fixes and lessons. Every agent reads this before it works.</p>
+              </div>
+              <div class="filters">
+                <select id="brain-kind" aria-label="Kind"></select>
+                <input id="brain-search" type="search" placeholder="Search" aria-label="Search the shared brain" />
+              </div>
             </div>
-            <div id="guides"></div>
+            <div id="brain"></div>
           </div>
         </section>
 
-        <section id="tab-activity" class="tab" role="tabpanel" hidden>
+        <section id="section-activity" class="section" hidden>
           <div class="panel">
             <div class="panel-head">
               <h2>Recent activity</h2>
@@ -111,6 +141,21 @@
               </div>
             </div>
             <div id="activity"></div>
+          </div>
+        </section>
+
+        <section id="section-guide" class="section" hidden>
+          <div class="panel">
+            <h2>Setup checklist</h2>
+            <p class="muted">What still has to be set up or fixed for everything to run.</p>
+            <div id="setup"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Troubleshooting guide</h2>
+              <input id="guide-search" type="search" placeholder="Search errors, e.g. Etsy 401" aria-label="Search the guide" />
+            </div>
+            <div id="guides"></div>
           </div>
         </section>
       </main>

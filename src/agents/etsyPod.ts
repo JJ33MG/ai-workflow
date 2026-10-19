@@ -303,7 +303,8 @@ export const etsyPodAgent: AgentDefinition = {
   id: ID,
   name: "Etsy / Print-on-Demand Agent",
   phase: 1,
-  business: "Etsy shop (print-on-demand mugs, fulfilled by Printful)",
+  businessId: "etsy-pod",
+  chatTasks: ["create_listings", "upload_listings", "sync_sales"],
   description: "Finds gift niches, designs typography mugs, lists them on Etsy and turns Etsy sales into Printful orders.",
   dependsOn: ["database", "claude", "etsy", "printful"],
   taskInfo: {

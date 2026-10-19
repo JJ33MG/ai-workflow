@@ -15,6 +15,9 @@ Node 22 + TypeScript (ESM, run with `tsx`), Express 5, Prisma 5 + PostgreSQL, no
 - Money: sales in integer cents; costs in fractional cents (API calls cost less than a cent). Convert with `toEurCents`.
 - Respect `DRY_RUN`: no external writes while it is true.
 - Imports use `.js` extensions (NodeNext).
+- Businesses live in `src/businesses.ts`; an agent's `businessId` ties its sales and costs to a business.
+- Chat tools (`src/chat.ts`) may only start jobs listed in an agent's `chatTasks`. Never add a job that spends money there.
+- Dashboard frontend (`src/dashboard/`) is plain ES modules with no build step. Insert server text with `h()` (text nodes), never `innerHTML`.
 
 ## Checks
 

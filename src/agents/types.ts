@@ -11,12 +11,14 @@ export interface AgentDefinition {
   id: string;
   name: string;
   phase: number;
-  /** Which business (or "All businesses") the agent works for; shown on the dashboard. */
-  business: string;
+  /** The business it works for (see src/businesses.ts); null = company-wide. */
+  businessId: string | null;
   description: string;
   /** Integrations the agent needs, by health-check id (see lib/health.ts). */
   dependsOn: string[];
   handlers: Record<string, TaskHandler>;
   /** Plain-language description of each task type, keyed like `handlers`. */
   taskInfo: Record<string, string>;
+  /** Tasks the agent may start itself when asked in chat. Anything that spends money is left out. */
+  chatTasks: string[];
 }

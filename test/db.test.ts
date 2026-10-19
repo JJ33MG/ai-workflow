@@ -15,7 +15,7 @@ describe.skipIf(!url)("with database", async () => {
 
   beforeAll(syncAgents);
   beforeEach(async () => {
-    for (const t of ["task", "log", "sale", "cost", "approval", "knowledge"] as const) {
+    for (const t of ["task", "log", "sale", "cost", "approval", "knowledge", "chatMessage"] as const) {
       await (db[t] as { deleteMany: () => Promise<unknown> }).deleteMany();
     }
   });
@@ -94,6 +94,55 @@ describe.skipIf(!url)("with database", async () => {
     expect(d.problems[0].guide.id).toBe("printful-order");
     expect(d.overall.status).toBe("error");
     expect(d.chart).toHaveLength(14);
+  });
+
+  it("lets chat start only allowed jobs, never money-spending ones", async () => {
+    const { toolsFor } = await import("../src/chat.js");
+    const start = (agentId: string) => toolsFor(agentId).find((t) => t.definition.name === "start_task")!;
+
+    await expect(start("etsy-pod").run({ agent: "etsy-pod", task: "create_listings", count: 50 })).resolves.toContain("Queued");
+    const queued = await db.task.findFirstOrThrow({ where: { agentId: "etsy-pod", type: "create_listings" } });
+    expect(queued.payload).toEqual({ count: 20 }); // capped
+
+    await expect(start("etsy-pod").run({ agent: "etsy-pod", task: "publish_listings" })).rejects.toThrow(/Not allowed/);
+    await expect(start("etsy-pod").run({ agent: "ceo", task: "briefing" })).rejects.toThrow(/Not allowed/);
+    // The CEO works company-wide and may start other agents' jobs.
+    await expect(start("ceo").run({ agent: "etsy-pod", task: "sync_sales" })).resolves.toContain("Queued");
+  });
+
+  it("saves chat notes to the shared brain", async () => {
+    const { toolsFor } = await import("../src/chat.js");
+    const save = toolsFor("ceo").find((t) => t.definition.name === "save_to_brain")!;
+    await save.run({ kind: "note", title: "Focus", body: "Etsy first" });
+    const row = await db.knowledge.findFirstOrThrow({ where: { title: "Focus" } });
+    expect(row.agentId).toBe("ceo");
+  });
+
+  it("refuses chat without a Claude key", async () => {
+    const { sendChat, ChatUnavailableError } = await import("../src/chat.js");
+    const saved = process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    try {
+      await expect(sendChat("ceo", "hi")).rejects.toBeInstanceOf(ChatUnavailableError);
+    } finally {
+      if (saved) process.env.ANTHROPIC_API_KEY = saved;
+    }
+  });
+
+  it("summarises businesses, including planned ones", async () => {
+    const { buildDashboard, buildBusinessDetail } = await import("../src/dashboard.js");
+    await db.sale.create({
+      data: { agentId: "etsy-pod", source: "etsy", externalId: "b1", amountCents: 1799, currency: "EUR", occurredAt: new Date() },
+    });
+    const d = await buildDashboard();
+    const etsy = d.businesses.find((b) => b.id === "etsy-pod")!;
+    expect(etsy.stage).toBe("earning");
+    expect(etsy.revenueMonth).toBe(1799);
+    expect(d.businesses.find((b) => b.id === "cartoon-content")!.stage).toBe("planned");
+    const detail = await buildBusinessDetail("etsy-pod");
+    expect(detail!.series).toHaveLength(30);
+    expect(detail!.series.at(-1)!.revenue).toBe(1799);
+    expect(await buildBusinessDetail("nope")).toBeNull();
   });
 
   it("blocks Claude calls once the daily budget is spent", async () => {

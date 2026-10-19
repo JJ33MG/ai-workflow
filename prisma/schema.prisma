@@ -152,3 +152,15 @@ model Setting {
   value     Json
   updatedAt DateTime @updatedAt
 }
+
+/// Conversation between Jarne and one agent (the dashboard's Chat tab).
+model ChatMessage {
+  id        String   @id @default(cuid())
+  agentId   String
+  role      String // user | assistant
+  content   String
+  actions   Json? // what the agent did while answering, e.g. queued tasks
+  createdAt DateTime @default(now())
+
+  @@index([agentId, createdAt])
+}

@@ -88,4 +88,80 @@ export async function askJson<S extends z.ZodType>(opts: AskOptions & { schema: 
   return response.parsed_output as z.infer<S>;
 }
 
+export interface ChatTool {
+  definition: Anthropic.Tool;
+  run: (input: Record<string, unknown>) => Promise<string>;
+}
+
+export interface ToolCall {
+  name: string;
+  input: Record<string, unknown>;
+  result: string;
+  isError: boolean;
+}
+
+/**
+ * A conversation turn where Claude may use tools (agent chat). Loops until Claude
+ * answers in text, at most `maxSteps` model calls. Every call is budgeted and costed.
+ */
+export async function chatWithTools(opts: {
+  agentId: string;
+  purpose: string;
+  system: string;
+  messages: Anthropic.MessageParam[];
+  tools: ChatTool[];
+  effort?: Effort;
+  maxSteps?: number;
+}): Promise<{ text: string; toolCalls: ToolCall[] }> {
+  const messages = [...opts.messages];
+  const byName = new Map(opts.tools.map((t) => [t.definition.name, t]));
+  const toolCalls: ToolCall[] = [];
+
+  for (let step = 0; step < (opts.maxSteps ?? 6); step++) {
+    await assertApiBudget();
+    const response = await getClient().messages.create({
+      model: config.claude.model,
+      max_tokens: 16000,
+      system: opts.system,
+      output_config: { effort: opts.effort ?? "medium" },
+      tools: opts.tools.map((t) => t.definition),
+      messages,
+    });
+    await track(opts.agentId, opts.purpose, response);
+
+    if (response.stop_reason === "pause_turn") {
+      messages.push({ role: "assistant", content: response.content });
+      continue;
+    }
+    const uses = response.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+    if (response.stop_reason !== "tool_use" || uses.length === 0) {
+      const text = response.content
+        .map((b) => (b.type === "text" ? b.text : ""))
+        .join("")
+        .trim();
+      return { text, toolCalls };
+    }
+
+    messages.push({ role: "assistant", content: response.content });
+    const results: Anthropic.ToolResultBlockParam[] = [];
+    for (const use of uses) {
+      const input = (use.input ?? {}) as Record<string, unknown>;
+      const tool = byName.get(use.name);
+      let result: string;
+      let isError = false;
+      try {
+        if (!tool) throw new Error(`Unknown tool ${use.name}`);
+        result = await tool.run(input);
+      } catch (err) {
+        result = err instanceof Error ? err.message : String(err);
+        isError = true;
+      }
+      toolCalls.push({ name: use.name, input, result, isError });
+      results.push({ type: "tool_result", tool_use_id: use.id, content: result, is_error: isError });
+    }
+    messages.push({ role: "user", content: results });
+  }
+  throw new Error("The agent used too many steps without answering; try a more specific question");
+}
+
 export const isClaudeConfigured = () => Boolean(process.env.ANTHROPIC_API_KEY);

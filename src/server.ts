@@ -6,7 +6,8 @@ import { collectBriefingData, formatBriefing } from "./agents/ceo.js";
 import { agents, syncAgents } from "./agents/index.js";
 import { handleCommand } from "./commands.js";
 import { config } from "./config.js";
-import { buildDashboard } from "./dashboard.js";
+import { ChatUnavailableError, chatHistory, sendChat } from "./chat.js";
+import { buildBusinessDetail, buildDashboard } from "./dashboard.js";
 import { db } from "./db.js";
 import * as etsy from "./integrations/etsy.js";
 import { decide } from "./lib/approvals.js";
@@ -47,6 +48,47 @@ app.use("/dashboard", express.static(dashboardDir));
 
 app.get("/api/dashboard", requireAdmin, async (_req, res) => {
   res.json(await buildDashboard());
+});
+
+app.get("/api/businesses/:id", requireAdmin, async (req, res) => {
+  const detail = await buildBusinessDetail(String(req.params.id));
+  if (!detail) {
+    res.status(404).json({ error: "No such business" });
+    return;
+  }
+  res.json(detail);
+});
+
+// Chat with an agent. A reply can take up to a minute when the agent uses tools.
+app.get("/api/agents/:id/chat", requireAdmin, async (req, res) => {
+  const { id } = req.params as { id: string };
+  if (!agents.has(id)) {
+    res.status(404).json({ error: "No such agent" });
+    return;
+  }
+  res.json(await chatHistory(id));
+});
+
+app.post("/api/agents/:id/chat", requireAdmin, async (req, res) => {
+  const { id } = req.params as { id: string };
+  const text = String((req.body as { message?: string }).message ?? "").trim();
+  if (!agents.has(id)) {
+    res.status(404).json({ error: "No such agent" });
+    return;
+  }
+  if (!text) {
+    res.status(400).json({ error: "Type a message first" });
+    return;
+  }
+  try {
+    res.json(await sendChat(id, text));
+  } catch (err) {
+    if (err instanceof ChatUnavailableError) {
+      res.status(503).json({ error: err.message });
+      return;
+    }
+    throw err;
+  }
 });
 
 // Failed task actions. Retry starts it fresh; dismiss hides it from problems.

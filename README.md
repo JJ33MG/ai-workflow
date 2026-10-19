@@ -73,16 +73,24 @@ TEST_DATABASE_URL=postgresql://... npm test
 
 ## Dashboard
 
-Open `${PUBLIC_URL}/dashboard` (locally: http://localhost:4000/dashboard) and enter `ADMIN_TOKEN`. It refreshes every 30 seconds.
+The dashboard is the company's control centre. Open `${PUBLIC_URL}/dashboard` (locally: http://localhost:4000/dashboard)
+and enter `ADMIN_TOKEN`. It refreshes every 30 seconds.
 
 - **Overview**: one verdict (all working / warnings / needs attention), money vs. the €10k goal, Claude budget,
-  every integration's status with what to do, each agent's state, 14 days of task runs, and decisions to approve.
+  every business at a glance, integration status, each agent's state, 14 days of task runs, decisions to approve.
+- **Businesses**: one page per business (`src/businesses.ts`): stage (planned / setting up / earning), revenue,
+  costs by category, profit vs. target, 30-day revenue and cost chart, products with their designs and sales,
+  latest sales, its agents and its open problems. Planned businesses show their plan and target.
 - **Agents**: per agent, which business it works for, what it can do (each task, its schedule, last success,
   next run), what it depends on, today's numbers, and the exact error when it fails. Pause/resume, run a task now.
+- **Chat**: talk with any agent. It answers from a live snapshot of its data (the CEO and Debug agents see the whole
+  company) and can act when you ask: start its jobs, retry a failed task, save a note to the shared brain. Jobs that
+  spend money are not available from chat; they go through approvals. Each message is a Claude call and is costed.
 - **Problems**: every failed task with the exact error, whether it's being retried or gave up, the likely cause
-  and fix steps. Retry or dismiss. Also errors and warnings from the last 48 hours.
-- **Fix guide**: setup checklist and a searchable troubleshooting guide.
+  and fix steps. Retry, dismiss, or ask the agent. Also errors and warnings from the last 48 hours.
+- **Shared brain**: what the agents have learned (niches, hooks, fixes, lessons, decisions), searchable.
 - **Activity**: the log, filterable by agent and level.
+- **Fix guide**: setup checklist and a searchable troubleshooting guide.
 
 Error explanations come from `src/lib/troubleshoot.ts`. When you solve a new kind of failure, add a rule there so the
 dashboard (and the Debug Agent's Telegram alerts) show the fix next time.
@@ -98,6 +106,9 @@ All `/api` routes need `Authorization: Bearer $ADMIN_TOKEN`.
 | GET | `/api/dashboard` | Everything the dashboard shows, as JSON |
 | POST | `/api/tasks/:id/retry` or `/dismiss` | Re-run or hide a failed task |
 | POST | `/api/agents/:id/pause` or `/resume` | Stop or restart an agent's scheduled jobs |
+| GET | `/api/businesses/:id` | One business: 30-day series, products, sales, costs by category |
+| GET | `/api/agents/:id/chat` | Conversation history with an agent |
+| POST | `/api/agents/:id/chat` | Send `{ "message": "..." }`; returns the agent's reply and what it did |
 | GET | `/api/status` | Briefing data as JSON (dashboard source for Phase 3) |
 | GET | `/api/briefing/preview` | Briefing as text |
 | GET | `/api/approvals` | Pending decisions |
@@ -108,8 +119,10 @@ All `/api` routes need `Authorization: Bearer $ADMIN_TOKEN`.
 
 ## Adding an agent (Phase 2+)
 
-Create `src/agents/<name>.ts` exporting an `AgentDefinition` (id, name, phase, business, description, the
-integrations it depends on, task handlers and a plain-language `taskInfo` line per task — the dashboard shows these), register it in
+Create `src/agents/<name>.ts` exporting an `AgentDefinition` (id, name, phase, `businessId`, description, the
+integrations it depends on, task handlers, a plain-language `taskInfo` line per task, and `chatTasks`: the jobs it may
+start when asked in chat). If it runs a new business, add the business to `src/businesses.ts` with a `products()`
+function so the Businesses page can show what it makes. Register the agent in
 `src/agents/index.ts`, and add its schedule in `src/scheduler.ts`. Use `askText`/`askJson` from `src/lib/claude.ts`
 (they enforce the budget and record costs), `agentLogger` for logs, `requestApproval` for anything that spends money,
 and the `Knowledge` table to share what works.
