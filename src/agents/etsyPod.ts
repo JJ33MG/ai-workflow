@@ -303,6 +303,16 @@ export const etsyPodAgent: AgentDefinition = {
   id: ID,
   name: "Etsy / Print-on-Demand Agent",
   phase: 1,
+  business: "Etsy shop (print-on-demand mugs, fulfilled by Printful)",
+  description: "Finds gift niches, designs typography mugs, lists them on Etsy and turns Etsy sales into Printful orders.",
+  dependsOn: ["database", "claude", "etsy", "printful"],
+  taskInfo: {
+    create_listings: "Pick niches, write listing text and render print-ready designs (local drafts)",
+    upload_listings: "Upload drafts and mockups to Etsy, then ask approval to publish",
+    publish_listings: "Make approved drafts live on Etsy (pays the $0.20 listing fee)",
+    sync_sales: "Import new paid Etsy orders as sales",
+    fulfil_receipt: "Create the Printful order for an Etsy sale (auto-confirm under the spend limit)",
+  },
   handlers: {
     create_listings: createListings,
     upload_listings: uploadListings,

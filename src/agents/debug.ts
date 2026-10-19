@@ -3,6 +3,7 @@ import { db } from "../db.js";
 import { apiSpendTodayCents } from "../lib/budget.js";
 import { askText, isClaudeConfigured } from "../lib/claude.js";
 import { notify } from "../lib/telegram.js";
+import { diagnose } from "../lib/troubleshoot.js";
 import type { AgentDefinition, TaskContext } from "./types.js";
 
 const ID = "debug";
@@ -66,7 +67,13 @@ async function check(_payload: Record<string, unknown>, { log, taskId }: TaskCon
     }
     await notify(
       `🔴 ${escalated.length} task(s) failed ${escalated[0].maxAttempts}× and need you:\n` +
-        escalated.map((t) => `• ${t.agentId}:${t.type} — ${t.error}`).join("\n") +
+        escalated
+          .map((t) => {
+            const guide = diagnose(t.error);
+            const hint = guide.id === "unknown" ? "" : `\n  → ${guide.title}: ${guide.fix[0]}`;
+            return `• ${t.agentId}:${t.type} — ${t.error}${hint}`;
+          })
+          .join("\n") +
         (diagnosis ? `\n\nLikely fix:\n${diagnosis}` : ""),
     );
   }
@@ -83,5 +90,11 @@ export const debugAgent: AgentDefinition = {
   id: ID,
   name: "Debug Agent",
   phase: 1,
+  business: "All businesses",
+  description: "Watches every agent: retries failed tasks, escalates what keeps failing and watches the API budget.",
+  dependsOn: ["database", "telegram"],
   handlers: { check },
+  taskInfo: {
+    check: "Retry failed tasks with backoff, unstick hung tasks, escalate repeated failures with a likely fix",
+  },
 };

@@ -150,5 +150,11 @@ export const ceoAgent: AgentDefinition = {
   id: ID,
   name: "CEO Agent",
   phase: 1,
+  business: "All businesses",
+  description: "Reads every agent's logs, sales and costs and sends Jarne one morning briefing with today's focus.",
+  dependsOn: ["database", "claude", "telegram"],
   handlers: { briefing },
+  taskInfo: {
+    briefing: "Collect revenue, costs, agent activity, incidents and pending decisions; send the Telegram briefing",
+  },
 };

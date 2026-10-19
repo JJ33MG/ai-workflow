@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agency Brain Dashboard</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="login" class="login" hidden>
+      <form id="login-form" class="login-card">
+        <h1>Agency Brain</h1>
+        <p>Enter the server's <code>ADMIN_TOKEN</code> to open the dashboard.</p>
+        <input id="token" type="password" autocomplete="current-password" placeholder="Admin token" required />
+        <button type="submit" class="btn btn-primary">Open dashboard</button>
+        <p id="login-error" class="login-error" role="alert"></p>
+      </form>
+    </div>
+
+    <div id="app" hidden>
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">◆</span>
+          <span>Agency Brain</span>
+          <span id="mode-badge" class="badge"></span>
+        </div>
+        <nav class="tabs" role="tablist">
+          <button role="tab" data-tab="overview" aria-selected="true">Overview</button>
+          <button role="tab" data-tab="agents">Agents</button>
+          <button role="tab" data-tab="problems">Problems <span id="problem-count" class="count" hidden></span></button>
+          <button role="tab" data-tab="guide">Fix guide</button>
+          <button role="tab" data-tab="activity">Activity</button>
+        </nav>
+        <div class="topbar-actions">
+          <span id="updated" class="muted"></span>
+          <button id="refresh" class="btn" title="Refresh now">↻ Refresh</button>
+          <button id="logout" class="btn btn-ghost" title="Forget the token on this device">Sign out</button>
+        </div>
+      </header>
+
+      <main>
+        <section id="tab-overview" class="tab" role="tabpanel">
+          <div id="banner" class="banner"></div>
+          <div id="kpis" class="kpis"></div>
+          <div class="grid-2">
+            <div class="panel">
+              <h2>Systems</h2>
+              <div id="checks" class="checks"></div>
+            </div>
+            <div class="panel">
+              <h2>Agents</h2>
+              <div id="agent-summary" class="agent-summary"></div>
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="panel">
+              <h2>Task runs, last 14 days</h2>
+              <div id="chart"></div>
+            </div>
+            <div class="panel">
+              <h2>Decisions waiting for you</h2>
+              <div id="approvals"></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="tab-agents" class="tab" role="tabpanel" hidden>
+          <div id="agents" class="agent-cards"></div>
+        </section>
+
+        <section id="tab-problems" class="tab" role="tabpanel" hidden>
+          <div class="panel">
+            <h2>Failed tasks</h2>
+            <p class="muted">Each failure shows the exact error, what it means and how to fix it. "Retrying" ones are handled automatically; "Needs you" ones gave up.</p>
+            <div id="problems"></div>
+          </div>
+          <div class="panel">
+            <h2>Errors and warnings, last 48 hours</h2>
+            <div id="issues"></div>
+          </div>
+        </section>
+
+        <section id="tab-guide" class="tab" role="tabpanel" hidden>
+          <div class="panel">
+            <h2>Setup checklist</h2>
+            <p class="muted">What still has to be set up or fixed for everything to run.</p>
+            <div id="setup"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Troubleshooting guide</h2>
+              <input id="guide-search" type="search" placeholder="Search errors, e.g. Etsy 401" />
+            </div>
+            <div id="guides"></div>
+          </div>
+        </section>
+
+        <section id="tab-activity" class="tab" role="tabpanel" hidden>
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Recent activity</h2>
+              <div class="filters">
+                <select id="filter-agent" aria-label="Agent"></select>
+                <select id="filter-level" aria-label="Level">
+                  <option value="">All levels</option>
+                  <option value="error">Errors</option>
+                  <option value="warn">Warnings</option>
+                  <option value="info">Info</option>
+                </select>
+              </div>
+            </div>
+            <div id="activity"></div>
+          </div>
+        </section>
+      </main>
+      <div id="toast" class="toast" role="status" hidden></div>
+    </div>
+    <script src="app.js" type="module"></script>
+  </body>
+</html>

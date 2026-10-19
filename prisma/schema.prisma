@@ -32,7 +32,7 @@ model Task {
   agent       Agent     @relation(fields: [agentId], references: [id])
   type        String
   payload     Json      @default("{}")
-  status      String    @default("pending") // pending | running | done | failed | escalated
+  status      String    @default("pending") // pending | running | done | failed | escalated | dismissed
   attempts    Int       @default(0)
   maxAttempts Int       @default(3)
   runAfter    DateTime  @default(now())

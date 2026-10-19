@@ -7,6 +7,30 @@ import { usageCostUsdCents } from "../src/lib/claude.js";
 import { sanitizeSvg } from "../src/lib/design.js";
 import { startOfDay, startOfMonth } from "../src/lib/money.js";
 import { splitMessage } from "../src/lib/telegram.js";
+import { allGuides, diagnose } from "../src/lib/troubleshoot.js";
+
+describe("diagnose", () => {
+  it.each([
+    ["Daily API budget reached: spent 500 of 500 EUR cents", "budget-reached"],
+    ['401 {"type":"error","error":{"type":"authentication_error"}}', "claude-auth"],
+    ["Etsy is not connected. Open /auth/etsy/start to authorise the shop.", "etsy-not-connected"],
+    ['Etsy POST /shops/1/listings failed: 400 {"error":"shipping_profile_id"}', "etsy-bad-listing"],
+    ["Etsy GET /shops/1/receipts?x=1 failed: 401 invalid token", "etsy-token"],
+    ["Printful POST /orders failed: 401 ", "printful-auth"],
+    ["Printful POST /orders failed: 400 Variant not available", "printful-order"],
+    ["Telegram sendMessage failed: Bad Request: chat not found", "telegram"],
+    ["Stuck in running state (process restart or hang)", "stuck"],
+    ["Can't reach database server at db:5432", "database"],
+    ["fetch failed", "network"],
+    ["something nobody has seen", "unknown"],
+  ])("%s → %s", (error, id) => {
+    expect(diagnose(error).id).toBe(id);
+  });
+
+  it("gives every guide at least one fix step", () => {
+    for (const g of allGuides()) expect(g.fix.length).toBeGreaterThan(0);
+  });
+});
 
 describe("normaliseIdea", () => {
   it("enforces Etsy title and tag limits", () => {

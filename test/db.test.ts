@@ -73,6 +73,29 @@ describe.skipIf(!url)("with database", async () => {
     expect(d.agents.map((a) => a.id).sort()).toEqual(["ceo", "debug", "etsy-pod"]);
   });
 
+  it("shows an escalated task on the dashboard with its fix", async () => {
+    const { buildDashboard } = await import("../src/dashboard.js");
+    await db.agent.updateMany({ data: { enabled: true, status: "idle" } });
+    await db.task.create({
+      data: {
+        agentId: "etsy-pod",
+        type: "fulfil_receipt",
+        status: "escalated",
+        attempts: 3,
+        error: "Printful POST /orders failed: 400 Variant not available",
+      },
+    });
+    const d = await buildDashboard();
+    const etsy = d.agents.find((a) => a.id === "etsy-pod")!;
+    expect(etsy.health).toBe("failing");
+    expect(etsy.error).toContain("Variant not available");
+    expect(d.problems).toHaveLength(1);
+    expect(d.problems[0].state).toBe("needs-you");
+    expect(d.problems[0].guide.id).toBe("printful-order");
+    expect(d.overall.status).toBe("error");
+    expect(d.chart).toHaveLength(14);
+  });
+
   it("blocks Claude calls once the daily budget is spent", async () => {
     await db.cost.create({ data: { agentId: "ceo", category: "claude_api", amountCents: 100_000, currency: "EUR" } });
     await expect(assertApiBudget()).rejects.toBeInstanceOf(BudgetExceededError);

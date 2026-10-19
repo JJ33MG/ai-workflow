@@ -1,9 +1,12 @@
 import { timingSafeEqual } from "node:crypto";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { collectBriefingData, formatBriefing } from "./agents/ceo.js";
 import { agents, syncAgents } from "./agents/index.js";
 import { handleCommand } from "./commands.js";
 import { config } from "./config.js";
+import { buildDashboard } from "./dashboard.js";
 import { db } from "./db.js";
 import * as etsy from "./integrations/etsy.js";
 import { decide } from "./lib/approvals.js";
@@ -37,6 +40,52 @@ app.get("/health", async (_req, res) => {
 // Design files must be publicly reachable: Printful downloads them to print.
 app.use("/files/designs", express.static(designsDir(), { index: false }));
 
+// The dashboard page itself holds no data; it asks for the admin token and calls /api/dashboard.
+const dashboardDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "dashboard");
+app.get("/", (_req, res) => res.redirect("/dashboard/"));
+app.use("/dashboard", express.static(dashboardDir));
+
+app.get("/api/dashboard", requireAdmin, async (_req, res) => {
+  res.json(await buildDashboard());
+});
+
+// Failed task actions. Retry starts it fresh; dismiss hides it from problems.
+app.post("/api/tasks/:id/:action", requireAdmin, async (req, res) => {
+  const { id, action } = req.params as { id: string; action: string };
+  const task = await db.task.findUnique({ where: { id } });
+  if (!task) {
+    res.status(404).json({ error: "No such task" });
+    return;
+  }
+  if (!["failed", "escalated", "pending"].includes(task.status)) {
+    res.status(409).json({ error: `Task is ${task.status}` });
+    return;
+  }
+  if (action === "retry") {
+    await db.task.update({
+      where: { id },
+      data: { status: "pending", attempts: 0, runAfter: new Date(), finishedAt: null },
+    });
+    res.json({ message: `Queued ${task.agentId}:${task.type} to run again` });
+  } else if (action === "dismiss") {
+    await db.task.update({ where: { id }, data: { status: "dismissed", finishedAt: new Date() } });
+    res.json({ message: "Dismissed" });
+  } else {
+    res.status(400).json({ error: "action must be retry or dismiss" });
+  }
+});
+
+app.post(["/api/agents/:id/pause", "/api/agents/:id/resume"], requireAdmin, async (req, res) => {
+  const { id } = req.params as { id: string };
+  const action = req.path.endsWith("/resume") ? "resume" : "pause";
+  if (!agents.has(id)) {
+    res.status(404).json({ error: "No such agent" });
+    return;
+  }
+  await db.agent.update({ where: { id }, data: { enabled: action === "resume" } });
+  res.json({ message: `${id} ${action === "resume" ? "resumed" : "paused"}` });
+});
+
 app.get("/api/status", requireAdmin, async (_req, res) => {
   res.json(await collectBriefingData());
 });
@@ -65,7 +114,8 @@ app.post("/api/agents/:id/tasks", requireAdmin, async (req, res) => {
     res.status(400).json({ error: `Unknown task ${id}:${type}` });
     return;
   }
-  res.status(201).json(await enqueue(id, type, payload ?? {}));
+  const task = await enqueue(id, type, payload ?? {});
+  res.status(201).json({ message: `Queued ${id}:${type}; it starts within 15 seconds`, task });
 });
 
 app.get("/api/logs", requireAdmin, async (req, res) => {
