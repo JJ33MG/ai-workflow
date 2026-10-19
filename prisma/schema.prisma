@@ -1,0 +1,154 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// One row per agent. `status` is updated by the runner on every run.
+model Agent {
+  id        String    @id // e.g. "ceo", "etsy-pod", "debug"
+  name      String
+  phase     Int
+  enabled   Boolean   @default(true)
+  status    String    @default("idle") // idle | running | error
+  lastRunAt DateTime?
+  lastError String?
+  createdAt DateTime  @default(now())
+
+  tasks     Task[]
+  logs      Log[]
+  costs     Cost[]
+  sales     Sale[]
+  knowledge Knowledge[]
+}
+
+/// Unit of work. Failed tasks are retried by the Debug Agent until maxAttempts.
+model Task {
+  id          String    @id @default(cuid())
+  agentId     String
+  agent       Agent     @relation(fields: [agentId], references: [id])
+  type        String
+  payload     Json      @default("{}")
+  status      String    @default("pending") // pending | running | done | failed | escalated
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(3)
+  runAfter    DateTime  @default(now())
+  result      Json?
+  error       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  finishedAt  DateTime?
+
+  @@index([status, runAfter])
+  @@index([agentId, createdAt])
+}
+
+model Log {
+  id        String   @id @default(cuid())
+  agentId   String
+  agent     Agent    @relation(fields: [agentId], references: [id])
+  level     String // info | warn | error
+  message   String
+  data      Json?
+  taskId    String?
+  resolved  Boolean  @default(false) // errors only; set by the Debug Agent
+  createdAt DateTime @default(now())
+
+  @@index([agentId, createdAt])
+  @@index([level, resolved])
+}
+
+/// Money in. Amounts are stored in minor units (cents) of `currency`.
+model Sale {
+  id          String   @id @default(cuid())
+  agentId     String
+  agent       Agent    @relation(fields: [agentId], references: [id])
+  source      String // etsy, shopify, ...
+  externalId  String // e.g. Etsy receipt_id
+  amountCents Int
+  currency    String
+  data        Json?
+  occurredAt  DateTime
+  createdAt   DateTime @default(now())
+
+  @@unique([source, externalId])
+  @@index([occurredAt])
+}
+
+/// Money out: API usage, listing fees, fulfilment, ads.
+model Cost {
+  id          String   @id @default(cuid())
+  agentId     String
+  agent       Agent    @relation(fields: [agentId], references: [id])
+  category    String // claude_api | etsy_fee | printful | ads | other
+  amountCents Float // fractional: a single Claude call often costs < 1 cent
+  currency    String
+  note        String?
+  data        Json?
+  occurredAt  DateTime @default(now())
+
+  @@index([occurredAt])
+  @@index([category, occurredAt])
+}
+
+/// Shared brain: what sells, what works, what broke and how it was fixed.
+model Knowledge {
+  id        String   @id @default(cuid())
+  agentId   String
+  agent     Agent    @relation(fields: [agentId], references: [id])
+  kind      String // niche | product | hook | fix | lesson
+  title     String
+  body      String
+  tags      String[]
+  score     Float    @default(0) // higher = more useful / proven
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([kind, score])
+}
+
+/// Decisions Jarne must make (spend, new platforms, risky actions).
+model Approval {
+  id          String    @id @default(cuid())
+  agentId     String
+  kind        String // e.g. printful_order_confirm, etsy_publish
+  title       String
+  details     String
+  amountCents Int?
+  currency    String?
+  payload     Json      @default("{}")
+  status      String    @default("pending") // pending | approved | rejected | executed | failed
+  decidedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([status])
+}
+
+/// A print-on-demand product created by the Etsy/POD Agent.
+model Listing {
+  id               String   @id @default(cuid())
+  niche            String
+  title            String
+  description      String
+  tags             String[]
+  priceCents       Int
+  currency         String
+  designSvg        String
+  designFile       String // file name under STORAGE_DIR/designs
+  status           String   @default("draft") // draft | uploaded | active | failed
+  etsyListingId    String?  @unique
+  printfulVariant  Int?
+  error            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+/// Small key/value store (OAuth tokens, cursors).
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
