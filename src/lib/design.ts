@@ -92,8 +92,11 @@ export async function mirrorSides(sidePng: Buffer): Promise<Buffer> {
     .toBuffer();
 }
 
-/** How much of one side of the mug a design may fill. */
-const FILL_WIDTH = 0.86;
+/**
+ * How much of one side of the mug a design may fill. The front of a mug only shows about
+ * two thirds of each side; wider designs look cut off in Printful's product photos.
+ */
+const FILL_WIDTH = 0.66;
 const FILL_HEIGHT = 0.8;
 
 function viewBoxOf(svg: string): [number, number, number, number] {
