@@ -164,3 +164,24 @@ model ChatMessage {
 
   @@index([agentId, createdAt])
 }
+
+/// A coloring book made by the KDP agent, ready for manual upload to Amazon KDP.
+model ColoringBook {
+  id          String   @id @default(cuid())
+  theme       String
+  ageRange    String
+  title       String
+  subtitle    String
+  author      String
+  description String
+  keywords    String[]
+  categories  String[]
+  pages       Json     @default("[]") // [{ subject, status, file }]
+  pageCount   Int      @default(0) // pages in the interior PDF
+  priceCents  Int
+  currency    String
+  status      String   @default("drawing") // drawing | ready | failed | published
+  error       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

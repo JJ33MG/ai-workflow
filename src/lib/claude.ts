@@ -35,6 +35,21 @@ interface AskOptions {
   prompt: string;
   effort?: Effort;
   maxTokens?: number;
+  /** PNG images shown to Claude before the prompt (e.g. a rendered page to review). */
+  images?: Buffer[];
+}
+
+function userContent(opts: AskOptions): Anthropic.MessageParam["content"] {
+  if (!opts.images?.length) return opts.prompt;
+  return [
+    ...opts.images.map(
+      (png): Anthropic.ImageBlockParam => ({
+        type: "image",
+        source: { type: "base64", media_type: "image/png", data: png.toString("base64") },
+      }),
+    ),
+    { type: "text", text: opts.prompt },
+  ];
 }
 
 async function track(agentId: string, purpose: string, response: Anthropic.Message) {
@@ -62,7 +77,7 @@ export async function askText(opts: AskOptions): Promise<string> {
     max_tokens: opts.maxTokens ?? 16000,
     system: opts.system,
     output_config: { effort: opts.effort ?? "medium" },
-    messages: [{ role: "user", content: opts.prompt }],
+    messages: [{ role: "user", content: userContent(opts) }],
   });
   await track(opts.agentId, opts.purpose, response);
   return response.content
@@ -79,7 +94,7 @@ export async function askJson<S extends z.ZodType>(opts: AskOptions & { schema: 
     max_tokens: opts.maxTokens ?? 16000,
     system: opts.system,
     output_config: { effort: opts.effort ?? "medium", format: zodOutputFormat(opts.schema) },
-    messages: [{ role: "user", content: opts.prompt }],
+    messages: [{ role: "user", content: userContent(opts) }],
   });
   await track(opts.agentId, opts.purpose, response);
   if (response.parsed_output == null) {

@@ -1,3 +1,7 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import sharp from "sharp";
+import { config } from "./config.js";
 import { db } from "./db.js";
 
 // Every business the company runs or plans to run (from the build brief).
@@ -76,6 +80,33 @@ export const BUSINESSES: BusinessDefinition[] = [
     plan:
       "Pick themes, generate the line-art pages, the print-ready interior PDF and cover, plus title, description and keywords. " +
       "Jarne uploads each book in KDP (no publishing API; KDP allows a few new titles per day).",
+    products: async () => {
+      const books = await db.coloringBook.findMany({ orderBy: { createdAt: "desc" }, take: 40 });
+      return Promise.all(
+        books.map(async (b) => {
+          let image: string | undefined;
+          try {
+            const cover = await readFile(path.resolve(config.storageDir, "books", b.id, "cover-front.jpg"));
+            const thumb = await sharp(cover).resize(360).jpeg({ quality: 70 }).toBuffer();
+            image = `data:image/jpeg;base64,${thumb.toString("base64")}`;
+          } catch {
+            // no cover yet (still drawing, or failed)
+          }
+          const pages = (b.pages as { status: string }[]).filter((p) => p.status === "ok").length;
+          return {
+            id: b.id,
+            title: b.title,
+            status: b.status,
+            priceCents: b.priceCents,
+            currency: b.currency,
+            image,
+            detail: `${b.theme} · ages ${b.ageRange} · ${pages} pictures`,
+            createdAt: b.createdAt,
+            salesCount: 0, // KDP has no sales API; sales are entered from the KDP report
+          };
+        }),
+      );
+    },
   },
   {
     id: "dropshipping",

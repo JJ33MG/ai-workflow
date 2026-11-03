@@ -63,6 +63,14 @@ export const config = {
     placement: str("PRINTFUL_PLACEMENT", "default"),
   },
 
+  kdp: {
+    // Pen name printed on the cover; Amazon shows it as the author.
+    author: str("KDP_AUTHOR", "Little Crayon Studio"),
+    picturesPerBook: num("KDP_PICTURES_PER_BOOK", 30),
+    priceCents: Math.round(num("KDP_PRICE_USD", 7.99) * 100),
+    currency: "USD",
+  },
+
   pod: {
     priceCents: Math.round(num("POD_PRICE_EUR", 19.99) * 100),
     currency: str("POD_CURRENCY", "EUR"),

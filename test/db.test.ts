@@ -70,7 +70,7 @@ describe.skipIf(!url)("with database", async () => {
     const d = await collectBriefingData();
     expect(d.revenue.monthToDate).toBe(2000);
     expect(d.costs.monthToDate).toBe(50);
-    expect(d.agents.map((a) => a.id).sort()).toEqual(["ceo", "debug", "etsy-pod"]);
+    expect(d.agents.map((a) => a.id).sort()).toEqual(["ceo", "debug", "etsy-pod", "kdp-coloring"]);
   });
 
   it("shows an escalated task on the dashboard with its fix", async () => {
@@ -137,7 +137,7 @@ describe.skipIf(!url)("with database", async () => {
     expect(etsy.stage).toBe("earning");
     expect(etsy.revenueMonth).toBe(1799);
     expect(d.businesses.find((b) => b.id === "cartoon-content")!.stage).toBe("planned");
-    expect(d.businesses.find((b) => b.id === "kdp-coloring")!.stage).toBe("planned");
+    expect(d.businesses.find((b) => b.id === "kdp-coloring")!.stage).toBe("setting-up"); // has an agent, no sales yet
     expect(d.businesses.find((b) => b.id === "roadgem")!.stage).toBe("parked");
     const detail = await buildBusinessDetail("etsy-pod");
     expect(detail!.series).toHaveLength(30);
