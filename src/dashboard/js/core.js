@@ -23,7 +23,11 @@ export const STAGE = {
   earning: { label: "Earning", status: "ok" },
   "setting-up": { label: "Setting up", status: "warn" },
   planned: { label: "Planned", status: "off" },
+  parked: { label: "Parked", status: "off" },
 };
+
+/** Not running yet: planned for a later phase, or parked on purpose. */
+export const notStarted = (b) => b.stage === "planned" || b.stage === "parked";
 
 export const state = { data: null, token: "", onReload: async () => {} };
 

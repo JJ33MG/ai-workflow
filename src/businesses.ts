@@ -29,6 +29,8 @@ export interface BusinessDefinition {
   targetCents: [number, number];
   /** What its agent will do; shown for planned businesses. */
   plan: string;
+  /** Deliberately on hold: shown, but not part of the current roadmap. */
+  parked?: boolean;
   products?: () => Promise<Product[]>;
 }
 
@@ -64,11 +66,23 @@ export const BUSINESSES: BusinessDefinition[] = [
     },
   },
   {
+    id: "kdp-coloring",
+    name: "Coloring books on Amazon KDP",
+    kind: "Self-publishing",
+    description: "Coloring books for adults and kids, printed on demand and sold on Amazon through Kindle Direct Publishing.",
+    phase: 2,
+    channels: ["Amazon KDP"],
+    targetCents: [0, 0],
+    plan:
+      "Pick themes, generate the line-art pages, the print-ready interior PDF and cover, plus title, description and keywords. " +
+      "Jarne uploads each book in KDP (no publishing API; KDP allows a few new titles per day).",
+  },
+  {
     id: "dropshipping",
     name: "Dropshipping stores",
     kind: "E-commerce",
     description: "Online stores selling trending products shipped directly by suppliers.",
-    phase: 2,
+    phase: 3,
     channels: ["Shopify (or alternative)", "Ads"],
     targetCents: [5_000_00, 6_000_00],
     plan: "Pick products, build and update the store, write listings and ad copy, track margins.",
@@ -78,7 +92,7 @@ export const BUSINESSES: BusinessDefinition[] = [
     name: "AI cartoon channel",
     kind: "Content",
     description: "AI cartoon videos and shorts for YouTube, TikTok and Instagram; also sends traffic to the shops.",
-    phase: 3,
+    phase: 4,
     channels: ["YouTube", "TikTok", "Instagram"],
     targetCents: [1_000_00, 2_000_00],
     plan: "Short-form first for reach, long-form for YouTube monetisation; ads and affiliate revenue.",
@@ -88,10 +102,11 @@ export const BUSINESSES: BusinessDefinition[] = [
     name: "RoadGem",
     kind: "App",
     description: "The RoadGem road-trip planner: growth, content and support.",
-    phase: 4,
+    phase: 5,
     channels: ["roadgem app", "Premium subscriptions", "Affiliates"],
     targetCents: [0, 0],
-    plan: "Growth, content and support for the RoadGem app once the core businesses are profitable.",
+    plan: "On hold: money first from simpler businesses (print-on-demand, coloring books, dropshipping).",
+    parked: true,
   },
 ];
 

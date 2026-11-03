@@ -137,6 +137,8 @@ describe.skipIf(!url)("with database", async () => {
     expect(etsy.stage).toBe("earning");
     expect(etsy.revenueMonth).toBe(1799);
     expect(d.businesses.find((b) => b.id === "cartoon-content")!.stage).toBe("planned");
+    expect(d.businesses.find((b) => b.id === "kdp-coloring")!.stage).toBe("planned");
+    expect(d.businesses.find((b) => b.id === "roadgem")!.stage).toBe("parked");
     const detail = await buildBusinessDetail("etsy-pod");
     expect(detail!.series).toHaveLength(30);
     expect(detail!.series.at(-1)!.revenue).toBe(1799);

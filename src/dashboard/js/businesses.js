@@ -1,5 +1,5 @@
 import { moneyChart } from "./charts.js";
-import { AGENT_LABEL, STAGE, api, empty, eur, fill, h, kpi, money, openSection, stamp, state, statusPill, table, ago } from "./core.js";
+import { AGENT_LABEL, STAGE, notStarted, api, empty, eur, fill, h, kpi, money, openSection, stamp, state, statusPill, table, ago } from "./core.js";
 import { openChat } from "./chat.js";
 import { targetLabel } from "./overview.js";
 
@@ -29,7 +29,7 @@ export function renderBusinesses(d) {
   const b = d.businesses.find((x) => x.id === selected);
   if (!b) return;
   renderDetail(d, b, details.get(b.id));
-  if (b.stage !== "planned") {
+  if (!notStarted(b)) {
     api(`/api/businesses/${b.id}`)
       .then((detail) => {
         details.set(b.id, detail);
@@ -54,16 +54,22 @@ function renderDetail(d, b, detail) {
       statusPill(stage.status, stage.label),
     ),
     h("p", {}, b.description),
-    b.stage === "planned" &&
+    notStarted(b) &&
       h(
         "div",
         { class: "plan-box" },
         h("strong", {}, "Plan: "),
         b.plan,
-        h("div", { class: "muted" }, `${targetLabel(b)}. Starts in phase ${b.phase}, once the businesses before it are earning.`),
+        h(
+          "div",
+          { class: "muted" },
+          b.stage === "parked"
+            ? "Parked for now; it comes back once the simpler businesses are earning."
+            : `${targetLabel(b)}. Starts in phase ${b.phase}, once the businesses before it are earning.`,
+        ),
       ),
   );
-  if (b.stage === "planned") {
+  if (notStarted(b)) {
     fill("business-detail", head);
     return;
   }

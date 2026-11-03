@@ -544,7 +544,8 @@ main {
 .biz-card:hover {
   border-color: var(--accent);
 }
-.biz-card.stage-planned {
+.biz-card.stage-planned,
+.biz-card.stage-parked {
   background: var(--surface-2);
   border-style: dashed;
 }

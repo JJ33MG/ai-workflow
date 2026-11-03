@@ -242,7 +242,7 @@ export async function buildDashboard(now = new Date()) {
         plan: b.plan,
         phase: b.phase,
         channels: b.channels,
-        stage: ids.length === 0 ? "planned" : recentSales > 0 ? "earning" : "setting-up",
+        stage: b.parked ? "parked" : ids.length === 0 ? "planned" : recentSales > 0 ? "earning" : "setting-up",
         health: (ids.length === 0 ? "off" : worst) as CheckStatus,
         agents: team.map((a) => ({ id: a.id, name: a.name, health: a.health, severity: a.severity })),
         revenueToday: inMonth(salesToday),

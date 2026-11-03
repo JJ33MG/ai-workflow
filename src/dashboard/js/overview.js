@@ -1,5 +1,5 @@
 import { taskRunsChart } from "./charts.js";
-import { AGENT_LABEL, STAGE, STATUS, act, ago, empty, eur, fill, h, kpi, money, openSection, statusPill } from "./core.js";
+import { AGENT_LABEL, STAGE, STATUS, notStarted, act, ago, empty, eur, fill, h, kpi, money, openSection, statusPill } from "./core.js";
 import { openChat } from "./chat.js";
 import { openBusiness } from "./businesses.js";
 
@@ -27,7 +27,7 @@ export function businessCard(b) {
     { class: `biz-card stage-${b.stage}`, onclick: () => openBusiness(b.id) },
     h("div", { class: "biz-card-head" }, h("span", { class: "biz-kind" }, `${b.kind} · Phase ${b.phase}`), statusPill(stage.status, stage.label)),
     h("strong", { class: "biz-name" }, b.name),
-    b.stage === "planned"
+    notStarted(b)
       ? h("p", { class: "biz-plan" }, b.plan)
       : h(
           "div",
@@ -37,7 +37,7 @@ export function businessCard(b) {
           h("div", {}, h("span", { class: "label" }, "Products"), h("b", {}, b.products.total)),
         ),
     hi > 0 &&
-      b.stage !== "planned" &&
+      !notStarted(b) &&
       h("div", { class: "meter", "aria-label": "Progress to target" }, h("span", { style: `width:${Math.min(100, pct)}%` })),
     h(
       "div",
