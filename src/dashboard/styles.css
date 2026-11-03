@@ -1324,3 +1324,426 @@ details summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* ===== Brain map, build plan, handbook ===== */
+/* Status tones: each always appears with an icon and a word, never colour alone. */
+.tone-good { --tone: var(--good); }
+.tone-test { --tone: var(--accent); }
+.tone-manual { --tone: var(--series-1); }
+.tone-warn { --tone: var(--warning); }
+.tone-error { --tone: var(--critical); }
+.tone-off { --tone: var(--off); }
+
+.map-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px 24px;
+}
+.map-head p {
+  max-width: 70ch;
+  margin-top: 6px;
+}
+.state-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.state-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 4px 10px 4px 6px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.state-chip[aria-pressed="true"] {
+  border-color: var(--tone);
+  box-shadow: inset 0 0 0 1px var(--tone);
+}
+.chip-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--tone, var(--off));
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  flex: none;
+}
+.tone-warn .chip-icon,
+.tone-warn.chip-icon {
+  color: #111;
+}
+
+.map-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 16px;
+  align-items: start;
+}
+.map-canvas {
+  padding: 8px;
+  overflow: hidden;
+}
+svg.map {
+  display: block;
+  width: 100%;
+  height: auto;
+  font-family: var(--font);
+}
+svg.map .zone {
+  fill: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+svg.map .edge {
+  stroke: var(--tone);
+  stroke-width: 2.5;
+  opacity: 0.75;
+}
+svg.map .edge.dashed {
+  stroke-dasharray: 6 7;
+  opacity: 0.5;
+}
+svg.map .edge.flow {
+  stroke-dasharray: 2 10;
+  stroke-linecap: round;
+  stroke-width: 3;
+  animation: flow 1.6s linear infinite;
+}
+@keyframes flow {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+svg.map .node {
+  cursor: pointer;
+  outline: none;
+}
+svg.map .node .card {
+  fill: var(--surface);
+  stroke: var(--border);
+  stroke-width: 1.5;
+}
+svg.map .node .stripe {
+  fill: var(--tone);
+}
+svg.map .node:hover .card,
+svg.map .node:focus-visible .card {
+  stroke: var(--accent);
+}
+svg.map .node.selected .card {
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+svg.map .node.later .card {
+  stroke-dasharray: 5 5;
+  fill: var(--surface-2);
+}
+svg.map .node .label {
+  fill: var(--text);
+  font-size: 18px;
+  font-weight: 650;
+}
+svg.map .node .label.big {
+  font-size: 22px;
+}
+svg.map .node .sub {
+  fill: var(--text-2);
+  font-size: 14.5px;
+}
+svg.map .brain-halo {
+  fill: none;
+  stroke: var(--tone);
+  stroke-width: 3;
+  opacity: 0.55;
+}
+svg.map .kind-brain .card {
+  stroke: var(--tone);
+  stroke-width: 2;
+}
+svg.map .dim {
+  opacity: 0.18;
+}
+@media (prefers-reduced-motion: reduce) {
+  svg.map .edge.flow {
+    animation: none;
+  }
+}
+
+.map-panel {
+  position: sticky;
+  top: 16px;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+.map-panel .kind,
+.plan-phase .kind {
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.state-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.state-line strong {
+  color: var(--text);
+}
+.map-panel .what {
+  font-size: 14.5px;
+}
+.map-panel h3 {
+  margin-top: 4px;
+}
+.map-panel ol.how,
+.hb-item ol {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 4px;
+  color: var(--text-2);
+}
+.you-box {
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--warning-bg);
+}
+.error-box {
+  background: var(--critical-bg);
+}
+.where {
+  font-size: 12.5px;
+}
+.legend-box summary {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.legend-list,
+.terms {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 8px 16px;
+  margin: 12px 0 0;
+}
+.legend-list dt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+.legend-list dd,
+.terms dd {
+  margin: 0;
+  color: var(--text-2);
+}
+.terms dt {
+  font-weight: 650;
+}
+.map-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 16px;
+}
+.map-list h3 {
+  margin-bottom: 6px;
+}
+.map-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  padding: 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.map-item:hover,
+.map-item[aria-pressed="true"] {
+  background: var(--surface-2);
+}
+.map-item-label {
+  font-weight: 600;
+  flex: 1;
+}
+
+/* Build plan */
+.plan-progress {
+  display: grid;
+  gap: 8px;
+}
+.plan-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.plan-col {
+  display: grid;
+  gap: 12px;
+}
+.plan-col h2 {
+  margin: 0;
+}
+.col-done {
+  border-top: 3px solid var(--good);
+}
+.col-doing {
+  border-top: 3px solid var(--accent);
+}
+.col-todo {
+  border-top: 3px solid var(--warning);
+}
+.col-parked {
+  border-top: 3px solid var(--off);
+}
+.plan-phase {
+  display: grid;
+  gap: 6px;
+}
+.plan-item {
+  display: grid;
+  gap: 4px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.plan-item:last-child {
+  border-bottom: 0;
+}
+.owner {
+  justify-self: start;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+.owner-jarne {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.plan-line {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+}
+.plan-mark {
+  font-weight: 700;
+  color: var(--muted);
+  text-align: center;
+}
+.status-done .plan-mark {
+  color: var(--good);
+}
+.status-doing .plan-mark {
+  color: var(--accent);
+}
+.plan-title {
+  font-weight: 600;
+}
+.status-done .plan-title {
+  color: var(--text-2);
+}
+.plan-line .muted {
+  font-size: 12.5px;
+}
+.panel-steps {
+  display: grid;
+  gap: 8px;
+}
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* Handbook */
+.hb-intro p {
+  max-width: 75ch;
+  margin: 8px 0 14px;
+}
+.flow {
+  margin: 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 6px;
+}
+.flow li strong {
+  margin-right: 6px;
+}
+.flow li span {
+  color: var(--text-2);
+}
+.hb-item {
+  display: grid;
+  gap: 6px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+  max-width: 80ch;
+}
+.hb-item:last-child {
+  border-bottom: 0;
+}
+.hb-item h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  font-size: 15px;
+}
+.hb-state {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--tone);
+  color: var(--text);
+}
+.you-line {
+  background: var(--warning-bg);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+@media (max-width: 1500px) {
+  .map-wrap {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .map-panel {
+    position: static;
+  }
+}
+@media (max-width: 700px) {
+  /* The full map is too small to read on a phone: the list below takes over. */
+  .map-canvas {
+    display: none;
+  }
+}

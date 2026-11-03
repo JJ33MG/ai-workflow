@@ -6,6 +6,7 @@ import { collectBriefingData, formatBriefing } from "./agents/ceo.js";
 import { agents, syncAgents } from "./agents/index.js";
 import { handleCommand } from "./commands.js";
 import { config } from "./config.js";
+import { setPlanStatus } from "./brain.js";
 import { ChatUnavailableError, chatHistory, sendChat } from "./chat.js";
 import { buildBusinessDetail, buildDashboard } from "./dashboard.js";
 import { db } from "./db.js";
@@ -88,6 +89,21 @@ app.post("/api/agents/:id/chat", requireAdmin, async (req, res) => {
       return;
     }
     throw err;
+  }
+});
+
+// Jarne ticks off his own steps in the build plan.
+app.post("/api/plan/:id", requireAdmin, async (req, res) => {
+  const status = String((req.body as { status?: string }).status ?? "");
+  if (!["done", "doing", "todo"].includes(status)) {
+    res.status(400).json({ error: "status moet done, doing of todo zijn" });
+    return;
+  }
+  try {
+    const item = await setPlanStatus(String(req.params.id), status as "done" | "doing" | "todo");
+    res.json({ message: status === "done" ? `Afgevinkt: ${item.title}` : `Bijgewerkt: ${item.title}`, item });
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
   }
 });
 

@@ -152,10 +152,10 @@ export const ceoAgent: AgentDefinition = {
   phase: 1,
   businessId: null,
   chatTasks: ["briefing"],
-  description: "Reads every agent's logs, sales and costs and sends Jarne one morning briefing with today's focus.",
+  description: "Leest alle logboeken, verkopen en kosten en stuurt Jarne elke ochtend één briefing met de focus voor vandaag.",
   dependsOn: ["database", "claude", "telegram"],
   handlers: { briefing },
   taskInfo: {
-    briefing: "Collect revenue, costs, agent activity, incidents and pending decisions; send the Telegram briefing",
+    briefing: "Omzet, kosten, wat elke agent deed, problemen en beslissingen verzamelen; de briefing via Telegram sturen",
   },
 };

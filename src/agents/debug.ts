@@ -92,10 +92,10 @@ export const debugAgent: AgentDefinition = {
   phase: 1,
   businessId: null,
   chatTasks: ["check"],
-  description: "Watches every agent: retries failed tasks, escalates what keeps failing and watches the API budget.",
+  description: "Bewaakt alle agents: probeert mislukte taken opnieuw, meldt wat blijft mislukken en let op het Claude-budget.",
   dependsOn: ["database", "telegram"],
   handlers: { check },
   taskInfo: {
-    check: "Retry failed tasks with backoff, unstick hung tasks, escalate repeated failures with a likely fix",
+    check: "Mislukte taken opnieuw proberen, vastgelopen taken vrijmaken, herhaalde fouten melden met de waarschijnlijke oplossing",
   },
 };

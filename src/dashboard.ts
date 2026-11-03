@@ -7,6 +7,7 @@ import { apiSpendTodayCents } from "./lib/budget.js";
 import { runHealthChecks, type CheckStatus, type HealthCheck } from "./lib/health.js";
 import { startOfDay, startOfMonth, toEurCents } from "./lib/money.js";
 import { allGuides, diagnose } from "./lib/troubleshoot.js";
+import { buildBrain, planWithStatus } from "./brain.js";
 import { SCHEDULE, nextRunOf, schedulerState } from "./scheduler.js";
 
 export type AgentHealth = "ok" | "running" | "waiting" | "paused" | "retrying" | "stale" | "blocked" | "failing";
@@ -90,7 +91,7 @@ export async function buildDashboard(now = new Date()) {
           return {
             type,
             description,
-            schedule: sched?.label ?? "On demand",
+            schedule: sched?.label ?? "Op verzoek",
             nextRunAt: sched ? nextRunOf(row.id, type) : null,
             lastSuccessAt,
             stale,
@@ -105,27 +106,27 @@ export async function buildDashboard(now = new Date()) {
       let health: AgentHealth;
       let reason: string;
       let error: string | null = null;
-      if (!row.enabled) [health, reason] = ["paused", "Paused: scheduled jobs are skipped"];
+      if (!row.enabled) [health, reason] = ["paused", "Gepauzeerd: geplande taken worden overgeslagen"];
       else if (escalated) {
-        [health, reason] = ["failing", `${escalated.type} failed ${escalated.attempts}× and gave up`];
+        [health, reason] = ["failing", `${escalated.type} is ${escalated.attempts}× mislukt en gestopt`];
         error = escalated.error;
       }
-      else if (blockedBy.length) [health, reason] = ["blocked", `Needs ${blockedBy.map((c) => c.label).join(", ")}: ${blockedBy[0].detail}`];
+      else if (blockedBy.length) [health, reason] = ["blocked", `Heeft ${blockedBy.map((c) => c.label).join(", ")} nodig: ${blockedBy[0].detail}`];
       else if (lastFailed) {
-        [health, reason] = ["retrying", `${lastFailed.type} failed; retrying automatically`];
+        [health, reason] = ["retrying", `${lastFailed.type} mislukt; wordt automatisch opnieuw geprobeerd`];
         error = lastFailed.error;
       }
-      else if (row.status === "running") [health, reason] = ["running", "Working on a task right now"];
-      else if (tasks.some((t) => t.stale)) [health, reason] = ["stale", `Hasn't completed ${tasks.filter((t) => t.stale).map((t) => t.type).join(", ")} on schedule`];
-      else if (!row.lastRunAt) [health, reason] = ["waiting", "Has not run yet; waiting for its first scheduled job"];
-      else [health, reason] = ["ok", "Working normally"];
+      else if (row.status === "running") [health, reason] = ["running", "Is nu met een taak bezig"];
+      else if (tasks.some((t) => t.stale)) [health, reason] = ["stale", `${tasks.filter((t) => t.stale).map((t) => t.type).join(", ")} is niet op tijd gelukt`];
+      else if (!row.lastRunAt) [health, reason] = ["waiting", "Heeft nog niet gedraaid; wacht op de eerste geplande taak"];
+      else [health, reason] = ["ok", "Werkt normaal"];
 
       return {
         id: row.id,
         name: row.name,
         phase: row.phase,
         businessId: def?.businessId ?? null,
-        business: businessById(def?.businessId)?.name ?? "Whole company",
+        business: businessById(def?.businessId)?.name ?? "Hele bedrijf",
         description: def?.description ?? "",
         enabled: row.enabled,
         health,
@@ -270,20 +271,25 @@ export async function buildDashboard(now = new Date()) {
     errorChecks.length || failingAgents.length || needsYou
       ? {
           status: "error",
-          headline: "Something needs your attention",
+          headline: "Er vraagt iets je aandacht",
           items: [
             ...errorChecks.map((c) => `${c.label}: ${c.detail}`),
             ...failingAgents.map((a) => `${a.name}: ${a.reason}${a.error ? ` (${a.error})` : ""}`),
-            ...(needsYou ? [`${needsYou} failed task(s) gave up after retrying`] : []),
+            ...(needsYou ? [`${needsYou} taak/taken mislukt en gestopt na opnieuw proberen`] : []),
           ],
         }
       : warnings
-        ? { status: "warn", headline: "Running, with warnings", items: [] }
-        : { status: "ok", headline: "All systems working", items: [] };
+        ? { status: "warn", headline: "Draait, met waarschuwingen", items: [] }
+        : { status: "ok", headline: "Alles werkt", items: [] };
+
+  const plan = await planWithStatus();
+  const brain = buildBrain({ checks, agents, businesses, approvals, plan });
 
   return {
     generatedAt: now,
     dryRun: config.dryRun,
+    brain,
+    plan,
     timezone: config.timezone,
     serverStartedAt: schedulerState.startedAt,
     overall,

@@ -145,6 +145,37 @@ describe.skipIf(!url)("with database", async () => {
     expect(await buildBusinessDetail("nope")).toBeNull();
   });
 
+  it("shows every part of the company on the brain map with a real status", async () => {
+    const { buildDashboard } = await import("../src/dashboard.js");
+    const { db: _db } = await import("../src/db.js");
+    await _db.setting.deleteMany({ where: { key: "plan.status" } });
+    const d = await buildDashboard();
+    const node = (id: string) => d.brain.nodes.find((n) => n.id === id)!;
+    expect(node("svc:database").status.state).toBe("live");
+    expect(node("svc:claude").status.state).toBe("error"); // tests run without a key
+    expect(node("svc:kdp").status.state).toBe("off");
+    expect(node("biz:roadgem").status.state).toBe("parked");
+    expect(node("svc:server").status.label).toBe("Niet online");
+    for (const [a, b] of d.brain.edges) {
+      expect(d.brain.nodes.some((n) => n.id === a)).toBe(true);
+      expect(d.brain.nodes.some((n) => n.id === b)).toBe(true);
+    }
+  });
+
+  it("lets Jarne tick off only his own plan steps, and the map follows", async () => {
+    const { setPlanStatus } = await import("../src/brain.js");
+    const { buildDashboard } = await import("../src/dashboard.js");
+    const { db: _db } = await import("../src/db.js");
+    await _db.setting.deleteMany({ where: { key: "plan.status" } });
+    await setPlanStatus("kdp-account", "done");
+    const d = await buildDashboard();
+    expect(d.plan.find((p) => p.id === "kdp-account")!.status).toBe("done");
+    expect(d.brain.nodes.find((n) => n.id === "svc:kdp")!.status.state).toBe("manual");
+    await expect(setPlanStatus("core", "todo")).rejects.toThrow(/systeem/);
+    await expect(setPlanStatus("nope", "done")).rejects.toThrow(/Onbekende/);
+    await _db.setting.deleteMany({ where: { key: "plan.status" } });
+  });
+
   it("blocks Claude calls once the daily budget is spent", async () => {
     await db.cost.create({ data: { agentId: "ceo", category: "claude_api", amountCents: 100_000, currency: "EUR" } });
     await expect(assertApiBudget()).rejects.toBeInstanceOf(BudgetExceededError);

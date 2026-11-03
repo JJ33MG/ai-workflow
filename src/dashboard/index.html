@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="nl">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -11,9 +11,9 @@
     <div id="login" class="login" hidden>
       <form id="login-form" class="login-card">
         <h1>Agency Brain</h1>
-        <p>Enter the server's <code>ADMIN_TOKEN</code> to open the dashboard.</p>
-        <input id="token" type="password" autocomplete="current-password" placeholder="Admin token" required />
-        <button type="submit" class="btn btn-primary">Open dashboard</button>
+        <p>Vul de <code>ADMIN_TOKEN</code> van de server in om het dashboard te openen.</p>
+        <input id="token" type="password" autocomplete="current-password" placeholder="Toegangscode" required />
+        <button type="submit" class="btn btn-primary">Dashboard openen</button>
         <p id="login-error" class="login-error" role="alert"></p>
       </form>
     </div>
@@ -26,36 +26,43 @@
           <span id="mode-badge" class="badge"></span>
         </div>
         <div id="side-status" class="side-status"></div>
-        <nav class="nav" aria-label="Sections">
-          <button data-section="overview" aria-current="true">Overview</button>
-          <button data-section="businesses">Businesses</button>
+        <nav class="nav" aria-label="Onderdelen">
+          <button data-section="map" aria-current="true">Het brein</button>
+          <button data-section="overview">Overzicht</button>
+          <button data-section="businesses">Bedrijven</button>
           <button data-section="agents">Agents</button>
           <button data-section="chat">Chat</button>
-          <button data-section="problems">Problems <span id="problem-count" class="count" hidden></span></button>
-          <button data-section="brain">Shared brain</button>
-          <button data-section="activity">Activity</button>
-          <button data-section="guide">Fix guide</button>
+          <button data-section="problems">Problemen <span id="problem-count" class="count" hidden></span></button>
+          <button data-section="plan">Bouwplan</button>
+          <button data-section="handbook">Handleiding</button>
+          <button data-section="guide">Oplossingen</button>
+          <button data-section="brain">Geheugen</button>
+          <button data-section="activity">Activiteit</button>
         </nav>
         <div class="side-foot">
           <span id="updated" class="muted"></span>
           <div class="side-actions">
-            <button id="refresh" class="btn btn-sm">↻ Refresh</button>
-            <button id="logout" class="btn btn-sm btn-ghost">Sign out</button>
+            <button id="refresh" class="btn btn-sm">↻ Vernieuwen</button>
+            <button id="logout" class="btn btn-sm btn-ghost">Uitloggen</button>
           </div>
         </div>
       </aside>
 
       <main>
-        <section id="section-overview" class="section">
+        <section id="section-map" class="section">
+          <div id="map" class="stack"></div>
+        </section>
+
+        <section id="section-overview" class="section" hidden>
           <div id="banner" class="banner"></div>
           <div id="kpis" class="kpis"></div>
           <div class="panel">
-            <h2>Businesses</h2>
+            <h2>Bedrijven</h2>
             <div id="overview-businesses" class="biz-grid"></div>
           </div>
           <div class="grid-2">
             <div class="panel">
-              <h2>Systems</h2>
+              <h2>Systemen</h2>
               <div id="checks" class="checks"></div>
             </div>
             <div class="panel">
@@ -65,18 +72,18 @@
           </div>
           <div class="grid-2">
             <div class="panel">
-              <h2>Task runs, last 14 days</h2>
+              <h2>Taken per dag, laatste 14 dagen</h2>
               <div id="chart"></div>
             </div>
             <div class="panel">
-              <h2>Decisions waiting for you</h2>
+              <h2>Beslissingen die op jou wachten</h2>
               <div id="approvals"></div>
             </div>
           </div>
         </section>
 
         <section id="section-businesses" class="section" hidden>
-          <div id="business-picker" class="picker" role="group" aria-label="Business"></div>
+          <div id="business-picker" class="picker" role="group" aria-label="Bedrijf"></div>
           <div id="business-detail" class="stack"></div>
         </section>
 
@@ -91,8 +98,8 @@
               <div id="chat-head" class="chat-head"></div>
               <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
               <form id="chat-form" class="chat-form">
-                <textarea id="chat-input" rows="2" placeholder="Message the agent… (Enter to send, Shift+Enter for a new line)" aria-label="Message"></textarea>
-                <button id="chat-send" type="submit" class="btn btn-primary">Send</button>
+                <textarea id="chat-input" rows="2" placeholder="Bericht aan de agent… (Enter om te versturen, Shift+Enter voor een nieuwe regel)" aria-label="Bericht"></textarea>
+                <button id="chat-send" type="submit" class="btn btn-primary">Versturen</button>
               </form>
             </div>
           </div>
@@ -100,13 +107,46 @@
 
         <section id="section-problems" class="section" hidden>
           <div class="panel">
-            <h2>Failed tasks</h2>
-            <p class="muted">Each failure shows the exact error, what it means and how to fix it. "Retrying" ones are handled automatically; "Needs you" ones gave up.</p>
+            <h2>Mislukte taken</h2>
+            <p class="muted">Bij elke fout zie je de exacte melding, wat ze betekent en hoe je ze oplost. "Probeert opnieuw" lost het systeem zelf op; "Wacht op jou" is gestopt na 3 pogingen.</p>
             <div id="problems"></div>
           </div>
           <div class="panel">
-            <h2>Errors and warnings, last 48 hours</h2>
+            <h2>Fouten en waarschuwingen, laatste 48 uur</h2>
             <div id="issues"></div>
+          </div>
+        </section>
+
+        <section id="section-plan" class="section" hidden>
+          <div class="panel">
+            <div class="panel-head">
+              <div>
+                <h1 class="flush">Bouwplan</h1>
+                <p class="muted flush">Wat er gebouwd is, wat loopt en wat nog komt. Jouw eigen stappen vink je hier af; de kaart van het brein toont dat meteen.</p>
+              </div>
+              <label class="toggle"><input id="plan-mine" type="checkbox" /> Alleen mijn stappen</label>
+            </div>
+            <div id="plan-progress"></div>
+          </div>
+          <div id="plan-board" class="plan-board"></div>
+        </section>
+
+        <section id="section-handbook" class="section" hidden>
+          <div id="handbook" class="stack"></div>
+        </section>
+
+        <section id="section-guide" class="section" hidden>
+          <div class="panel">
+            <h2>Wat nog ingesteld moet worden</h2>
+            <p class="muted">Wat nog ingesteld of gerepareerd moet worden zodat alles draait.</p>
+            <div id="setup"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Oplossingen per foutsoort</h2>
+              <input id="guide-search" type="search" placeholder="Zoek een fout, bv. Etsy 401" aria-label="Zoek in de oplossingen" />
+            </div>
+            <div id="guides"></div>
           </div>
         </section>
 
@@ -114,12 +154,12 @@
           <div class="panel">
             <div class="panel-head">
               <div>
-                <h2>Shared brain</h2>
-                <p class="muted flush">What the agents have learned: winning niches, hooks, fixes and lessons. Every agent reads this before it works.</p>
+                <h2>Gedeeld geheugen</h2>
+                <p class="muted flush">Wat de agents geleerd hebben: niches die verkopen, haakjes, oplossingen en lessen. Elke agent leest dit voor hij begint.</p>
               </div>
               <div class="filters">
-                <select id="brain-kind" aria-label="Kind"></select>
-                <input id="brain-search" type="search" placeholder="Search" aria-label="Search the shared brain" />
+                <select id="brain-kind" aria-label="Soort"></select>
+                <input id="brain-search" type="search" placeholder="Zoeken" aria-label="Zoek in het geheugen" />
               </div>
             </div>
             <div id="brain"></div>
@@ -129,33 +169,18 @@
         <section id="section-activity" class="section" hidden>
           <div class="panel">
             <div class="panel-head">
-              <h2>Recent activity</h2>
+              <h2>Recente activiteit</h2>
               <div class="filters">
                 <select id="filter-agent" aria-label="Agent"></select>
-                <select id="filter-level" aria-label="Level">
-                  <option value="">All levels</option>
-                  <option value="error">Errors</option>
-                  <option value="warn">Warnings</option>
+                <select id="filter-level" aria-label="Soort">
+                  <option value="">Alle soorten</option>
+                  <option value="error">Fouten</option>
+                  <option value="warn">Waarschuwingen</option>
                   <option value="info">Info</option>
                 </select>
               </div>
             </div>
             <div id="activity"></div>
-          </div>
-        </section>
-
-        <section id="section-guide" class="section" hidden>
-          <div class="panel">
-            <h2>Setup checklist</h2>
-            <p class="muted">What still has to be set up or fixed for everything to run.</p>
-            <div id="setup"></div>
-          </div>
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Troubleshooting guide</h2>
-              <input id="guide-search" type="search" placeholder="Search errors, e.g. Etsy 401" aria-label="Search the guide" />
-            </div>
-            <div id="guides"></div>
           </div>
         </section>
       </main>

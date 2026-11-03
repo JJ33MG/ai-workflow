@@ -1,16 +1,19 @@
 // Agency Brain dashboard entry: login, navigation, polling and rendering.
 import { renderActivity, renderBrain } from "./js/activity.js";
 import { renderAgents } from "./js/agents.js";
+import { renderBrainMap } from "./js/brainmap.js";
 import { renderBusinesses } from "./js/businesses.js";
 import { initChat, renderChat } from "./js/chat.js";
 import { $, api, openSection, state, toast } from "./js/core.js";
+import { renderHandbook } from "./js/handbook.js";
 import { renderOverview } from "./js/overview.js";
+import { renderPlan } from "./js/plan.js";
 import { renderGuide, renderProblems } from "./js/problems.js";
 
 const TOKEN_KEY = "agency-brain-token";
 const REFRESH_MS = 30_000;
 let timer = null;
-let active = "overview";
+let active = "map";
 
 function readToken() {
   try {
@@ -32,9 +35,9 @@ function saveToken(v) {
 function render() {
   const d = state.data;
   if (!d) return;
-  $("mode-badge").textContent = window.AGENCY_PREVIEW ? (window.AGENCY_PREVIEW.label ?? "Example data") : d.dryRun ? "Dry run" : "Live";
+  $("mode-badge").textContent = window.AGENCY_PREVIEW ? (window.AGENCY_PREVIEW.label ?? "Voorbeelddata") : d.dryRun ? "Dry run" : "Live";
   $("mode-badge").dataset.live = String(!d.dryRun && !window.AGENCY_PREVIEW);
-  $("updated").textContent = `Updated ${new Date(d.generatedAt).toLocaleTimeString()}`;
+  $("updated").textContent = `Bijgewerkt ${new Date(d.generatedAt).toLocaleTimeString("nl-NL")}`;
   const count = $("problem-count");
   count.hidden = d.problems.length === 0;
   count.textContent = d.problems.length;
@@ -42,7 +45,10 @@ function render() {
   sideStatus.className = `side-status s-${d.overall.status}`;
   sideStatus.textContent = d.overall.headline;
 
+  renderBrainMap(d);
   renderOverview(d);
+  renderPlan(d);
+  renderHandbook(d);
   renderAgents(d);
   renderProblems(d);
   renderGuide(d);
@@ -58,7 +64,7 @@ async function load() {
     state.data = await api("/api/dashboard");
     render();
   } catch (err) {
-    if (err.message !== "unauthorized") toast(`Could not load: ${err.message}`);
+    if (err.message !== "unauthorized") toast(`Laden mislukt: ${err.message}`);
   }
 }
 state.onReload = load;
@@ -79,7 +85,7 @@ async function start() {
   timer = setInterval(() => document.visibilityState === "visible" && load(), REFRESH_MS);
 }
 
-window.addEventListener("unauthorized", () => showLogin("That token was not accepted."));
+window.addEventListener("unauthorized", () => showLogin("Die code werd niet geaccepteerd."));
 window.addEventListener("section", (e) => {
   active = e.detail;
   if (active === "businesses") renderBusinesses(state.data);
@@ -102,6 +108,7 @@ $("filter-agent").addEventListener("change", () => state.data && renderActivity(
 $("filter-level").addEventListener("change", () => state.data && renderActivity(state.data));
 $("brain-kind").addEventListener("change", () => state.data && renderBrain(state.data));
 $("brain-search").addEventListener("input", () => state.data && renderBrain(state.data));
+$("plan-mine").addEventListener("change", () => state.data && renderPlan(state.data));
 document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && state.data && load());
 initChat();
 

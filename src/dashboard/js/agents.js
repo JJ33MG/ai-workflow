@@ -12,7 +12,7 @@ function agentCard(a) {
     h(
       "header",
       {},
-      h("div", {}, h("h2", { class: "flush" }, a.name), h("div", { class: "business" }, `Works for: ${a.business} · Phase ${a.phase}`)),
+      h("div", {}, h("h2", { class: "flush" }, a.name), h("div", { class: "business" }, `Werkt voor: ${a.business} · Fase ${a.phase}`)),
       h(
         "div",
         { class: "agent-head-actions" },
@@ -23,9 +23,9 @@ function agentCard(a) {
           {
             class: "btn btn-sm",
             onclick: (e) =>
-              act(e.currentTarget, `/api/agents/${a.id}/${a.enabled ? "pause" : "resume"}`, null, a.enabled ? `Pause ${a.name}? Its scheduled jobs will be skipped.` : null),
+              act(e.currentTarget, `/api/agents/${a.id}/${a.enabled ? "pause" : "resume"}`, null, a.enabled ? `${a.name} pauzeren? De geplande taken worden dan overgeslagen.` : null),
           },
-          a.enabled ? "Pause" : "Resume",
+          a.enabled ? "Pauzeren" : "Hervatten",
         ),
       ),
     ),
@@ -40,31 +40,31 @@ function agentCard(a) {
         h(
           "div",
           {},
-          a.guide.id === "unknown" ? "" : `Likely cause: ${a.guide.title}. `,
-          h("button", { class: "link-btn", onclick: () => openSection("problems") }, "See how to fix →"),
+          a.guide.id === "unknown" ? "" : `Waarschijnlijke oorzaak: ${a.guide.title}. `,
+          h("button", { class: "link-btn", onclick: () => openSection("problems") }, "Bekijk de oplossing →"),
         ),
     ),
     h(
       "div",
       { class: "facts" },
-      h("span", {}, "Last run ", h("b", {}, ago(a.lastRunAt))),
-      h("span", {}, "Done (24h) ", h("b", {}, a.stats.done24h)),
-      h("span", {}, "Failed (24h) ", h("b", {}, a.stats.failed24h)),
-      h("span", {}, "Queued ", h("b", {}, a.stats.open)),
-      h("span", {}, "Cost this month ", h("b", {}, eur(a.stats.costMonth))),
+      h("span", {}, "Laatst gedraaid ", h("b", {}, ago(a.lastRunAt))),
+      h("span", {}, "Gelukt (24u) ", h("b", {}, a.stats.done24h)),
+      h("span", {}, "Mislukt (24u) ", h("b", {}, a.stats.failed24h)),
+      h("span", {}, "In wachtrij ", h("b", {}, a.stats.open)),
+      h("span", {}, "Kosten deze maand ", h("b", {}, eur(a.stats.costMonth))),
     ),
-    h("div", { class: "deps" }, h("span", { class: "muted" }, "Needs:"), a.dependsOn.map((dep) => statusPill(dep.status, dep.label))),
+    h("div", { class: "deps" }, h("span", { class: "muted" }, "Heeft nodig:"), a.dependsOn.map((dep) => statusPill(dep.status, dep.label))),
     table(
-      ["What it can do", "When", "Last success", "Next run", ""],
+      ["Wat hij kan", "Wanneer", "Laatst gelukt", "Volgende keer", ""],
       a.tasks.map((t) =>
         h(
           "tr",
           {},
           h("td", {}, h("div", {}, t.description), h("code", { class: "muted" }, t.type)),
           h("td", { class: "nowrap" }, t.schedule),
-          h("td", { class: `nowrap ${t.stale ? "stale" : ""}` }, ago(t.lastSuccessAt), t.stale ? " · late" : ""),
+          h("td", { class: `nowrap ${t.stale ? "stale" : ""}` }, ago(t.lastSuccessAt), t.stale ? " · te laat" : ""),
           h("td", { class: "nowrap" }, t.nextRunAt ? until(t.nextRunAt) : "—"),
-          h("td", {}, h("button", { class: "btn btn-sm", onclick: (e) => act(e.currentTarget, `/api/agents/${a.id}/tasks`, { type: t.type }) }, "Run now")),
+          h("td", {}, h("button", { class: "btn btn-sm", onclick: (e) => act(e.currentTarget, `/api/agents/${a.id}/tasks`, { type: t.type }) }, "Nu starten")),
         ),
       ),
     ),

@@ -240,14 +240,14 @@ async function createBook(payload: Record<string, unknown>, { log, taskId }: Tas
 
 export const kdpColoringAgent: AgentDefinition = {
   id: ID,
-  name: "Coloring Book Agent",
+  name: "Kleurboek-agent",
   phase: 2,
   businessId: "kdp-coloring",
-  description: "Plans and draws children's coloring books, checks every page, and prepares the print files for Amazon KDP.",
+  description: "Bedenkt en tekent kinderkleurboeken, controleert elke pagina en maakt de printbestanden voor Amazon KDP.",
   dependsOn: ["database", "claude"],
   chatTasks: ["create_book"],
   handlers: { create_book: createBook },
   taskInfo: {
-    create_book: "Plan a children's coloring book, draw and review every page, build the interior and cover PDFs for KDP",
+    create_book: "Een kinderkleurboek bedenken, elke pagina tekenen en controleren, het binnenwerk en de omslag maken voor KDP",
   },
 };

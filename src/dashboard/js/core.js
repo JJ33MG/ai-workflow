@@ -3,27 +3,30 @@
 
 export const STATUS = {
   ok: { icon: "✓", label: "OK" },
-  warn: { icon: "!", label: "Warning" },
-  error: { icon: "✕", label: "Problem" },
-  off: { icon: "–", label: "Not set up" },
+  warn: { icon: "!", label: "Let op" },
+  error: { icon: "✕", label: "Probleem" },
+  off: { icon: "–", label: "Niet ingesteld" },
 };
 
 export const AGENT_LABEL = {
-  ok: "Working",
-  running: "Running",
-  waiting: "Waiting",
-  paused: "Paused",
-  retrying: "Retrying",
-  stale: "Late",
-  blocked: "Blocked",
-  failing: "Failing",
+  ok: "Werkt",
+  running: "Bezig",
+  waiting: "Wacht",
+  paused: "Gepauzeerd",
+  retrying: "Probeert opnieuw",
+  stale: "Te laat",
+  blocked: "Geblokkeerd",
+  failing: "Faalt",
 };
 
+/** Log levels as shown to Jarne. */
+export const LEVEL = { error: "fout", warn: "waarschuwing", info: "info" };
+
 export const STAGE = {
-  earning: { label: "Earning", status: "ok" },
-  "setting-up": { label: "Setting up", status: "warn" },
-  planned: { label: "Planned", status: "off" },
-  parked: { label: "Parked", status: "off" },
+  earning: { label: "Verdient", status: "ok" },
+  "setting-up": { label: "In opbouw", status: "warn" },
+  planned: { label: "Gepland", status: "off" },
+  parked: { label: "Geparkeerd", status: "off" },
 };
 
 /** Not running yet: planned for a later phase, or parked on purpose. */
@@ -61,7 +64,7 @@ export function statusPill(status, label) {
 }
 
 export const eur = (cents, digits = 2) =>
-  `${cents < 0 ? "-" : ""}€${(Math.abs(cents) / 100).toLocaleString("en-US", {
+  `${cents < 0 ? "-" : ""}€${(Math.abs(cents) / 100).toLocaleString("nl-NL", {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   })}`;
@@ -70,20 +73,20 @@ export const money = (cents, currency) => (currency === "EUR" ? eur(cents) : `${
 
 function span(s) {
   if (s < 3600) return `${Math.max(1, Math.round(s / 60))} min`;
-  if (s < 86400) return `${Math.round(s / 3600)} h`;
+  if (s < 86400) return `${Math.round(s / 3600)} u`;
   return `${Math.round(s / 86400)} d`;
 }
 export function ago(iso) {
-  if (!iso) return "never";
+  if (!iso) return "nooit";
   const s = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
   if (s < -60) return `in ${span(-s)}`;
-  if (s < 45) return "just now";
-  return `${span(s)} ago`;
+  if (s < 45) return "zojuist";
+  return `${span(s)} geleden`;
 }
 export const until = (iso) =>
   iso ? `in ${span(Math.max(60, Math.round((new Date(iso).getTime() - Date.now()) / 1000)))}` : "—";
 export const stamp = (iso) =>
-  iso ? new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "—";
+  iso ? new Date(iso).toLocaleString("nl-NL", { dateStyle: "medium", timeStyle: "short" }) : "—";
 
 export async function api(path, options = {}) {
   // The published preview swaps in example data here.
@@ -97,7 +100,7 @@ export async function api(path, options = {}) {
     throw new Error("unauthorized");
   }
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`);
+  if (!res.ok) throw new Error(body.error ?? `Verzoek mislukt (${res.status})`);
   return body;
 }
 
@@ -115,10 +118,10 @@ export async function act(button, path, body, confirmText) {
   button.disabled = true;
   try {
     const res = await api(path, { method: "POST", body: body ? JSON.stringify(body) : undefined });
-    toast(res.message ?? "Done");
+    toast(res.message ?? "Gedaan");
     await state.onReload();
   } catch (err) {
-    if (err.message !== "unauthorized") toast(`Failed: ${err.message}`);
+    if (err.message !== "unauthorized") toast(`Mislukt: ${err.message}`);
   } finally {
     button.disabled = false;
   }
@@ -136,8 +139,8 @@ function confirmInline(button, text) {
       "div",
       { class: "confirm", role: "alertdialog" },
       h("span", {}, text),
-      h("button", { class: "btn btn-primary btn-sm", onclick: () => done(true) }, "Yes"),
-      h("button", { class: "btn btn-sm", onclick: () => done(false) }, "Cancel"),
+      h("button", { class: "btn btn-primary btn-sm", onclick: () => done(true) }, "Ja"),
+      h("button", { class: "btn btn-sm", onclick: () => done(false) }, "Annuleren"),
     );
     button.closest(".actions, .agent-head-actions, td, div")?.after(bar);
     bar.querySelector("button")?.focus();

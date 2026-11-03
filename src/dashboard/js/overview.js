@@ -15,7 +15,7 @@ export function renderCheck(c) {
 
 export function targetLabel(b) {
   const [lo, hi] = b.targetCents;
-  return hi ? `Target ${eur(lo, 0)}–${eur(hi, 0)} / month` : "No revenue target yet";
+  return hi ? `Doel ${eur(lo, 0)}–${eur(hi, 0)} per maand` : "Nog geen omzetdoel";
 }
 
 export function businessCard(b) {
@@ -25,25 +25,25 @@ export function businessCard(b) {
   return h(
     "button",
     { class: `biz-card stage-${b.stage}`, onclick: () => openBusiness(b.id) },
-    h("div", { class: "biz-card-head" }, h("span", { class: "biz-kind" }, `${b.kind} · Phase ${b.phase}`), statusPill(stage.status, stage.label)),
+    h("div", { class: "biz-card-head" }, h("span", { class: "biz-kind" }, `${b.kind} · Fase ${b.phase}`), statusPill(stage.status, stage.label)),
     h("strong", { class: "biz-name" }, b.name),
     notStarted(b)
       ? h("p", { class: "biz-plan" }, b.plan)
       : h(
           "div",
           { class: "biz-figures" },
-          h("div", {}, h("span", { class: "label" }, "Revenue this month"), h("b", {}, eur(b.revenueMonth))),
-          h("div", {}, h("span", { class: "label" }, "Profit"), h("b", {}, eur(b.profitMonth))),
-          h("div", {}, h("span", { class: "label" }, "Products"), h("b", {}, b.products.total)),
+          h("div", {}, h("span", { class: "label" }, "Omzet deze maand"), h("b", {}, eur(b.revenueMonth))),
+          h("div", {}, h("span", { class: "label" }, "Winst"), h("b", {}, eur(b.profitMonth))),
+          h("div", {}, h("span", { class: "label" }, "Producten"), h("b", {}, b.products.total)),
         ),
     hi > 0 &&
       !notStarted(b) &&
-      h("div", { class: "meter", "aria-label": "Progress to target" }, h("span", { style: `width:${Math.min(100, pct)}%` })),
+      h("div", { class: "meter", "aria-label": "Voortgang naar doel" }, h("span", { style: `width:${Math.min(100, pct)}%` })),
     h(
       "div",
       { class: "biz-foot" },
       h("span", {}, targetLabel(b)),
-      b.openProblems > 0 && h("span", { class: "problem-chip" }, `${b.openProblems} problem${b.openProblems > 1 ? "s" : ""}`),
+      b.openProblems > 0 && h("span", { class: "problem-chip" }, `${b.openProblems} probleem${b.openProblems > 1 ? "en" : ""}`),
     ),
   );
 }
@@ -60,10 +60,10 @@ export function renderOverview(d) {
       h("h1", {}, d.overall.headline),
       d.overall.items.length
         ? h("ul", {}, d.overall.items.map((i) => h("li", {}, i)))
-        : h("div", { class: "muted" }, d.overall.status === "ok" ? "Every business, agent and integration is healthy." : "See the warnings under Systems and Agents."),
+        : h("div", { class: "muted" }, d.overall.status === "ok" ? "Alle bedrijven, agents en koppelingen werken." : "Zie de waarschuwingen bij Systemen en Agents."),
     ),
     d.overall.status !== "ok" &&
-      h("button", { class: "btn btn-sm banner-btn", onclick: () => openSection("problems") }, "Open problems"),
+      h("button", { class: "btn btn-sm banner-btn", onclick: () => openSection("problems") }, "Bekijk problemen"),
   );
 
   const m = d.money;
@@ -72,14 +72,14 @@ export function renderOverview(d) {
   const needsYou = d.problems.filter((p) => p.state === "needs-you").length;
   fill(
     "kpis",
-    kpi("Revenue this month", eur(m.revenueMonth), `${eur(m.revenueToday)} today`),
-    kpi("Costs this month", eur(m.costsMonth), `${eur(m.overheadMonth)} company-wide overhead`),
-    kpi("Net towards €10,000", eur(m.netMonth), `${Math.max(0, goalPct).toFixed(1)}% of the monthly goal`, { pct: goalPct }),
-    kpi("Claude budget today", `${Math.round(apiPct)}%`, `${eur(m.apiSpentToday)} of ${eur(m.apiCapToday)}`, {
+    kpi("Omzet deze maand", eur(m.revenueMonth), `${eur(m.revenueToday)} vandaag`),
+    kpi("Kosten deze maand", eur(m.costsMonth), `${eur(m.overheadMonth)} algemene kosten`),
+    kpi("Netto richting €10.000", eur(m.netMonth), `${Math.max(0, goalPct).toFixed(1)}% van het maanddoel`, { pct: goalPct }),
+    kpi("Claude-budget vandaag", `${Math.round(apiPct)}%`, `${eur(m.apiSpentToday)} van ${eur(m.apiCapToday)}`, {
       pct: apiPct,
       cls: apiPct >= 100 ? "error" : apiPct >= 80 ? "warn" : "",
     }),
-    kpi("Open problems", String(d.problems.length), needsYou ? `${needsYou} need you` : d.problems.length ? "Being retried automatically" : "None"),
+    kpi("Open problemen", String(d.problems.length), needsYou ? `${needsYou} wachten op jou` : d.problems.length ? "Worden automatisch opnieuw geprobeerd" : "Geen"),
   );
 
   fill("overview-businesses", d.businesses.map(businessCard));
@@ -105,19 +105,19 @@ export function renderOverview(d) {
   fill(
     "approvals",
     d.approvals.length === 0
-      ? empty("Nothing waiting for a decision.", true)
+      ? empty("Er wacht niets op een beslissing.", true)
       : d.approvals.map((a) => {
           const amount = a.amountCents != null ? ` · ${money(a.amountCents, a.currency)}` : "";
           return h(
             "div",
             { class: "approval" },
             h("strong", {}, a.title),
-            h("div", { class: "details" }, a.details, amount, ` · asked ${ago(a.createdAt)}`),
+            h("div", { class: "details" }, a.details, amount, ` · gevraagd ${ago(a.createdAt)}`),
             h(
               "div",
               { class: "actions" },
-              h("button", { class: "btn btn-primary btn-sm", onclick: (e) => act(e.currentTarget, `/api/approvals/${a.id}/approve`, null, `Approve "${a.title}"${amount}?`) }, "Approve"),
-              h("button", { class: "btn btn-sm btn-danger", onclick: (e) => act(e.currentTarget, `/api/approvals/${a.id}/reject`) }, "Reject"),
+              h("button", { class: "btn btn-primary btn-sm", onclick: (e) => act(e.currentTarget, `/api/approvals/${a.id}/approve`, null, `"${a.title}"${amount} goedkeuren?`) }, "Goedkeuren"),
+              h("button", { class: "btn btn-sm btn-danger", onclick: (e) => act(e.currentTarget, `/api/approvals/${a.id}/reject`) }, "Afwijzen"),
             ),
           );
         }),

@@ -41,13 +41,13 @@ export interface BusinessDefinition {
 export const BUSINESSES: BusinessDefinition[] = [
   {
     id: "etsy-pod",
-    name: "Etsy print-on-demand shop",
+    name: "Etsy-winkel",
     kind: "Print-on-demand",
-    description: "Typography mugs for gift niches, sold on Etsy and printed and shipped by Printful.",
+    description: "Mokken met tekstontwerpen voor cadeau-niches, verkocht op Etsy en gedrukt en verstuurd door Printful.",
     phase: 1,
     channels: ["Etsy", "Printful"],
     targetCents: [1_000_00, 2_000_00],
-    plan: "Research niches, generate designs and listings, publish via the Etsy API, fulfil via Printful.",
+    plan: "Niches zoeken, ontwerpen en listings maken, publiceren via Etsy, laten drukken door Printful.",
     products: async () => {
       const listings = await db.listing.findMany({ orderBy: { createdAt: "desc" }, take: 60 });
       const sales = await db.sale.findMany({ where: { source: "etsy" }, select: { data: true } });
@@ -71,15 +71,15 @@ export const BUSINESSES: BusinessDefinition[] = [
   },
   {
     id: "kdp-coloring",
-    name: "Coloring books on Amazon KDP",
-    kind: "Self-publishing",
-    description: "Coloring books for adults and kids, printed on demand and sold on Amazon through Kindle Direct Publishing.",
+    name: "Kleurboeken",
+    kind: "Zelfpublicatie",
+    description: "Kinderkleurboeken, gedrukt op bestelling en verkocht op Amazon via Kindle Direct Publishing.",
     phase: 2,
     channels: ["Amazon KDP"],
     targetCents: [0, 0],
     plan:
-      "Pick themes, generate the line-art pages, the print-ready interior PDF and cover, plus title, description and keywords. " +
-      "Jarne uploads each book in KDP (no publishing API; KDP allows a few new titles per day).",
+      "Thema's kiezen, kleurplaten tekenen, het printklare binnenwerk en de omslag maken, plus titel, beschrijving en zoekwoorden. " +
+      "Jarne uploadt elk boek in KDP (geen koppeling mogelijk; KDP staat een paar nieuwe boeken per dag toe).",
     products: async () => {
       const books = await db.coloringBook.findMany({ orderBy: { createdAt: "desc" }, take: 40 });
       return Promise.all(
@@ -110,33 +110,33 @@ export const BUSINESSES: BusinessDefinition[] = [
   },
   {
     id: "dropshipping",
-    name: "Dropshipping stores",
-    kind: "E-commerce",
-    description: "Online stores selling trending products shipped directly by suppliers.",
+    name: "Dropshipping",
+    kind: "Webwinkel",
+    description: "Webwinkels met trending producten die de leverancier zelf verstuurt.",
     phase: 3,
     channels: ["Shopify (or alternative)", "Ads"],
     targetCents: [5_000_00, 6_000_00],
-    plan: "Pick products, build and update the store, write listings and ad copy, track margins.",
+    plan: "Producten kiezen, de winkel bouwen en bijhouden, teksten en advertenties schrijven, marges bewaken.",
   },
   {
     id: "cartoon-content",
-    name: "AI cartoon channel",
+    name: "AI-cartoonkanaal",
     kind: "Content",
-    description: "AI cartoon videos and shorts for YouTube, TikTok and Instagram; also sends traffic to the shops.",
+    description: "AI-cartoonvideo's en shorts voor YouTube, TikTok en Instagram; stuurt ook bezoekers naar de winkels.",
     phase: 4,
     channels: ["YouTube", "TikTok", "Instagram"],
     targetCents: [1_000_00, 2_000_00],
-    plan: "Short-form first for reach, long-form for YouTube monetisation; ads and affiliate revenue.",
+    plan: "Eerst korte video's voor bereik, daarna lange voor YouTube-inkomsten; advertenties en affiliate-links.",
   },
   {
     id: "roadgem",
     name: "RoadGem",
     kind: "App",
-    description: "The RoadGem road-trip planner: growth, content and support.",
+    description: "De RoadGem roadtrip-app: groei, content en support.",
     phase: 5,
     channels: ["roadgem app", "Premium subscriptions", "Affiliates"],
     targetCents: [0, 0],
-    plan: "On hold: money first from simpler businesses (print-on-demand, coloring books, dropshipping).",
+    plan: "Geparkeerd: eerst geld verdienen met de simpelere bedrijven (mokken, kleurboeken, dropshipping).",
     parked: true,
   },
 ];

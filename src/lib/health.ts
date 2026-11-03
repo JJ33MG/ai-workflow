@@ -31,13 +31,13 @@ export async function runHealthChecks(now = new Date()): Promise<HealthCheck[]> 
   }
   checks.push(
     dbOk
-      ? { id: "database", label: "Database", status: "ok", detail: "PostgreSQL reachable" }
+      ? { id: "database", label: "Database", status: "ok", detail: "PostgreSQL bereikbaar" }
       : {
           id: "database",
           label: "Database",
           status: "error",
-          detail: "PostgreSQL is not reachable",
-          fix: "Check DATABASE_URL and that the database service is running.",
+          detail: "PostgreSQL is niet bereikbaar",
+          fix: "Controleer DATABASE_URL en of de database-dienst draait.",
         },
   );
 
@@ -47,13 +47,13 @@ export async function runHealthChecks(now = new Date()): Promise<HealthCheck[]> 
   const justStarted = started && now.getTime() - started.getTime() < WORKER_STALE_MS;
   checks.push(
     workerFresh || justStarted
-      ? { id: "worker", label: "Task worker", status: "ok", detail: "Picking up tasks every 15 seconds" }
+      ? { id: "worker", label: "Takenwachtrij", status: "ok", detail: "Pakt elke 15 seconden taken op" }
       : {
           id: "worker",
-          label: "Task worker",
+          label: "Takenwachtrij",
           status: "error",
-          detail: tick ? `Last ran ${Math.round((now.getTime() - tick.getTime()) / 60000)} min ago` : "Has not run",
-          fix: "The worker loop has stopped. Restart the server and check its logs for a crash.",
+          detail: tick ? `Laatst gedraaid ${Math.round((now.getTime() - tick.getTime()) / 60000)} min geleden` : "Heeft nog niet gedraaid",
+          fix: "De takenwachtrij is gestopt. Herstart de server en kijk in het serverlog naar een crash.",
         },
   );
 
@@ -62,14 +62,14 @@ export async function runHealthChecks(now = new Date()): Promise<HealthCheck[]> 
       id: "claude",
       label: "Claude API",
       status: "error",
-      detail: "ANTHROPIC_API_KEY is not set: agents cannot think",
-      fix: "Create a key at console.anthropic.com and set ANTHROPIC_API_KEY.",
+      detail: "ANTHROPIC_API_KEY ontbreekt: de agents kunnen niet denken",
+      fix: "Maak een sleutel op console.anthropic.com en stel ANTHROPIC_API_KEY in.",
     });
   } else {
     const spent = await apiSpendTodayCents(now);
     const cap = config.budget.dailyApiCapCents;
     const pct = Math.round((spent / cap) * 100);
-    const detail = `Key set · ${pct}% of today's €${(cap / 100).toFixed(2)} budget used`;
+    const detail = `Sleutel ingesteld · ${pct}% van het dagbudget van €${(cap / 100).toFixed(2)} gebruikt`;
     checks.push(
       spent >= cap
         ? {
@@ -77,23 +77,23 @@ export async function runHealthChecks(now = new Date()): Promise<HealthCheck[]> 
             label: "Claude API",
             status: "error",
             detail,
-            fix: "Budget reached: agents pause Claude calls until midnight. Raise DAILY_API_BUDGET_EUR if needed.",
+            fix: "Budget bereikt: de agents pauzeren tot middernacht. Verhoog DAILY_API_BUDGET_EUR als dat nodig is.",
           }
         : spent >= cap * 0.8
-          ? { id: "claude", label: "Claude API", status: "warn", detail, fix: "Close to the daily cap." }
+          ? { id: "claude", label: "Claude API", status: "warn", detail, fix: "Bijna aan de daglimiet." }
           : { id: "claude", label: "Claude API", status: "ok", detail },
     );
   }
 
   checks.push(
     isTelegramConfigured()
-      ? { id: "telegram", label: "Telegram", status: "ok", detail: "Briefings and alerts are sent to your chat" }
+      ? { id: "telegram", label: "Telegram", status: "ok", detail: "Briefings en meldingen gaan naar je chat" }
       : {
           id: "telegram",
           label: "Telegram",
           status: "warn",
-          detail: "Not set up: briefings and alerts only go to the server log",
-          fix: "Create a bot with @BotFather, then set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID.",
+          detail: "Niet ingesteld: briefings en meldingen komen alleen in het serverlog",
+          fix: "Maak een bot via @BotFather en stel TELEGRAM_BOT_TOKEN en TELEGRAM_CHAT_ID in.",
         },
   );
 
@@ -102,19 +102,19 @@ export async function runHealthChecks(now = new Date()): Promise<HealthCheck[]> 
       id: "etsy",
       label: "Etsy",
       status: "off",
-      detail: "Not set up: listings stay as local drafts",
-      fix: "Register an app at etsy.com/developers and fill in the ETSY_* variables.",
+      detail: "Niet gekoppeld: listings blijven lokale concepten",
+      fix: "Vraag een app aan op etsy.com/developers en vul de ETSY_*-instellingen in.",
     });
   } else if (!(await isEtsyConnected())) {
     checks.push({
       id: "etsy",
       label: "Etsy",
       status: "error",
-      detail: "Keys set, but the shop is not connected",
-      fix: "Open /auth/etsy/start?token=ADMIN_TOKEN and approve access.",
+      detail: "Sleutels ingesteld, maar de winkel is niet gekoppeld",
+      fix: "Open /auth/etsy/start?token=ADMIN_TOKEN en geef toegang.",
     });
   } else {
-    checks.push({ id: "etsy", label: "Etsy", status: "ok", detail: `Shop ${config.etsy.shopId} connected` });
+    checks.push({ id: "etsy", label: "Etsy", status: "ok", detail: `Winkel ${config.etsy.shopId} gekoppeld` });
   }
 
   checks.push(
@@ -124,18 +124,18 @@ export async function runHealthChecks(now = new Date()): Promise<HealthCheck[]> 
           id: "printful",
           label: "Printful",
           status: "off",
-          detail: "Not set up: sales can't be fulfilled automatically",
-          fix: "Set PRINTFUL_TOKEN, PRINTFUL_PRODUCT_ID and PRINTFUL_VARIANT_ID (see npm run printful:catalog).",
+          detail: "Niet gekoppeld: bestellingen worden niet automatisch doorgezet",
+          fix: "Stel PRINTFUL_TOKEN, PRINTFUL_PRODUCT_ID en PRINTFUL_VARIANT_ID in (zie npm run printful:catalog).",
         },
   );
 
   if (!config.dryRun && config.publicUrl.includes("localhost")) {
     checks.push({
       id: "public-url",
-      label: "Public URL",
+      label: "Publiek adres",
       status: "warn",
-      detail: "PUBLIC_URL is localhost: Printful can't download design files",
-      fix: "Set PUBLIC_URL to the server's public https address.",
+      detail: "PUBLIC_URL is localhost: Printful kan de ontwerpen niet downloaden",
+      fix: "Zet PUBLIC_URL op het publieke https-adres van de server.",
     });
   }
 
@@ -143,12 +143,12 @@ export async function runHealthChecks(now = new Date()): Promise<HealthCheck[]> 
     config.dryRun
       ? {
           id: "mode",
-          label: "Mode",
+          label: "Modus",
           status: "warn",
-          detail: "Dry run: nothing goes live and nothing is spent on Etsy or Printful",
-          fix: "When designs look good and keys are set, set DRY_RUN=false.",
+          detail: "Dry run: niets gaat live en er wordt niets uitgegeven op Etsy of Printful",
+          fix: "Als de ontwerpen goed zijn en de sleutels ingesteld, zet DRY_RUN=false.",
         }
-      : { id: "mode", label: "Mode", status: "ok", detail: "Live" },
+      : { id: "mode", label: "Modus", status: "ok", detail: "Live" },
   );
 
   const oldApprovals = await db.approval.count({
@@ -157,10 +157,10 @@ export async function runHealthChecks(now = new Date()): Promise<HealthCheck[]> 
   if (oldApprovals > 0) {
     checks.push({
       id: "approvals",
-      label: "Approvals",
+      label: "Beslissingen",
       status: "warn",
-      detail: `${oldApprovals} decision(s) waiting more than a day`,
-      fix: "Approve or reject them below, or with /approve in Telegram.",
+      detail: `${oldApprovals} beslissing(en) wachten al langer dan een dag`,
+      fix: "Keur goed of af in Overzicht, of met /approve in Telegram.",
     });
   }
 

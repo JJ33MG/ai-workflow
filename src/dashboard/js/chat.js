@@ -5,11 +5,12 @@ const threads = new Map(); // agent id → messages
 const pending = new Set(); // agent ids waiting for a reply
 
 const SUGGESTIONS = {
-  ceo: ["How is the company doing today?", "What should I focus on this week?", "Which business is closest to its target?"],
-  debug: ["Is anything broken right now?", "Explain the open problems and how to fix them", "Run a health check now"],
-  "etsy-pod": ["What have you made so far?", "Make 3 new mug designs", "Which niches are you trying next and why?"],
+  ceo: ["Hoe gaat het vandaag met het bedrijf?", "Waar moet ik deze week op focussen?", "Welk bedrijf zit het dichtst bij zijn doel?"],
+  debug: ["Is er nu iets kapot?", "Leg de open problemen uit en hoe ik ze oplos", "Doe nu een controle"],
+  "etsy-pod": ["Wat heb je tot nu toe gemaakt?", "Maak 3 nieuwe mokontwerpen", "Welke niches probeer je hierna en waarom?"],
+  "kdp-coloring": ["Welk kleurboek zou je als eerste maken?", "Maak een kleurboek over dinosaurussen", "Hoe weet je of een pagina goed genoeg is?"],
 };
-const DEFAULT_SUGGESTIONS = ["How are things going?", "What's blocking you?", "What do you need from me?"];
+const DEFAULT_SUGGESTIONS = ["Hoe gaat het?", "Wat houdt je tegen?", "Wat heb je van mij nodig?"];
 
 export function openChat(agentId) {
   current = agentId;
@@ -60,17 +61,17 @@ function renderThread(loadError) {
   const busy = pending.has(current);
   $("chat-send").disabled = busy;
   if (msgs === null || msgs === undefined) {
-    fill(box, h("div", { class: "empty" }, "Loading conversation…"));
+    fill(box, h("div", { class: "empty" }, "Gesprek laden…"));
     return;
   }
   const items = msgs.map(messageView);
-  if (busy) items.push(h("div", { class: "msg msg-assistant typing" }, h("span", {}), h("span", {}), h("span", {}), h("span", { class: "sr-only" }, "Agent is typing")));
+  if (busy) items.push(h("div", { class: "msg msg-assistant typing" }, h("span", {}), h("span", {}), h("span", {}), h("span", { class: "sr-only" }, "Agent is aan het typen")));
   if (msgs.length === 0 && !busy) {
     items.push(
       h(
         "div",
         { class: "chat-empty" },
-        h("p", {}, loadError ? `Couldn't load the conversation: ${loadError}` : "Ask anything. The agent answers from its live data and can start its own jobs when you ask."),
+        h("p", {}, loadError ? `Gesprek laden mislukt: ${loadError}` : "Vraag wat je wilt. De agent antwoordt vanuit zijn live gegevens en kan zijn eigen taken starten als je dat vraagt."),
         h("div", { class: "suggestions" }, (SUGGESTIONS[current] ?? DEFAULT_SUGGESTIONS).map((s) => h("button", { class: "chip-btn", onclick: () => send(s) }, s))),
       ),
     );
@@ -97,9 +98,9 @@ function messageView(m) {
 }
 
 function actionLabel(a) {
-  if (a.name === "start_task") return `Started ${a.input.agent}:${a.input.task}`;
-  if (a.name === "retry_task") return "Retried a failed task";
-  if (a.name === "save_to_brain") return `Saved to brain: ${a.input.title}`;
+  if (a.name === "start_task") return `Gestart: ${a.input.agent}:${a.input.task}`;
+  if (a.name === "retry_task") return "Mislukte taak opnieuw gestart";
+  if (a.name === "save_to_brain") return `Bewaard in het brein: ${a.input.title}`;
   return a.name;
 }
 
@@ -122,7 +123,7 @@ async function send(text) {
     thread.push({
       id: `err-${Date.now()}`,
       role: "assistant",
-      content: err.message === "unauthorized" ? "Your session expired. Sign in again." : `Couldn't reach the agent: ${err.message}`,
+      content: err.message === "unauthorized" ? "Je sessie is verlopen. Log opnieuw in." : `Kon de agent niet bereiken: ${err.message}`,
       actions: { error: true },
       createdAt: new Date().toISOString(),
     });

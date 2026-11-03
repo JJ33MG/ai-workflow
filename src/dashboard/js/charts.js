@@ -50,7 +50,7 @@ function tableView(headers, rows) {
   return h(
     "details",
     {},
-    h("summary", {}, "Show as table"),
+    h("summary", {}, "Toon als tabel"),
     h(
       "div",
       { class: "table-wrap" },
@@ -71,7 +71,7 @@ export function taskRunsChart(days) {
   const y = (v) => T + (H - T - B) * (1 - v / top);
   const colW = (W - L) / days.length;
   const barW = Math.min(22, colW * 0.6);
-  const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Tasks completed and failed per day" });
+  const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Gelukte en mislukte taken per dag" });
   axis(svg, { L, W, y, top, ticks: 4, fmt: (v) => String(Math.round(v)) });
 
   days.forEach((d, i) => {
@@ -96,7 +96,7 @@ export function taskRunsChart(days) {
     });
     if (i % 2 === (days.length - 1) % 2) dateLabel(svg, x + barW / 2, H, d.date);
     const hit = s("rect", { class: "hit", x: L + i * colW, y: T, width: colW, height: H - T - B });
-    hit.addEventListener("mousemove", (e) => showTip(e, `${d.date}: ${d.done} done, ${d.failed} failed`));
+    hit.addEventListener("mousemove", (e) => showTip(e, `${d.date}: ${d.done} gelukt, ${d.failed} mislukt`));
     hit.addEventListener("mouseleave", hideTip);
     svg.append(hit);
   });
@@ -108,11 +108,11 @@ export function taskRunsChart(days) {
     h(
       "div",
       { class: "legend" },
-      h("span", {}, h("i", { class: "swatch-done" }), `Done (${total.done})`),
-      h("span", {}, h("i", { class: "swatch-failed" }), `Failed (${total.failed})`),
+      h("span", {}, h("i", { class: "swatch-done" }), `Gelukt (${total.done})`),
+      h("span", {}, h("i", { class: "swatch-failed" }), `Mislukt (${total.failed})`),
     ),
     svg,
-    tableView(["Day", "Done", "Failed"], days.map((d) => [d.date, d.done, d.failed])),
+    tableView(["Dag", "Gelukt", "Mislukt"], days.map((d) => [d.date, d.done, d.failed])),
   );
 }
 
@@ -122,7 +122,7 @@ export function moneyChart(series) {
   const top = niceMax(Math.max(...series.map((d) => Math.max(d.revenue, d.costs))) / 100) * 100;
   const y = (v) => T + (H - T - B) * (1 - v / top);
   const x = (i) => L + ((W - L - R) * i) / (series.length - 1);
-  const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Revenue and costs per day, last 30 days" });
+  const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Omzet en kosten per dag, laatste 30 dagen" });
   axis(svg, { L, W: W - R, y, top, ticks: 4, fmt: (v) => eur(v, 0) });
 
   const line = (key, cls) => {
@@ -148,7 +148,7 @@ export function moneyChart(series) {
     cross.setAttribute("x2", x(i));
     cross.setAttribute("visibility", "visible");
     const d = series[i];
-    showTip(e, `${d.date}: revenue ${eur(d.revenue)}, costs ${eur(d.costs)}`);
+    showTip(e, `${d.date}: omzet ${eur(d.revenue)}, kosten ${eur(d.costs)}`);
   });
   hit.addEventListener("mouseleave", () => {
     cross.setAttribute("visibility", "hidden");
@@ -163,10 +163,10 @@ export function moneyChart(series) {
     h(
       "div",
       { class: "legend" },
-      h("span", {}, h("i", { class: "swatch-revenue" }), `Revenue (${eur(sum("revenue"))})`),
-      h("span", {}, h("i", { class: "swatch-costs" }), `Costs (${eur(sum("costs"))})`),
+      h("span", {}, h("i", { class: "swatch-revenue" }), `Omzet (${eur(sum("revenue"))})`),
+      h("span", {}, h("i", { class: "swatch-costs" }), `Kosten (${eur(sum("costs"))})`),
     ),
     svg,
-    tableView(["Day", "Revenue", "Costs"], series.map((d) => [d.date, eur(d.revenue), eur(d.costs)])),
+    tableView(["Dag", "Omzet", "Kosten"], series.map((d) => [d.date, eur(d.revenue), eur(d.costs)])),
   );
 }

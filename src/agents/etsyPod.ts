@@ -331,18 +331,18 @@ registerApprovalExecutor("printful_order_confirm", confirmPrintfulOrder);
 
 export const etsyPodAgent: AgentDefinition = {
   id: ID,
-  name: "Etsy / Print-on-Demand Agent",
+  name: "Etsy-agent",
   phase: 1,
   businessId: "etsy-pod",
   chatTasks: ["create_listings", "upload_listings", "sync_sales"],
-  description: "Finds gift niches, designs typography mugs, lists them on Etsy and turns Etsy sales into Printful orders.",
+  description: "Zoekt cadeau-niches, ontwerpt mokken, zet ze op Etsy en maakt van Etsy-verkopen Printful-bestellingen.",
   dependsOn: ["database", "claude", "etsy", "printful"],
   taskInfo: {
-    create_listings: "Pick niches, write listing text and render print-ready designs (local drafts)",
-    upload_listings: "Upload drafts and mockups to Etsy, then ask approval to publish",
-    publish_listings: "Make approved drafts live on Etsy (pays the $0.20 listing fee)",
-    sync_sales: "Import new paid Etsy orders as sales",
-    fulfil_receipt: "Create the Printful order for an Etsy sale (auto-confirm under the spend limit)",
+    create_listings: "Niches kiezen, listingteksten schrijven en printklare ontwerpen maken (lokale concepten)",
+    upload_listings: "Concepten en mockups naar Etsy uploaden, daarna akkoord vragen om te publiceren",
+    publish_listings: "Goedgekeurde concepten live zetten op Etsy (kost $0,20 listingkosten per stuk)",
+    sync_sales: "Nieuwe betaalde Etsy-bestellingen ophalen als verkopen",
+    fulfil_receipt: "De Printful-bestelling maken voor een Etsy-verkoop (automatisch bevestigd onder de uitgavelimiet)",
   },
   handlers: {
     create_listings: createListings,

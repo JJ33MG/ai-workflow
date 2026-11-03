@@ -1,19 +1,19 @@
-import { $, ago, empty, fill, h, stamp, table } from "./core.js";
+import { $, LEVEL, ago, empty, fill, h, stamp, table } from "./core.js";
 
 const KIND_LABEL = {
   niche: "Niche",
   product: "Product",
-  hook: "Hook",
-  fix: "Fix",
-  lesson: "Lesson",
-  opportunity: "Opportunity",
-  note: "Note",
+  hook: "Haakje",
+  fix: "Oplossing",
+  lesson: "Les",
+  opportunity: "Kans",
+  note: "Notitie",
 };
 
 export function renderActivity(d) {
   const agentSel = $("filter-agent");
   if (agentSel.options.length === 0) {
-    agentSel.append(h("option", { value: "" }, "All agents"), ...d.agents.map((a) => h("option", { value: a.id }, a.name)));
+    agentSel.append(h("option", { value: "" }, "Alle agents"), ...d.agents.map((a) => h("option", { value: a.id }, a.name)));
   }
   const agent = agentSel.value;
   const level = $("filter-level").value;
@@ -21,16 +21,16 @@ export function renderActivity(d) {
   fill(
     "activity",
     rows.length === 0
-      ? empty("Nothing logged yet.")
+      ? empty("Nog niets gelogd.")
       : table(
-          ["When", "Agent", "Level", "Message"],
+          ["Wanneer", "Agent", "Soort", "Bericht"],
           rows.map((l) =>
             h(
               "tr",
               {},
               h("td", { class: "nowrap", title: stamp(l.createdAt) }, ago(l.createdAt)),
               h("td", { class: "nowrap" }, l.agentName),
-              h("td", { class: "nowrap" }, h("span", { class: `level level-${l.level}` }, l.level)),
+              h("td", { class: "nowrap" }, h("span", { class: `level level-${l.level}` }, LEVEL[l.level] ?? l.level)),
               h("td", {}, l.message),
             ),
           ),
@@ -41,7 +41,7 @@ export function renderActivity(d) {
 export function renderBrain(d) {
   const kindSel = $("brain-kind");
   if (kindSel.options.length === 0) {
-    kindSel.append(h("option", { value: "" }, "Everything"), ...Object.entries(KIND_LABEL).map(([k, v]) => h("option", { value: k }, v)));
+    kindSel.append(h("option", { value: "" }, "Alles"), ...Object.entries(KIND_LABEL).map(([k, v]) => h("option", { value: k }, v)));
   }
   const kind = kindSel.value;
   const q = $("brain-search").value.trim().toLowerCase();
@@ -51,9 +51,9 @@ export function renderBrain(d) {
   fill(
     "brain",
     d.knowledge.length === 0
-      ? empty("The shared brain is empty. Agents add what sells, what works and what they fixed; you can also ask an agent in Chat to remember something.")
+      ? empty("Het gedeelde brein is nog leeg. Agents bewaren hier wat verkoopt, wat werkt en wat ze oplosten; je kunt een agent in Chat ook vragen iets te onthouden.")
       : items.length === 0
-        ? empty("Nothing matches.")
+        ? empty("Niets gevonden.")
         : h(
             "div",
             { class: "brain-grid" },

@@ -3,6 +3,17 @@ import { AGENT_LABEL, STAGE, notStarted, api, empty, eur, fill, h, kpi, money, o
 import { openChat } from "./chat.js";
 import { targetLabel } from "./overview.js";
 
+/** Product states as shown on the dashboard. */
+const PRODUCT_STATUS = {
+  draft: "concept",
+  uploaded: "geüpload",
+  active: "live",
+  failed: "mislukt",
+  drawing: "wordt getekend",
+  ready: "klaar om te uploaden",
+  published: "gepubliceerd",
+};
+
 let selected = null;
 const details = new Map(); // business id → detail payload
 
@@ -50,7 +61,7 @@ function renderDetail(d, b, detail) {
     h(
       "div",
       { class: "biz-head-top" },
-      h("div", {}, h("div", { class: "biz-kind" }, `${b.kind} · Phase ${b.phase} · ${b.channels.join(", ")}`), h("h1", {}, b.name)),
+      h("div", {}, h("div", { class: "biz-kind" }, `${b.kind} · Fase ${b.phase} · ${b.channels.join(", ")}`), h("h1", {}, b.name)),
       statusPill(stage.status, stage.label),
     ),
     h("p", {}, b.description),
@@ -64,8 +75,8 @@ function renderDetail(d, b, detail) {
           "div",
           { class: "muted" },
           b.stage === "parked"
-            ? "Parked for now; it comes back once the simpler businesses are earning."
-            : `${targetLabel(b)}. Starts in phase ${b.phase}, once the businesses before it are earning.`,
+            ? "Voorlopig geparkeerd; komt terug zodra de simpelere bedrijven verdienen."
+            : `${targetLabel(b)}. Start in fase ${b.phase}, zodra de bedrijven ervoor verdienen.`,
         ),
       ),
   );
@@ -78,10 +89,10 @@ function renderDetail(d, b, detail) {
   const kpis = h(
     "div",
     { class: "kpis" },
-    kpi("Revenue this month", eur(b.revenueMonth), `${eur(b.revenueToday)} today · ${b.salesMonth} sale(s)`),
-    kpi("Costs this month", eur(b.costsMonth), detail ? costLine(detail.costsByCategory) : ""),
-    kpi("Profit this month", eur(b.profitMonth), hi ? targetLabel(b) : "", hi ? { pct: (b.profitMonth / lo) * 100 } : null),
-    kpi("Products", String(b.products.total), Object.entries(b.products.byStatus).map(([k, v]) => `${v} ${k}`).join(" · ") || "None yet"),
+    kpi("Omzet deze maand", eur(b.revenueMonth), `${eur(b.revenueToday)} vandaag · ${b.salesMonth} verkoop/verkopen`),
+    kpi("Kosten deze maand", eur(b.costsMonth), detail ? costLine(detail.costsByCategory) : ""),
+    kpi("Winst deze maand", eur(b.profitMonth), hi ? targetLabel(b) : "", hi ? { pct: (b.profitMonth / lo) * 100 } : null),
+    kpi("Producten", String(b.products.total), Object.entries(b.products.byStatus).map(([k, v]) => `${v} ${PRODUCT_STATUS[k] ?? k}`).join(" · ") || "Nog geen"),
   );
 
   const teamPanel = h(
@@ -101,23 +112,23 @@ function renderDetail(d, b, detail) {
       h(
         "div",
         { class: "plan-box s-error-box" },
-        `${problems.length} open problem(s): `,
+        `${problems.length} open probleem/problemen: `,
         problems.map((p) => p.type).join(", "),
         " ",
-        h("button", { class: "link-btn", onclick: () => openSection("problems") }, "See problems →"),
+        h("button", { class: "link-btn", onclick: () => openSection("problems") }, "Bekijk problemen →"),
       ),
   );
 
-  const chartPanel = h("div", { class: "panel" }, h("h2", {}, "Revenue and costs, last 30 days"), detail ? moneyChart(detail.series) : empty("Loading…"));
+  const chartPanel = h("div", { class: "panel" }, h("h2", {}, "Omzet en kosten, laatste 30 dagen"), detail ? moneyChart(detail.series) : empty("Laden…"));
 
   const productsPanel = h(
     "div",
     { class: "panel" },
-    h("h2", {}, `Products (${detail?.products.length ?? b.products.total})`),
+    h("h2", {}, `Producten (${detail?.products.length ?? b.products.total})`),
     !detail
-      ? empty("Loading…")
+      ? empty("Laden…")
       : detail.products.length === 0
-        ? empty("No products yet. The agent creates them on its schedule, or ask it in Chat.")
+        ? empty("Nog geen producten. De agent maakt ze volgens schema, of vraag het in Chat.")
         : h(
             "div",
             { class: "products" },
@@ -125,14 +136,14 @@ function renderDetail(d, b, detail) {
               h(
                 "div",
                 { class: "product" },
-                h("div", { class: "product-img" }, p.image ? h("img", { src: p.image, alt: `Design: ${p.title}`, loading: "lazy" }) : h("span", { class: "muted" }, "No image")),
+                h("div", { class: "product-img" }, p.image ? h("img", { src: p.image, alt: `Design: ${p.title}`, loading: "lazy" }) : h("span", { class: "muted" }, "Geen afbeelding")),
                 h("div", { class: "product-body" }, h("div", { class: "product-title" }, p.title), p.detail && h("div", { class: "muted" }, p.detail)),
                 h(
                   "div",
                   { class: "product-foot" },
-                  h("span", { class: `chip chip-${p.status}` }, p.status),
+                  h("span", { class: `chip chip-${p.status}` }, PRODUCT_STATUS[p.status] ?? p.status),
                   h("span", {}, money(p.priceCents, p.currency)),
-                  h("span", { class: "muted" }, `${p.salesCount} sold`),
+                  h("span", { class: "muted" }, `${p.salesCount} verkocht`),
                 ),
               ),
             ),
@@ -142,13 +153,13 @@ function renderDetail(d, b, detail) {
   const salesPanel = h(
     "div",
     { class: "panel" },
-    h("h2", {}, "Latest sales"),
+    h("h2", {}, "Laatste verkopen"),
     !detail
-      ? empty("Loading…")
+      ? empty("Laden…")
       : detail.sales.length === 0
-        ? empty("No sales yet.")
+        ? empty("Nog geen verkopen.")
         : table(
-            ["When", "Order", "Items", "Amount"],
+            ["Wanneer", "Bestelling", "Aantal", "Bedrag"],
             detail.sales.map((s) =>
               h("tr", {}, h("td", { class: "nowrap", title: stamp(s.occurredAt) }, ago(s.occurredAt)), h("td", {}, `${s.source} #${s.externalId}`), h("td", { class: "num" }, s.items || "—"), h("td", { class: "num" }, money(s.amountCents, s.currency))),
             ),
@@ -159,9 +170,9 @@ function renderDetail(d, b, detail) {
 }
 
 function costLine(byCategory) {
-  const names = { claude_api: "Claude", etsy_fee: "Etsy fees", printful: "Printful", ads: "Ads" };
+  const names = { claude_api: "Claude", etsy_fee: "Etsy-kosten", printful: "Printful", ads: "Advertenties" };
   const parts = Object.entries(byCategory)
     .sort((a, b) => b[1] - a[1])
     .map(([k, v]) => `${names[k] ?? k} ${eur(v)}`);
-  return parts.join(" · ") || "No costs yet";
+  return parts.join(" · ") || "Nog geen kosten";
 }
