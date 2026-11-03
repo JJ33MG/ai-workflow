@@ -93,6 +93,22 @@ describe("prepareDesign", () => {
     expect(alphaAt(1350, 525)).toBe(0); // gap between them
   });
 
+  it("enlarges and centres a small design drawn high on the canvas", async () => {
+    const png = await prepareDesign(svg('<rect x="575" y="100" width="200" height="200" fill="#123"/>'));
+    const { data, info } = await sharp(png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    let top = info.height, bottom = -1;
+    for (let y = 0; y < info.height; y++) {
+      for (let x = 0; x < info.width / 2; x++) {
+        if (data[(y * info.width + x) * 4 + 3] > 40) {
+          top = Math.min(top, y);
+          bottom = Math.max(bottom, y);
+        }
+      }
+    }
+    expect((top + bottom) / 2).toBeCloseTo(525, -1); // vertically centred
+    expect(bottom - top).toBeGreaterThan(1050 * 0.75); // fills most of the mug's height
+  });
+
   it("rejects text that runs off the canvas, naming the edge", async () => {
     const wide = svg('<text x="-200" y="525" font-family="sans-serif" font-size="300">WAY TOO LONG FOR ONE SIDE</text>');
     await expect(prepareDesign(wide)).rejects.toBeInstanceOf(DesignLayoutError);
