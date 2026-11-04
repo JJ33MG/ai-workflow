@@ -58,7 +58,7 @@ async function check(_payload: Record<string, unknown>, { log, taskId }: TaskCon
           maxTokens: 2000,
           system:
             "You are the on-call engineer for a set of automated e-commerce agents (Etsy, Printful, Telegram, Claude API). " +
-            "For each failed task give the most likely cause and the concrete fix in one or two lines. Plain text, no markdown.",
+            "For each failed task give the most likely cause and the concrete fix in one or two lines, in Dutch. Plain text, no markdown.",
           prompt: escalated.map((t) => `${t.agentId}:${t.type} → ${t.error}`).join("\n"),
         });
       } catch (err) {
@@ -66,7 +66,7 @@ async function check(_payload: Record<string, unknown>, { log, taskId }: TaskCon
       }
     }
     await notify(
-      `🔴 ${escalated.length} task(s) failed ${escalated[0].maxAttempts}× and need you:\n` +
+      `🔴 ${escalated.length} taak/taken zijn ${escalated[0].maxAttempts}× mislukt en wachten op jou:\n` +
         escalated
           .map((t) => {
             const guide = diagnose(t.error);
@@ -74,7 +74,7 @@ async function check(_payload: Record<string, unknown>, { log, taskId }: TaskCon
             return `• ${t.agentId}:${t.type} — ${t.error}${hint}`;
           })
           .join("\n") +
-        (diagnosis ? `\n\nLikely fix:\n${diagnosis}` : ""),
+        (diagnosis ? `\n\nWaarschijnlijke oplossing:\n${diagnosis}` : ""),
     );
   }
   if (budgetWarning) {

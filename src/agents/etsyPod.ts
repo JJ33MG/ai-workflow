@@ -197,8 +197,8 @@ async function uploadListings(payload: Record<string, unknown>, { log, taskId }:
     await requestApproval({
       agentId: ID,
       kind: "etsy_publish",
-      title: `Publish ${uploaded.length} Etsy listing(s)`,
-      details: `Drafts are on Etsy. Publishing costs $0.20 each in listing fees.`,
+      title: `${uploaded.length} Etsy-listing(s) publiceren`,
+      details: `De concepten staan op Etsy. Publiceren kost $0,20 listingkosten per stuk.`,
       amountCents: uploaded.length * ETSY_LISTING_FEE_USD_CENTS,
       currency: "USD",
       payload: { listingIds: uploaded },
@@ -302,8 +302,8 @@ async function fulfilReceipt(payload: Record<string, unknown>, { log, taskId }: 
   await requestApproval({
     agentId: ID,
     kind: "printful_order_confirm",
-    title: `Confirm Printful order for Etsy receipt ${receiptId}`,
-    details: `Draft order ${order.id} is above the auto-approve limit.`,
+    title: `Printful-bestelling bevestigen voor Etsy-bestelling ${receiptId}`,
+    details: `Conceptbestelling ${order.id} ligt boven de limiet voor automatisch goedkeuren.`,
     amountCents: costCents,
     currency,
     payload: { orderId: order.id, costCents, currency, receiptId },

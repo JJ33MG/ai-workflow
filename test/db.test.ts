@@ -57,8 +57,8 @@ describe.skipIf(!url)("with database", async () => {
       return "ok";
     });
     const a = await requestApproval({ agentId: "ceo", kind: "test_kind", title: "Test", details: "d" });
-    expect(await decide(a.id, true)).toContain("Approved and done");
-    expect(await decide(a.id, true)).toContain("Already executed");
+    expect(await decide(a.id, true)).toContain("Goedgekeurd en uitgevoerd");
+    expect(await decide(a.id, true)).toContain("Al uitgevoerd");
     expect(runs).toBe(1);
   });
 

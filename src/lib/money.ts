@@ -10,7 +10,7 @@ export function toEurCents(amountCents: number, currency: string): number {
 
 export function formatEur(cents: number): string {
   const sign = cents < 0 ? "-" : "";
-  const amount = (Math.abs(cents) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const amount = (Math.abs(cents) / 100).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return `${sign}€${amount}`;
 }
 

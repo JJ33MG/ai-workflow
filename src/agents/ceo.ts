@@ -75,7 +75,7 @@ export async function collectBriefingData(now = new Date()): Promise<BriefingDat
   );
 
   return {
-    date: new Intl.DateTimeFormat("en-GB", { timeZone: tz, dateStyle: "full" }).format(now),
+    date: new Intl.DateTimeFormat("nl-NL", { timeZone: tz, dateStyle: "full" }).format(now),
     revenue: { yesterday: sumEur(salesY), monthToDate: sumEur(salesM) },
     costs: { yesterday: sumEur(costsY), monthToDate: sumEur(costsM) },
     agents: agentRows,
@@ -89,34 +89,34 @@ export function formatBriefing(d: BriefingData, focus?: string): string {
   const net = d.revenue.monthToDate - d.costs.monthToDate;
   const pct = Math.max(0, Math.round((net / MONTHLY_GOAL_CENTS) * 100));
   const lines = [
-    `☀️ Morning briefing — ${d.date}`,
+    `☀️ Ochtendbriefing — ${d.date}`,
     "",
-    "💰 Money",
-    `Revenue: ${formatEur(d.revenue.yesterday)} yesterday · ${formatEur(d.revenue.monthToDate)} this month`,
-    `Costs: ${formatEur(d.costs.yesterday)} yesterday · ${formatEur(d.costs.monthToDate)} this month`,
-    `Net this month: ${formatEur(net)} — ${pct}% of €10,000`,
+    "💰 Geld",
+    `Omzet: ${formatEur(d.revenue.yesterday)} gisteren · ${formatEur(d.revenue.monthToDate)} deze maand`,
+    `Kosten: ${formatEur(d.costs.yesterday)} gisteren · ${formatEur(d.costs.monthToDate)} deze maand`,
+    `Netto deze maand: ${formatEur(net)} — ${pct}% van €10.000`,
     "",
-    "🤖 Agents (last 24h)",
+    "🤖 Agents (laatste 24 uur)",
     ...d.agents.map(
       (a) =>
-        `• ${a.name}: ${a.done} done, ${a.failed} failed${a.status === "error" ? " ⚠️" : ""}` +
+        `• ${a.name}: ${a.done} gelukt, ${a.failed} mislukt${a.status === "error" ? " ⚠️" : ""}` +
         (a.highlights.length ? `\n  ${a.highlights.slice(0, 3).join("\n  ")}` : ""),
     ),
     "",
-    "🛠 What broke",
+    "🛠 Wat er misging",
     ...(d.incidents.length
-      ? d.incidents.map((i) => `• ${i.task}: ${i.error} — ${i.fixed ? "fixed ✅" : "NOT fixed ❌"}`)
-      : ["Nothing."]),
+      ? d.incidents.map((i) => `• ${i.task}: ${i.error} — ${i.fixed ? "opgelost ✅" : "NIET opgelost ❌"}`)
+      : ["Niets."]),
     "",
-    "🔭 New opportunities",
-    ...(d.opportunities.length ? d.opportunities.map((o) => `• ${o}`) : ["None yet (Scout Agent arrives in Phase 2)."]),
+    "🔭 Nieuwe kansen",
+    ...(d.opportunities.length ? d.opportunities.map((o) => `• ${o}`) : ["Nog geen (de Scout Agent komt later)."]),
     "",
-    "✋ Decisions needed",
+    "✋ Beslissingen nodig",
     ...(d.approvals.length
-      ? d.approvals.map((a) => `• ${a.title}${a.amount ? ` (${a.amount})` : ""} → /approve ${a.id} or /reject ${a.id}`)
-      : ["None."]),
+      ? d.approvals.map((a) => `• ${a.title}${a.amount ? ` (${a.amount})` : ""} → /approve ${a.id} of /reject ${a.id}`)
+      : ["Geen."]),
   ];
-  if (focus) lines.push("", "🎯 CEO focus for today", focus);
+  if (focus) lines.push("", "🎯 Focus voor vandaag", focus);
   return lines.join("\n");
 }
 
@@ -133,7 +133,7 @@ async function briefing(_payload: Record<string, unknown>, { log, taskId }: Task
         system:
           "You are the CEO agent of a small set of AI-run online businesses aiming for €10,000/month net profit. " +
           "Principles: cash first; one business earning before the next starts; human approval for money and risk. " +
-          "Given yesterday's data, write 2–4 short bullet points (plain text, starting with •) on what to focus on today. Be specific and honest; no filler.",
+          "Given yesterday's data, write 2–4 short bullet points in Dutch (plain text, starting with •) on what Jarne should focus on today. Be specific and honest; no filler.",
         prompt: JSON.stringify(data),
       });
     } catch (err) {

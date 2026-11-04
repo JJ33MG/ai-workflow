@@ -2,6 +2,13 @@ import { db } from "../db.js";
 import { formatEur, toEurCents } from "./money.js";
 import { notify } from "./telegram.js";
 
+const STATUS_NL: Record<string, string> = {
+  approved: "goedgekeurd",
+  rejected: "afgewezen",
+  executed: "uitgevoerd",
+  failed: "mislukt",
+};
+
 export type ApprovalExecutor = (payload: Record<string, unknown>) => Promise<string>;
 
 const executors = new Map<string, ApprovalExecutor>();
@@ -28,7 +35,7 @@ export async function requestApproval(input: {
       ? ` (${formatEur(toEurCents(input.amountCents, input.currency))})`
       : "";
   await notify(
-    `🟡 Approval needed${amount}: ${input.title}\n${input.details}\n\n/approve ${approval.id}\n/reject ${approval.id}`,
+    `🟡 Jouw akkoord nodig${amount}: ${input.title}\n${input.details}\n\nGoedkeuren: /approve ${approval.id}\nAfwijzen: /reject ${approval.id}`,
   );
   return approval;
 }
@@ -41,20 +48,20 @@ export async function decide(id: string, approve: boolean): Promise<string> {
   });
   if (claimed.count !== 1) {
     const existing = await db.approval.findUnique({ where: { id } });
-    return existing ? `Already ${existing.status}: ${existing.title}` : `No approval with id ${id}`;
+    return existing ? `Al ${STATUS_NL[existing.status] ?? existing.status}: ${existing.title}` : `Geen beslissing met id ${id}`;
   }
   const approval = await db.approval.findUniqueOrThrow({ where: { id } });
-  if (!approve) return `Rejected: ${approval.title}`;
+  if (!approve) return `Afgewezen: ${approval.title}`;
 
   const executor = executors.get(approval.kind);
-  if (!executor) return `Approved: ${approval.title} (nothing to execute)`;
+  if (!executor) return `Goedgekeurd: ${approval.title} (er hoeft niets uitgevoerd te worden)`;
   try {
     const outcome = await executor(approval.payload as Record<string, unknown>);
     await db.approval.update({ where: { id }, data: { status: "executed" } });
-    return `Approved and done: ${approval.title}\n${outcome}`;
+    return `Goedgekeurd en uitgevoerd: ${approval.title}\n${outcome}`;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await db.approval.update({ where: { id }, data: { status: "failed" } });
-    return `Approved, but executing failed: ${message}`;
+    return `Goedgekeurd, maar uitvoeren mislukte: ${message}`;
   }
 }

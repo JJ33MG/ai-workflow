@@ -172,9 +172,9 @@ describe("formatBriefing", () => {
   };
   it("shows progress towards the goal and pending decisions", () => {
     const text = formatBriefing(data, "• Ship more listings");
-    expect(text).toContain("Net this month: €400.00 — 4% of €10,000");
-    expect(text).toContain("fixed ✅");
+    expect(text).toContain("Netto deze maand: €400,00 — 4% van €10.000");
+    expect(text).toContain("opgelost ✅");
     expect(text).toContain("/approve abc");
-    expect(text).toContain("CEO focus");
+    expect(text).toContain("Focus voor vandaag");
   });
 });
