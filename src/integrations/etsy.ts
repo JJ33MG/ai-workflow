@@ -28,6 +28,20 @@ export async function shopId(): Promise<string> {
 
 export const isEtsyConfigured = () => Boolean(config.etsy.apiKey);
 
+/**
+ * Shop settings every new listing needs. Set by hand (ETSY_* variables) or, normally, found
+ * automatically by findEtsySetup() right after the shop is connected and loaded at startup.
+ */
+export const es = {
+  taxonomyId: config.etsy.taxonomyId,
+  shippingProfileId: Number(config.etsy.shippingProfileId) || 0,
+  returnPolicyId: Number(config.etsy.returnPolicyId) || 0,
+  productionPartnerId: Number(process.env.ETSY_PRODUCTION_PARTNER_ID) || 0,
+  currency: config.pod.currency,
+  priceCents: config.pod.priceCents,
+};
+export const isEtsyListingReady = () => Boolean(es.taxonomyId && es.shippingProfileId && es.returnPolicyId);
+
 export async function isEtsyConnected(): Promise<boolean> {
   return (await getSetting<StoredToken>(TOKEN_KEY)) !== null;
 }
@@ -134,15 +148,14 @@ export async function createDraftListing(input: DraftListingInput): Promise<{ li
     price: input.priceCents / 100,
     who_made: "i_did",
     when_made: "made_to_order",
-    taxonomy_id: config.etsy.taxonomyId,
-    shipping_profile_id: Number(config.etsy.shippingProfileId),
-    return_policy_id: Number(config.etsy.returnPolicyId),
+    taxonomy_id: es.taxonomyId,
+    shipping_profile_id: es.shippingProfileId,
+    return_policy_id: es.returnPolicyId,
     tags: input.tags,
     type: "physical",
     is_supply: false,
   };
-  const partner = process.env.ETSY_PRODUCTION_PARTNER_ID;
-  if (partner) body.production_partner_ids = [Number(partner)];
+  if (es.productionPartnerId) body.production_partner_ids = [es.productionPartnerId];
   return etsy("POST", `/shops/${await shopId()}/listings`, body);
 }
 
@@ -203,6 +216,28 @@ export async function getActiveListings(): Promise<EtsyListing[]> {
     if (page.results.length < 100 || all.length >= page.count) return all;
   }
 }
+
+export const getShop = async () =>
+  etsy<{ shop_id: number; shop_name: string; currency_code: string }>("GET", `/shops/${await shopId()}`);
+
+export const getShippingProfiles = async () =>
+  (await etsy<{ results: { shipping_profile_id: number; title: string }[] }>("GET", `/shops/${await shopId()}/shipping-profiles`)).results;
+
+export const getReturnPolicies = async () =>
+  (await etsy<{ results: { return_policy_id: number; accepts_returns: boolean; accepts_exchanges: boolean }[] }>(
+    "GET",
+    `/shops/${await shopId()}/policies/return`,
+  )).results;
+
+export const getProductionPartners = async () =>
+  (await etsy<{ results: { production_partner_id: number; partner_name: string }[] }>("GET", `/shops/${await shopId()}/production-partners`)).results;
+
+export interface TaxonomyNode {
+  id: number;
+  name: string;
+  children: TaxonomyNode[];
+}
+export const getTaxonomy = async () => (await etsy<{ results: TaxonomyNode[] }>("GET", "/seller-taxonomy/nodes")).results;
 
 /** URL of a listing's main photo (570 px wide), if it has one. */
 export async function getMainImageUrl(listingId: number): Promise<string | null> {

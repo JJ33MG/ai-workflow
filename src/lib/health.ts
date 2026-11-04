@@ -1,6 +1,6 @@
 import { config } from "../config.js";
 import { db } from "../db.js";
-import { isEtsyConfigured, isEtsyConnected } from "../integrations/etsy.js";
+import { isEtsyConfigured, isEtsyConnected, isEtsyListingReady } from "../integrations/etsy.js";
 import { hasPrintfulToken, isPrintfulConfigured, pf } from "../integrations/printful.js";
 import { schedulerState } from "../scheduler.js";
 import { apiSpendTodayCents } from "./budget.js";
@@ -114,7 +114,17 @@ export async function runHealthChecks(now = new Date()): Promise<HealthCheck[]> 
       fix: "Open /auth/etsy/start?token=ADMIN_TOKEN en geef toegang.",
     });
   } else {
-    checks.push({ id: "etsy", label: "Etsy", status: "ok", detail: "Winkel gekoppeld" });
+    checks.push(
+      isEtsyListingReady()
+        ? { id: "etsy", label: "Etsy", status: "ok", detail: "Winkel gekoppeld" }
+        : {
+            id: "etsy",
+            label: "Etsy",
+            status: "warn",
+            detail: "Winkel gekoppeld; winkelinstellingen voor nieuwe listings zijn nog niet opgehaald",
+            fix: "Start bij Agents → Etsy-agent de taak etsy_setup (gebeurt ook vanzelf na het koppelen).",
+          },
+    );
   }
 
   checks.push(

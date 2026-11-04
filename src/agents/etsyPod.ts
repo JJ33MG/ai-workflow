@@ -10,6 +10,7 @@ import { recordCost } from "../lib/budget.js";
 import { askJson, askText } from "../lib/claude.js";
 import { DesignLayoutError, designUrl, designsDir, prepareDesign, sanitizeSvg, saveDesign, sideSize } from "../lib/design.js";
 import { toEurCents } from "../lib/money.js";
+import { findEtsySetup } from "../lib/etsySetup.js";
 import { findPrintfulSetup } from "../lib/printfulSetup.js";
 import { enqueue } from "../lib/tasks.js";
 import type { AgentDefinition, TaskContext } from "./types.js";
@@ -93,8 +94,8 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
           title: idea.title,
           description: idea.description,
           tags: idea.tags,
-          priceCents: config.pod.priceCents,
-          currency: config.pod.currency,
+          priceCents: etsy.es.priceCents,
+          currency: etsy.es.currency,
           designSvg: svg,
           designFile: "",
           printfulVariant: printful.pf.variantId || null,
@@ -161,6 +162,9 @@ async function uploadListings(payload: Record<string, unknown>, { log, taskId }:
     return { uploaded: 0, dryRun: true };
   }
 
+  if (!etsy.isEtsyListingReady()) {
+    throw new Error("Etsy shop settings are not known yet (shipping profile, return policy, category). Run etsy_setup first.");
+  }
   const uploaded: string[] = [];
   for (const id of ids) {
     const listing = await db.listing.findUniqueOrThrow({ where: { id } });
@@ -287,6 +291,18 @@ async function syncListings(_payload: Record<string, unknown>, { log, taskId }: 
   return result;
 }
 
+async function etsySetup(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
+  if (!etsy.isEtsyConfigured() || !(await etsy.isEtsyConnected())) return { skipped: "etsy not connected" };
+  const s = await findEtsySetup();
+  await log.info(
+    `Etsy ingesteld: winkel "${s.shopName}" (${s.currency}), prijs ${(s.priceCents / 100).toFixed(2)}, verzendprofiel "${s.shippingProfileTitle}"` +
+      (s.productionPartnerId ? ", productiepartner Printful" : " · let op: Printful staat nog niet als productiepartner in je winkel"),
+    s,
+    taskId,
+  );
+  return s;
+}
+
 async function printfulSetup(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
   if (!printful.hasPrintfulToken()) return { skipped: "no Printful token" };
   const s = await findPrintfulSetup();
@@ -404,7 +420,7 @@ export const etsyPodAgent: AgentDefinition = {
   name: "Etsy-agent",
   phase: 1,
   businessId: "etsy-pod",
-  chatTasks: ["create_listings", "upload_listings", "sync_sales", "sync_listings", "printful_setup"],
+  chatTasks: ["create_listings", "upload_listings", "sync_sales", "sync_listings", "printful_setup", "etsy_setup"],
   description: "Zoekt cadeau-niches, ontwerpt mokken, zet ze op Etsy en maakt van Etsy-verkopen Printful-bestellingen.",
   dependsOn: ["database", "claude", "etsy", "printful"],
   taskInfo: {
@@ -414,6 +430,7 @@ export const etsyPodAgent: AgentDefinition = {
     sync_sales: "Nieuwe betaalde Etsy-bestellingen ophalen als verkopen",
     sync_listings: "Alle actieve listings van je Etsy-winkel ophalen, ook die je met de hand plaatste",
     printful_setup: "Bij Printful de API-winkel, de 11 oz mok en de exacte printmaat opzoeken en opslaan",
+    etsy_setup: "Bij Etsy de munt, het verzendprofiel, het retourbeleid, de categorie Mokken en de productiepartner opzoeken",
     fulfil_receipt: "De Printful-bestelling maken voor een Etsy-verkoop (automatisch bevestigd onder de uitgavelimiet)",
   },
   handlers: {
@@ -423,6 +440,7 @@ export const etsyPodAgent: AgentDefinition = {
     sync_sales: syncSales,
     sync_listings: syncListings,
     printful_setup: printfulSetup,
+    etsy_setup: etsySetup,
     fulfil_receipt: fulfilReceipt,
   },
 };

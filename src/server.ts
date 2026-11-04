@@ -12,6 +12,7 @@ import { buildBusinessDetail, buildDashboard } from "./dashboard.js";
 import { db } from "./db.js";
 import * as etsy from "./integrations/etsy.js";
 import { decide } from "./lib/approvals.js";
+import { loadEtsySetup } from "./lib/etsySetup.js";
 import { loadPrintfulSetup } from "./lib/printfulSetup.js";
 import { hasPrintfulToken } from "./integrations/printful.js";
 import { designsDir } from "./lib/design.js";
@@ -196,7 +197,8 @@ app.get("/auth/etsy/start", requireAdmin, async (_req, res) => {
 app.get("/auth/etsy/callback", async (req, res) => {
   try {
     await etsy.handleCallback(String(req.query.code ?? ""), String(req.query.state ?? ""));
-    // Pull the shop in right away instead of waiting for the hourly sync.
+    // Look up the shop's settings and pull the shop in right away instead of waiting for the hourly sync.
+    await enqueue("etsy-pod", "etsy_setup");
     await enqueue("etsy-pod", "sync_listings");
     await enqueue("etsy-pod", "sync_sales");
     res.send("Etsy connected. You can close this tab.");
@@ -215,6 +217,7 @@ async function main() {
   await syncAgents();
   // Printful product and print size: loaded if found before, otherwise looked up in the background.
   if (!(await loadPrintfulSetup()) && hasPrintfulToken()) await enqueueOnce("etsy-pod", "printful_setup");
+  if (!(await loadEtsySetup()) && (await etsy.isEtsyConnected())) await enqueueOnce("etsy-pod", "etsy_setup");
   const stopScheduler = startScheduler();
   const stopPolling = startCommandPolling(handleCommand);
   const server = app.listen(config.port, () => {
