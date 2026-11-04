@@ -16,7 +16,17 @@ interface StoredToken {
   expires_at: number; // epoch ms
 }
 
-export const isEtsyConfigured = () => Boolean(config.etsy.apiKey && config.etsy.shopId);
+// The shop ID can be set by hand (ETSY_SHOP_ID) but is normally looked up once when the shop is connected.
+const SHOP_KEY = "etsy.shop.id";
+let shopIdCache: string | null = config.etsy.shopId || null;
+
+export async function shopId(): Promise<string> {
+  shopIdCache ??= await getSetting<string>(SHOP_KEY);
+  if (!shopIdCache) throw new Error("Etsy is not connected. Open /auth/etsy/start to authorise the shop.");
+  return shopIdCache;
+}
+
+export const isEtsyConfigured = () => Boolean(config.etsy.apiKey);
 
 export async function isEtsyConnected(): Promise<boolean> {
   return (await getSetting<StoredToken>(TOKEN_KEY)) !== null;
@@ -57,6 +67,11 @@ export async function handleCallback(code: string, state: string): Promise<void>
     code_verifier: pending.verifier,
   });
   await setSetting(PENDING_KEY, null);
+  // Etsy tells us which shop belongs to the account that just approved access.
+  const me = await etsy<{ user_id: number; shop_id: number | null }>("GET", "/users/me");
+  if (!me.shop_id) throw new Error("This Etsy account has no shop");
+  shopIdCache = String(me.shop_id);
+  await setSetting(SHOP_KEY, shopIdCache);
 }
 
 async function requestToken(form: Record<string, string>): Promise<StoredToken> {
@@ -128,18 +143,18 @@ export async function createDraftListing(input: DraftListingInput): Promise<{ li
   };
   const partner = process.env.ETSY_PRODUCTION_PARTNER_ID;
   if (partner) body.production_partner_ids = [Number(partner)];
-  return etsy("POST", `/shops/${config.etsy.shopId}/listings`, body);
+  return etsy("POST", `/shops/${await shopId()}/listings`, body);
 }
 
 export async function uploadListingImage(listingId: string, png: Buffer, rank = 1): Promise<void> {
   const form = new FormData();
   form.append("image", new Blob([new Uint8Array(png)], { type: "image/png" }), `image-${rank}.png`);
   form.append("rank", String(rank));
-  await etsy("POST", `/shops/${config.etsy.shopId}/listings/${listingId}/images`, form);
+  await etsy("POST", `/shops/${await shopId()}/listings/${listingId}/images`, form);
 }
 
 export async function activateListing(listingId: string): Promise<void> {
-  await etsy("PATCH", `/shops/${config.etsy.shopId}/listings/${listingId}`, { state: "active" });
+  await etsy("PATCH", `/shops/${await shopId()}/listings/${listingId}`, { state: "active" });
 }
 
 export interface EtsyReceipt {
@@ -162,7 +177,7 @@ export async function getPaidReceiptsSince(sinceEpochSeconds: number): Promise<E
     min_created: String(sinceEpochSeconds),
     limit: "100",
   });
-  const res = await etsy<{ results: EtsyReceipt[] }>("GET", `/shops/${config.etsy.shopId}/receipts?${params}`);
+  const res = await etsy<{ results: EtsyReceipt[] }>("GET", `/shops/${await shopId()}/receipts?${params}`);
   return res.results;
 }
 
@@ -182,7 +197,7 @@ export async function getActiveListings(): Promise<EtsyListing[]> {
   for (let offset = 0; ; offset += 100) {
     const page = await etsy<{ count: number; results: EtsyListing[] }>(
       "GET",
-      `/shops/${config.etsy.shopId}/listings/active?limit=100&offset=${offset}`,
+      `/shops/${await shopId()}/listings/active?limit=100&offset=${offset}`,
     );
     all.push(...page.results);
     if (page.results.length < 100 || all.length >= page.count) return all;

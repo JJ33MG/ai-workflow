@@ -114,7 +114,7 @@ export async function runHealthChecks(now = new Date()): Promise<HealthCheck[]> 
       fix: "Open /auth/etsy/start?token=ADMIN_TOKEN en geef toegang.",
     });
   } else {
-    checks.push({ id: "etsy", label: "Etsy", status: "ok", detail: `Winkel ${config.etsy.shopId} gekoppeld` });
+    checks.push({ id: "etsy", label: "Etsy", status: "ok", detail: "Winkel gekoppeld" });
   }
 
   checks.push(
