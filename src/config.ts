@@ -69,6 +69,10 @@ export const config = {
     picturesPerBook: num("KDP_PICTURES_PER_BOOK", 30),
     priceCents: Math.round(num("KDP_PRICE_USD", 7.99) * 100),
     currency: "USD",
+    // Drawing the pages is most of a book's cost: a cheap model draws, a stronger one reviews,
+    // and a page rejected twice gets one last try on CLAUDE_MODEL.
+    drawModel: str("KDP_DRAW_MODEL", "claude-haiku-5-5"),
+    reviewModel: str("KDP_REVIEW_MODEL", "claude-sonnet-5-5"),
   },
 
   pod: {

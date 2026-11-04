@@ -115,7 +115,7 @@ export const NODES: BrainNode[] = [
         "Hij zet alles in een uploadpakket met alle velden voor het KDP-formulier. Uploaden doe jij: Amazon heeft daar geen koppeling voor.",
       ],
       where: "Bedrijven → Kleurboeken, en Chat → Kleurboek-agent.",
-      you: "Zeg wanneer hij een boek mag maken (kost ongeveer €2–3 aan Claude per boek).",
+      you: "Zeg wanneer hij een boek mag maken (kost ongeveer €0,50 aan Claude per boek).",
     },
   },
   {
@@ -331,7 +331,7 @@ export const PLAN: PlanItem[] = [
   { id: "telegram", phase: "Fundament", title: "Telegram-bot aanmaken", detail: "Voor de ochtendbriefing en meldingen op je telefoon.", owner: "jarne", status: "todo", node: "svc:telegram" },
   { id: "online", phase: "Fundament", title: "Systeem online zetten (Railway)", detail: "Agents werken 24/7 en het dashboard is altijd bereikbaar, ook op je telefoon.", owner: "jarne", status: "todo", node: "svc:server" },
   { id: "kdp-account", phase: "Kleurboeken", title: "Amazon KDP-account", detail: "kdp.amazon.com, met belasting- en bankgegevens.", owner: "jarne", status: "todo", node: "svc:kdp" },
-  { id: "first-book", phase: "Kleurboeken", title: "Eerste kleurboek maken, nakijken en uploaden", detail: "Op jouw sein; ongeveer €2–3 aan Claude.", owner: "jarne", status: "todo", node: "biz:kdp-coloring" },
+  { id: "first-book", phase: "Kleurboeken", title: "Eerste kleurboek maken, nakijken en uploaden", detail: "Op jouw sein; ongeveer €0,50 aan Claude.", owner: "jarne", status: "todo", node: "biz:kdp-coloring" },
   { id: "etsy-dev", phase: "Etsy-winkel", title: "Etsy developer-app aanvragen", detail: "Nodig om automatisch te uploaden en verkopen op te halen; goedkeuring duurt vaak enkele dagen.", owner: "jarne", status: "todo" },
 
   // Nog te bouwen

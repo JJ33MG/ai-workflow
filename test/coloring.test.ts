@@ -104,3 +104,11 @@ describe("normalisePlan", () => {
     expect(plan.coverColor).toBe("#ffd23f");
   });
 });
+
+describe("drawModels", () => {
+  it("tries the cheap model twice, then the main model once", async () => {
+    const { drawModels } = await import("../src/agents/kdpColoring.js");
+    const { config } = await import("../src/config.js");
+    expect(drawModels()).toEqual([config.kdp.drawModel, config.kdp.drawModel, config.claude.model]);
+  });
+});

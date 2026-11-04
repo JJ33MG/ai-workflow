@@ -32,6 +32,8 @@ interface AskOptions {
   agentId: string;
   purpose: string; // stored on the cost row
   system: string;
+  /** Defaults to CLAUDE_MODEL. Bulk work (e.g. drawing book pages) can use a cheaper model. */
+  model?: string;
   prompt: string;
   effort?: Effort;
   maxTokens?: number;
@@ -73,7 +75,7 @@ async function track(agentId: string, purpose: string, response: Anthropic.Messa
 export async function askText(opts: AskOptions): Promise<string> {
   await assertApiBudget();
   const response = await getClient().messages.create({
-    model: config.claude.model,
+    model: opts.model ?? config.claude.model,
     max_tokens: opts.maxTokens ?? 16000,
     system: opts.system,
     output_config: { effort: opts.effort ?? "medium" },
@@ -90,7 +92,7 @@ export async function askText(opts: AskOptions): Promise<string> {
 export async function askJson<S extends z.ZodType>(opts: AskOptions & { schema: S }): Promise<z.infer<S>> {
   await assertApiBudget();
   const response = await getClient().messages.parse({
-    model: config.claude.model,
+    model: opts.model ?? config.claude.model,
     max_tokens: opts.maxTokens ?? 16000,
     system: opts.system,
     output_config: { effort: opts.effort ?? "medium", format: zodOutputFormat(opts.schema) },

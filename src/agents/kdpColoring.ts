@@ -69,6 +69,7 @@ async function review(png: Buffer, subject: string, kind: "page" | "cover") {
   return askJson({
     agentId: ID,
     purpose: "kdp_page_review",
+    model: config.kdp.reviewModel,
     effort: "low",
     maxTokens: 2000,
     schema: ReviewSchema,
@@ -85,13 +86,20 @@ async function review(png: Buffer, subject: string, kind: "page" | "cover") {
   });
 }
 
+/** The cheap model gets DRAW_ATTEMPTS tries; a page it can't get right gets one last try on the main model. */
+export function drawModels(): string[] {
+  const tries = Array<string>(DRAW_ATTEMPTS).fill(config.kdp.drawModel);
+  return config.kdp.drawModel === config.claude.model ? tries : [...tries, config.claude.model];
+}
+
 async function drawPage(subject: string, theme: string, ageRange: string): Promise<{ svg: string; png: Buffer } | null> {
   let feedback = "";
-  for (let attempt = 1; attempt <= DRAW_ATTEMPTS; attempt++) {
+  for (const model of drawModels()) {
     const svg = sanitizeSvg(
       await askText({
         agentId: ID,
         purpose: "kdp_page_svg",
+        model,
         effort: "medium",
         system: PAGE_RULES,
         prompt: `Book theme: ${theme} (ages ${ageRange}).\nDraw: ${subject}${feedback}`,
