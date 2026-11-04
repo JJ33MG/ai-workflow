@@ -62,8 +62,8 @@ export const BUSINESSES: BusinessDefinition[] = [
         status: l.status,
         priceCents: l.priceCents,
         currency: l.currency,
-        image: l.designSvg ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(l.designSvg)}` : undefined,
-        detail: l.niche,
+        image: l.designSvg ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(l.designSvg)}` : (l.imageUrl ?? undefined),
+        detail: l.source === "etsy" ? "Uit je Etsy-winkel" : l.niche,
         createdAt: l.createdAt,
         salesCount: l.etsyListingId ? (soldByListing.get(l.etsyListingId) ?? 0) : 0,
       }));

@@ -176,6 +176,31 @@ describe.skipIf(!url)("with database", async () => {
     await _db.setting.deleteMany({ where: { key: "plan.status" } });
   });
 
+  it("syncs the Etsy shop's listings: adds new, updates known, ends removed", async () => {
+    const { upsertEtsyListings } = await import("../src/agents/etsyPod.js");
+    const { db: _db } = await import("../src/db.js");
+    await _db.listing.deleteMany({ where: { etsyListingId: { not: null } } }); // start from an empty shop
+    const mug = (id: number, title: string) => ({
+      listing_id: id,
+      title,
+      description: "d",
+      tags: ["mug"],
+      state: "active",
+      url: "https://etsy.com/listing/" + id,
+      price: { amount: 2199, divisor: 100, currency_code: "USD" },
+    });
+    const image = async () => "https://i.etsystatic.com/x.jpg";
+
+    expect(await upsertEtsyListings([mug(9001, "Bee mug"), mug(9002, "Baker mug")], image)).toEqual({ added: 2, updated: 0, ended: 0 });
+    expect(await upsertEtsyListings([mug(9001, "Bee mug v2")], image)).toEqual({ added: 0, updated: 1, ended: 1 });
+
+    const bee = await _db.listing.findUniqueOrThrow({ where: { etsyListingId: "9001" } });
+    expect(bee).toMatchObject({ title: "Bee mug v2", source: "etsy", status: "active", priceCents: 2199, currency: "USD" });
+    expect(bee.printfulVariant).toBeNull(); // Printful's own Etsy integration fulfils these, never the agent
+    expect((await _db.listing.findUniqueOrThrow({ where: { etsyListingId: "9002" } })).status).toBe("ended");
+    await _db.listing.deleteMany({ where: { etsyListingId: { in: ["9001", "9002"] } } });
+  });
+
   it("blocks Claude calls once the daily budget is spent", async () => {
     await db.cost.create({ data: { agentId: "ceo", category: "claude_api", amountCents: 100_000, currency: "EUR" } });
     await expect(assertApiBudget()).rejects.toBeInstanceOf(BudgetExceededError);

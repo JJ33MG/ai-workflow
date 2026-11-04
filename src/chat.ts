@@ -157,6 +157,11 @@ async function snapshot(agentId: string) {
       : { business: d.businesses.find((b) => b.id === agents.get(agentId)?.businessId), systems: d.checks },
     problems: mine(d.problems).map((p) => ({ taskId: p.taskId, agent: p.agentId, job: p.type, state: p.state, attempts: p.attempts, error: p.error, likelyCause: p.guide.title, fix: p.guide.fix })),
     approvalsWaiting: mine(d.approvals).map((a) => ({ title: a.title, details: a.details })),
+    // Jarne's own steps (ticked on the dashboard): what he did by hand outside the system.
+    jarneSteps: d.plan.filter((p) => p.owner === "jarne").map((p) => ({ step: p.title, status: p.status })),
+    notes:
+      "Until the Etsy connection is approved the system cannot see the Etsy shop: products Jarne placed there by hand " +
+      "(see jarneSteps) and their sales are missing from these numbers. Once connected, the shop is synced every hour.",
     recentLog: mine(d.activity).slice(0, 40).map((l) => `${new Date(l.createdAt).toISOString()} ${l.agentId} ${l.level}: ${l.message}`),
     sharedBrain: knowledge.map((k) => ({ kind: k.kind, title: k.title, body: k.body })),
   };

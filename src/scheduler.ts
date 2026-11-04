@@ -18,6 +18,7 @@ export const SCHEDULE: ScheduleEntry[] = [
   { cron: "*/30 * * * *", agentId: "debug", type: "check", label: "Elke 30 minuten", staleAfterMin: 70 },
   { cron: "0 10 * * *", agentId: "etsy-pod", type: "create_listings", label: "Dagelijks om 10:00", staleAfterMin: 26 * 60 },
   { cron: "15 * * * *", agentId: "etsy-pod", type: "sync_sales", label: "Elk uur om :15", staleAfterMin: 130 },
+  { cron: "45 * * * *", agentId: "etsy-pod", type: "sync_listings", label: "Elk uur om :45", staleAfterMin: 130 },
 ];
 
 /** Live state of this process, read by the dashboard. */

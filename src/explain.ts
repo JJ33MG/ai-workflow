@@ -96,6 +96,7 @@ export const NODES: BrainNode[] = [
         "Hij schrijft de titel, beschrijving en 13 tags volgens de regels van Etsy.",
         "Nu (dry run): ontwerpen worden klaargezet als pakket dat jij in Printful uploadt.",
         "Later (online + Etsy-koppeling): hij zet listings zelf op Etsy, vraagt jouw akkoord voor de listingkosten, haalt verkopen op en maakt de Printful-bestelling.",
+        "Zodra Etsy gekoppeld is, haalt hij elk uur alle listings van je winkel op, ook die je met de hand via Printful plaatste. Die bestellingen laat hij aan Printful zelf over.",
       ],
       where: "Bedrijven → Etsy-winkel (producten, verkopen) en Chat → Etsy-agent.",
       you: "Vraag nieuwe ontwerpen in Chat, bijvoorbeeld: \"Maak 5 mokken voor verpleegkundigen\".",

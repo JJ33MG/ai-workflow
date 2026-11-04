@@ -166,6 +166,35 @@ export async function getPaidReceiptsSince(sinceEpochSeconds: number): Promise<E
   return res.results;
 }
 
+export interface EtsyListing {
+  listing_id: number;
+  title: string;
+  description: string;
+  tags: string[];
+  state: string;
+  url: string;
+  price: { amount: number; divisor: number; currency_code: string };
+}
+
+/** Every active listing in the shop, including ones placed by hand or through Printful. */
+export async function getActiveListings(): Promise<EtsyListing[]> {
+  const all: EtsyListing[] = [];
+  for (let offset = 0; ; offset += 100) {
+    const page = await etsy<{ count: number; results: EtsyListing[] }>(
+      "GET",
+      `/shops/${config.etsy.shopId}/listings/active?limit=100&offset=${offset}`,
+    );
+    all.push(...page.results);
+    if (page.results.length < 100 || all.length >= page.count) return all;
+  }
+}
+
+/** URL of a listing's main photo (570 px wide), if it has one. */
+export async function getMainImageUrl(listingId: number): Promise<string | null> {
+  const res = await etsy<{ results: { url_570xN: string; rank: number }[] }>("GET", `/listings/${listingId}/images`);
+  return res.results.sort((a, b) => a.rank - b.rank)[0]?.url_570xN ?? null;
+}
+
 /** Etsy amounts are { amount, divisor }; convert to minor units (cents). */
 export function moneyToCents(m: { amount: number; divisor: number }): number {
   return Math.round((m.amount / m.divisor) * 100);

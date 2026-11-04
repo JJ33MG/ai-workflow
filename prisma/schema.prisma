@@ -138,7 +138,11 @@ model Listing {
   currency         String
   designSvg        String
   designFile       String // file name under STORAGE_DIR/designs
-  status           String   @default("draft") // draft | uploaded | active | failed
+  status           String   @default("draft") // draft | uploaded | active | ended | failed
+  /// agent: made by the Etsy agent · etsy: found in the shop by sync (e.g. placed by hand via Printful)
+  source           String   @default("agent")
+  /// Main photo from Etsy, for listings the agent didn't design itself.
+  imageUrl         String?
   etsyListingId    String?  @unique
   printfulVariant  Int?
   error            String?

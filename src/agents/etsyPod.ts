@@ -228,6 +228,64 @@ async function publishListings(payload: Record<string, unknown>, { log, taskId }
   return { published };
 }
 
+/**
+ * Brings the shop's real listings into the system: anything active on Etsy that we don't know yet
+ * (for example mugs Jarne placed by hand through Printful) is added, known ones are updated, and
+ * listings that are no longer active are marked ended. Orders for listings the agent didn't create
+ * are left to Printful's own Etsy integration (fulfilReceipt skips them).
+ */
+export async function upsertEtsyListings(
+  listings: etsy.EtsyListing[],
+  imageFor: (listingId: number) => Promise<string | null>,
+): Promise<{ added: number; updated: number; ended: number }> {
+  let added = 0;
+  let updated = 0;
+  const activeIds = new Set(listings.map((l) => String(l.listing_id)));
+  for (const l of listings) {
+    const etsyListingId = String(l.listing_id);
+    const fields = {
+      title: l.title.slice(0, 140),
+      description: l.description,
+      tags: l.tags,
+      priceCents: etsy.moneyToCents(l.price),
+      currency: l.price.currency_code,
+      status: "active",
+    };
+    const known = await db.listing.findUnique({ where: { etsyListingId } });
+    if (known) {
+      await db.listing.update({ where: { id: known.id }, data: fields });
+      updated++;
+    } else {
+      await db.listing.create({
+        data: {
+          ...fields,
+          etsyListingId,
+          niche: "Etsy-winkel",
+          source: "etsy",
+          designSvg: "",
+          designFile: "",
+          imageUrl: await imageFor(l.listing_id).catch(() => null),
+        },
+      });
+      added++;
+    }
+  }
+  const gone = await db.listing.updateMany({
+    where: { status: "active", etsyListingId: { not: null, notIn: [...activeIds] } },
+    data: { status: "ended" },
+  });
+  return { added, updated, ended: gone.count };
+}
+
+async function syncListings(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
+  if (!etsy.isEtsyConfigured() || !(await etsy.isEtsyConnected())) return { skipped: "etsy not connected" };
+  const result = await upsertEtsyListings(await etsy.getActiveListings(), etsy.getMainImageUrl);
+  if (result.added || result.ended) {
+    await log.info(`Etsy-winkel bijgewerkt: ${result.added} nieuw, ${result.updated} bijgewerkt, ${result.ended} beëindigd`, result, taskId);
+  }
+  return result;
+}
+
 async function syncSales(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
   if (!etsy.isEtsyConfigured() || !(await etsy.isEtsyConnected())) return { skipped: "etsy not connected" };
   const since = (await getSetting<number>(RECEIPTS_CURSOR)) ?? Math.floor(Date.now() / 1000) - 7 * 86400;
@@ -334,7 +392,7 @@ export const etsyPodAgent: AgentDefinition = {
   name: "Etsy-agent",
   phase: 1,
   businessId: "etsy-pod",
-  chatTasks: ["create_listings", "upload_listings", "sync_sales"],
+  chatTasks: ["create_listings", "upload_listings", "sync_sales", "sync_listings"],
   description: "Zoekt cadeau-niches, ontwerpt mokken, zet ze op Etsy en maakt van Etsy-verkopen Printful-bestellingen.",
   dependsOn: ["database", "claude", "etsy", "printful"],
   taskInfo: {
@@ -342,6 +400,7 @@ export const etsyPodAgent: AgentDefinition = {
     upload_listings: "Concepten en mockups naar Etsy uploaden, daarna akkoord vragen om te publiceren",
     publish_listings: "Goedgekeurde concepten live zetten op Etsy (kost $0,20 listingkosten per stuk)",
     sync_sales: "Nieuwe betaalde Etsy-bestellingen ophalen als verkopen",
+    sync_listings: "Alle actieve listings van je Etsy-winkel ophalen, ook die je met de hand plaatste",
     fulfil_receipt: "De Printful-bestelling maken voor een Etsy-verkoop (automatisch bevestigd onder de uitgavelimiet)",
   },
   handlers: {
@@ -349,6 +408,7 @@ export const etsyPodAgent: AgentDefinition = {
     upload_listings: uploadListings,
     publish_listings: publishListings,
     sync_sales: syncSales,
+    sync_listings: syncListings,
     fulfil_receipt: fulfilReceipt,
   },
 };

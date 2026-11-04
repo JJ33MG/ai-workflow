@@ -194,6 +194,9 @@ app.get("/auth/etsy/start", requireAdmin, async (_req, res) => {
 app.get("/auth/etsy/callback", async (req, res) => {
   try {
     await etsy.handleCallback(String(req.query.code ?? ""), String(req.query.state ?? ""));
+    // Pull the shop in right away instead of waiting for the hourly sync.
+    await enqueue("etsy-pod", "sync_listings");
+    await enqueue("etsy-pod", "sync_sales");
     res.send("Etsy connected. You can close this tab.");
   } catch (err) {
     res.status(400).send(`Etsy connection failed: ${(err as Error).message}`);

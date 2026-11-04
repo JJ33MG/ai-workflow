@@ -12,6 +12,7 @@ const PRODUCT_STATUS = {
   drawing: "wordt getekend",
   ready: "klaar om te uploaden",
   published: "gepubliceerd",
+  ended: "beëindigd",
 };
 
 let selected = null;
