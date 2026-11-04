@@ -2,12 +2,23 @@ import { config } from "../config.js";
 
 const API = "https://api.printful.com";
 
-export const isPrintfulConfigured = () =>
-  Boolean(config.printful.token && config.printful.productId && config.printful.variantId);
+/**
+ * Which store, product and variant the agent orders. Set by hand (PRINTFUL_* variables) or,
+ * normally, found automatically by findPrintfulSetup() and loaded from the database at startup.
+ */
+export const pf = {
+  storeId: config.printful.storeId,
+  productId: config.printful.productId,
+  variantId: config.printful.variantId,
+  placement: config.printful.placement,
+};
+
+export const hasPrintfulToken = () => Boolean(config.printful.token);
+export const isPrintfulConfigured = () => Boolean(config.printful.token && pf.productId && pf.variantId);
 
 async function printful<T>(method: string, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = { authorization: `Bearer ${config.printful.token}` };
-  if (config.printful.storeId) headers["X-PF-Store-Id"] = config.printful.storeId;
+  if (pf.storeId) headers["X-PF-Store-Id"] = pf.storeId;
   if (body !== undefined) headers["content-type"] = "application/json";
   const res = await fetch(`${API}${path}`, {
     method,
@@ -26,6 +37,18 @@ export interface CatalogProduct {
 
 export const getCatalogProduct = (productId: number) => printful<CatalogProduct>("GET", `/products/${productId}`);
 
+export interface PrintfulStore {
+  id: number;
+  name: string;
+  type: string; // "native" is a Manual order / API store; others are platform integrations (etsy, shopify…)
+}
+
+/** Stores the token can see (an account-level token sees all; a store token sees one). */
+export const listStores = () => printful<PrintfulStore[]>("GET", "/stores");
+
+/** The whole Printful catalogue (id, title, type of every product). */
+export const listCatalog = () => printful<{ id: number; title: string; type: string }[]>("GET", "/products");
+
 export interface PrintfileInfo {
   printfiles: { printfile_id: number; width: number; height: number; dpi: number }[];
   variant_printfiles: { variant_id: number; placements: Record<string, number> }[];
@@ -38,11 +61,11 @@ export const getPrintfiles = (productId: number) =>
 export async function generateMockup(designUrl: string): Promise<string[]> {
   const { task_key } = await printful<{ task_key: string }>(
     "POST",
-    `/mockup-generator/create-task/${config.printful.productId}`,
+    `/mockup-generator/create-task/${pf.productId}`,
     {
-      variant_ids: [config.printful.variantId],
+      variant_ids: [pf.variantId],
       format: "jpg",
-      files: [{ placement: config.printful.placement, image_url: designUrl }],
+      files: [{ placement: pf.placement, image_url: designUrl }],
     },
   );
   for (let i = 0; i < 24; i++) {
@@ -85,7 +108,7 @@ export async function createDraftOrder(input: {
     items: input.items.map((i) => ({
       variant_id: i.variantId,
       quantity: i.quantity,
-      files: [{ type: config.printful.placement, url: i.fileUrl }],
+      files: [{ type: pf.placement, url: i.fileUrl }],
     })),
   });
 }

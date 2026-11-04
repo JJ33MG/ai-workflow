@@ -1,7 +1,7 @@
 import { config } from "../config.js";
 import { db } from "../db.js";
 import { isEtsyConfigured, isEtsyConnected } from "../integrations/etsy.js";
-import { isPrintfulConfigured } from "../integrations/printful.js";
+import { hasPrintfulToken, isPrintfulConfigured, pf } from "../integrations/printful.js";
 import { schedulerState } from "../scheduler.js";
 import { apiSpendTodayCents } from "./budget.js";
 import { isClaudeConfigured } from "./claude.js";
@@ -119,7 +119,15 @@ export async function runHealthChecks(now = new Date()): Promise<HealthCheck[]> 
 
   checks.push(
     isPrintfulConfigured()
-      ? { id: "printful", label: "Printful", status: "ok", detail: `Product ${config.printful.productId}, variant ${config.printful.variantId}` }
+      ? { id: "printful", label: "Printful", status: "ok", detail: `Gekoppeld · product ${pf.productId}, variant ${pf.variantId}` }
+      : hasPrintfulToken()
+        ? {
+            id: "printful",
+            label: "Printful",
+            status: "warn",
+            detail: "Sleutel ingesteld; product en printmaat zijn nog niet opgehaald",
+            fix: "Start bij Agents → Etsy-agent de taak printful_setup (gebeurt ook vanzelf bij het opstarten).",
+          }
       : {
           id: "printful",
           label: "Printful",

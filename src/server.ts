@@ -12,8 +12,10 @@ import { buildBusinessDetail, buildDashboard } from "./dashboard.js";
 import { db } from "./db.js";
 import * as etsy from "./integrations/etsy.js";
 import { decide } from "./lib/approvals.js";
+import { loadPrintfulSetup } from "./lib/printfulSetup.js";
+import { hasPrintfulToken } from "./integrations/printful.js";
 import { designsDir } from "./lib/design.js";
-import { enqueue } from "./lib/tasks.js";
+import { enqueue, enqueueOnce } from "./lib/tasks.js";
 import { startCommandPolling } from "./lib/telegram.js";
 import { startScheduler } from "./scheduler.js";
 
@@ -211,6 +213,8 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 async function main() {
   if (!config.adminToken) console.warn("ADMIN_TOKEN is not set: the /api routes will refuse every request.");
   await syncAgents();
+  // Printful product and print size: loaded if found before, otherwise looked up in the background.
+  if (!(await loadPrintfulSetup()) && hasPrintfulToken()) await enqueueOnce("etsy-pod", "printful_setup");
   const stopScheduler = startScheduler();
   const stopPolling = startCommandPolling(handleCommand);
   const server = app.listen(config.port, () => {

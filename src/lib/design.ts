@@ -20,8 +20,16 @@ export function sanitizeSvg(raw: string): string {
   return svg;
 }
 
+/** Full print-file size in pixels; replaced by Printful's real size once that has been looked up. */
+const printSize = { width: config.pod.designWidth, height: config.pod.designHeight };
+export function setPrintSize(width: number, height: number) {
+  printSize.width = width;
+  printSize.height = height;
+}
+export const getPrintSize = () => ({ ...printSize });
+
 /** A mug is printed with the same design on both sides: each design is drawn for one half. */
-export const sideSize = () => ({ width: Math.round(config.pod.designWidth / 2), height: config.pod.designHeight });
+export const sideSize = () => ({ width: Math.round(printSize.width / 2), height: printSize.height });
 
 /** The rendered design runs off its canvas (usually text wider than the agent expected). */
 export class DesignLayoutError extends Error {

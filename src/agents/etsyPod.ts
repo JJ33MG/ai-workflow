@@ -10,6 +10,7 @@ import { recordCost } from "../lib/budget.js";
 import { askJson, askText } from "../lib/claude.js";
 import { DesignLayoutError, designUrl, designsDir, prepareDesign, sanitizeSvg, saveDesign, sideSize } from "../lib/design.js";
 import { toEurCents } from "../lib/money.js";
+import { findPrintfulSetup } from "../lib/printfulSetup.js";
 import { enqueue } from "../lib/tasks.js";
 import type { AgentDefinition, TaskContext } from "./types.js";
 
@@ -96,7 +97,7 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
           currency: config.pod.currency,
           designSvg: svg,
           designFile: "",
-          printfulVariant: config.printful.variantId || null,
+          printfulVariant: printful.pf.variantId || null,
         },
       });
       const file = await saveDesign(png, listing.id);
@@ -286,6 +287,17 @@ async function syncListings(_payload: Record<string, unknown>, { log, taskId }: 
   return result;
 }
 
+async function printfulSetup(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
+  if (!printful.hasPrintfulToken()) return { skipped: "no Printful token" };
+  const s = await findPrintfulSetup();
+  await log.info(
+    `Printful ingesteld: winkel "${s.storeName}", mok product ${s.productId} variant ${s.variantId}, printmaat ${s.printWidth}×${s.printHeight}`,
+    s,
+    taskId,
+  );
+  return s;
+}
+
 async function syncSales(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
   if (!etsy.isEtsyConfigured() || !(await etsy.isEtsyConnected())) return { skipped: "etsy not connected" };
   const since = (await getSetting<number>(RECEIPTS_CURSOR)) ?? Math.floor(Date.now() / 1000) - 7 * 86400;
@@ -392,7 +404,7 @@ export const etsyPodAgent: AgentDefinition = {
   name: "Etsy-agent",
   phase: 1,
   businessId: "etsy-pod",
-  chatTasks: ["create_listings", "upload_listings", "sync_sales", "sync_listings"],
+  chatTasks: ["create_listings", "upload_listings", "sync_sales", "sync_listings", "printful_setup"],
   description: "Zoekt cadeau-niches, ontwerpt mokken, zet ze op Etsy en maakt van Etsy-verkopen Printful-bestellingen.",
   dependsOn: ["database", "claude", "etsy", "printful"],
   taskInfo: {
@@ -401,6 +413,7 @@ export const etsyPodAgent: AgentDefinition = {
     publish_listings: "Goedgekeurde concepten live zetten op Etsy (kost $0,20 listingkosten per stuk)",
     sync_sales: "Nieuwe betaalde Etsy-bestellingen ophalen als verkopen",
     sync_listings: "Alle actieve listings van je Etsy-winkel ophalen, ook die je met de hand plaatste",
+    printful_setup: "Bij Printful de API-winkel, de 11 oz mok en de exacte printmaat opzoeken en opslaan",
     fulfil_receipt: "De Printful-bestelling maken voor een Etsy-verkoop (automatisch bevestigd onder de uitgavelimiet)",
   },
   handlers: {
@@ -409,6 +422,7 @@ export const etsyPodAgent: AgentDefinition = {
     publish_listings: publishListings,
     sync_sales: syncSales,
     sync_listings: syncListings,
+    printful_setup: printfulSetup,
     fulfil_receipt: fulfilReceipt,
   },
 };
