@@ -76,7 +76,7 @@ export const config = {
   },
 
   pod: {
-    priceCents: Math.round(num("POD_PRICE_EUR", 19.99) * 100),
+    priceCents: Math.round(num("POD_PRICE", 21.99) * 100), // 11 oz mug
     currency: str("POD_CURRENCY", "EUR"),
     listingsPerRun: num("POD_LISTINGS_PER_RUN", 5),
     designWidth: num("POD_DESIGN_WIDTH", 2700),

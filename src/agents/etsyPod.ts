@@ -183,11 +183,15 @@ async function uploadListings(payload: Record<string, unknown>, { log, taskId }:
     const draft = await etsy.createDraftListing({
       title: listing.title,
       description: listing.description,
-      priceCents: listing.priceCents,
+      // The current shop price, also for drafts made before it changed.
+      priceCents: etsy.es.priceCents,
       tags: listing.tags,
     });
     const etsyId = String(draft.listing_id);
-    await db.listing.update({ where: { id }, data: { etsyListingId: etsyId, status: "uploaded" } });
+    await db.listing.update({
+      where: { id },
+      data: { etsyListingId: etsyId, status: "uploaded", priceCents: etsy.es.priceCents, currency: etsy.es.currency },
+    });
 
     // Prefer a Printful mockup (needs a public URL); fall back to the flat design.
     let rank = 1;

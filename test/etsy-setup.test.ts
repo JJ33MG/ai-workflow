@@ -62,6 +62,7 @@ describe("Etsy setup", () => {
   it("prices in the shop's currency", () => {
     delete process.env.POD_PRICE;
     expect(defaultPriceCents("USD")).toBe(2199);
+    expect(defaultPriceCents("EUR")).toBe(2199);
     process.env.POD_PRICE = "24.5";
     expect(defaultPriceCents("USD")).toBe(2450);
     delete process.env.POD_PRICE;

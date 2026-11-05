@@ -1,7 +1,6 @@
 // Finds the shop settings every new Etsy listing needs, so nothing has to be looked up by hand:
 // the shipping profile Printful created, a return policy, the "Mugs" category, Printful as
 // production partner, and the shop's currency (with a matching price). Saved and loaded at startup.
-import { config } from "../config.js";
 import { getSetting, setSetting } from "../db.js";
 import {
   es,
@@ -78,16 +77,16 @@ export function findTaxonomyId(nodes: TaxonomyNode[], name = "Mugs"): number | n
   return null;
 }
 
-/** POD_PRICE (in the shop's currency) wins; otherwise $21.99 for a USD shop, 19.99 elsewhere. */
-export function defaultPriceCents(currency: string): number {
+/** Price of the 11 oz mug in the shop's currency: POD_PRICE when set, else 21.99 (Jarne's shop price). */
+export function defaultPriceCents(_currency: string): number {
   const set = Number(process.env.POD_PRICE);
-  if (set > 0) return Math.round(set * 100);
-  return currency.toUpperCase() === "USD" ? 2199 : config.pod.priceCents;
+  return set > 0 ? Math.round(set * 100) : 2199;
 }
 
 function apply(s: EtsySetup) {
   es.currency = s.currency;
-  es.priceCents = s.priceCents;
+  // The price follows POD_PRICE at every start, so changing it needs no new setup run.
+  es.priceCents = defaultPriceCents(s.currency);
   es.shippingProfileId = s.shippingProfileId;
   es.returnPolicyId = s.returnPolicyId ?? 0;
   es.taxonomyId = s.taxonomyId;
