@@ -163,7 +163,7 @@ async function uploadListings(payload: Record<string, unknown>, { log, taskId }:
   }
 
   if (!etsy.isEtsyListingReady()) {
-    throw new Error("Etsy shop settings are not known yet (shipping profile, category). Run etsy_setup first.");
+    throw new Error("Etsy shop settings are not known yet (shipping profile, processing profile, category). Run etsy_setup first.");
   }
   const uploaded: string[] = [];
   for (const id of ids) {
@@ -295,7 +295,7 @@ async function etsySetup(_payload: Record<string, unknown>, { log, taskId }: Tas
   if (!etsy.isEtsyConfigured() || !(await etsy.isEtsyConnected())) return { skipped: "etsy not connected" };
   const s = await findEtsySetup();
   await log.info(
-    `Etsy ingesteld: winkel "${s.shopName}" (${s.currency}), prijs ${(s.priceCents / 100).toFixed(2)}, verzendprofiel "${s.shippingProfileTitle}"` +
+    `Etsy ingesteld: winkel "${s.shopName}" (${s.currency}), prijs ${(s.priceCents / 100).toFixed(2)}, verzendprofiel "${s.shippingProfileTitle}", verwerking ${s.readinessLabel}` +
       (etsy.es.productionPartnerId
         ? `, productiepartner #${etsy.es.productionPartnerId}`
         : ` · let op: geen productiepartner gevonden (Etsy gaf: ${s.partnersSeen?.join(", ") || "geen enkele"})`) +

@@ -7,6 +7,7 @@ import {
   es,
   getActiveListings,
   getProductionPartners,
+  getReadinessStates,
   getReturnPolicies,
   getShippingProfiles,
   getShop,
@@ -25,6 +26,8 @@ export interface EtsySetup {
   returnPolicyId: number | null;
   taxonomyId: number;
   productionPartnerId: number | null;
+  readinessStateId: number;
+  readinessLabel?: string;
   /** What Etsy returned, so a missing partner can be diagnosed from the log. */
   partnersSeen?: string[];
 }
@@ -32,6 +35,11 @@ export interface EtsySetup {
 /** Prefer the shipping profile Printful made for its products; otherwise the first one. */
 export function pickShippingProfile<T extends { title: string }>(profiles: T[]): T | null {
   return profiles.find((p) => /printful/i.test(p.title)) ?? profiles[0] ?? null;
+}
+
+/** Print on demand is made to order; take that processing profile, else whatever the shop has. */
+export function pickReadinessState<T extends { readiness_state: string }>(states: T[]): T | null {
+  return states.find((r) => r.readiness_state === "made_to_order") ?? states[0] ?? null;
 }
 
 /** Printful by name; a shop with exactly one production partner uses that one. */
@@ -74,13 +82,15 @@ function apply(s: EtsySetup) {
   es.shippingProfileId = s.shippingProfileId;
   es.returnPolicyId = s.returnPolicyId ?? 0;
   es.taxonomyId = s.taxonomyId;
+  es.readinessStateId = s.readinessStateId ?? (Number(process.env.ETSY_READINESS_STATE_ID) || 0);
   es.productionPartnerId = s.productionPartnerId ?? (Number(process.env.ETSY_PRODUCTION_PARTNER_ID) || 0);
 }
 
 export async function loadEtsySetup(): Promise<boolean> {
   const saved = await getSetting<EtsySetup>(KEY);
   if (saved) apply(saved);
-  return Boolean(saved);
+  // A setup saved before processing profiles were looked up is looked up again.
+  return Boolean(saved?.readinessStateId);
 }
 
 export async function findEtsySetup(): Promise<EtsySetup> {
@@ -99,6 +109,10 @@ export async function findEtsySetup(): Promise<EtsySetup> {
   // Optional, so it never blocks the shop (a policy added later is picked up by running etsy_setup again).
   const taxonomyId = findTaxonomyId(await getTaxonomy());
   if (!taxonomyId) throw new Error('Could not find the "Mugs" category in Etsy\'s taxonomy');
+  const readiness = pickReadinessState(await getReadinessStates());
+  if (!readiness) {
+    throw new Error("No processing profile in the Etsy shop. Add one in Shop Manager → Settings → Shipping settings → Processing profiles.");
+  }
   const partners = await getProductionPartners();
   const partner = pickProductionPartner(partners);
 
@@ -111,6 +125,8 @@ export async function findEtsySetup(): Promise<EtsySetup> {
     returnPolicyId,
     taxonomyId,
     productionPartnerId: partner?.production_partner_id ?? null,
+    readinessStateId: readiness.readiness_state_id,
+    readinessLabel: `${readiness.readiness_state}, ${readiness.min_processing_time}–${readiness.max_processing_time} ${readiness.processing_time_unit}`,
     partnersSeen: partners.map((p) => `${p.partner_name} (#${p.production_partner_id})`),
   };
   await setSetting(KEY, setup);

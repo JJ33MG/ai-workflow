@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultPriceCents, findTaxonomyId, mostUsedId, pickProductionPartner, pickShippingProfile } from "../src/lib/etsySetup.js";
+import { defaultPriceCents, findTaxonomyId, mostUsedId, pickReadinessState, pickProductionPartner, pickShippingProfile } from "../src/lib/etsySetup.js";
 
 describe("Etsy setup", () => {
   it("prefers the shipping profile Printful created", () => {
@@ -10,6 +10,16 @@ describe("Etsy setup", () => {
     expect(pickShippingProfile(profiles)?.shipping_profile_id).toBe(2);
     expect(pickShippingProfile([profiles[0]])?.shipping_profile_id).toBe(1);
     expect(pickShippingProfile([])).toBeNull();
+  });
+
+  it("prefers the made-to-order processing profile", () => {
+    const states = [
+      { readiness_state_id: 1, readiness_state: "ready_to_ship" },
+      { readiness_state_id: 2, readiness_state: "made_to_order" },
+    ];
+    expect(pickReadinessState(states)?.readiness_state_id).toBe(2);
+    expect(pickReadinessState([states[0]])?.readiness_state_id).toBe(1);
+    expect(pickReadinessState([])).toBeNull();
   });
 
   it("takes the return policy most listings use", () => {

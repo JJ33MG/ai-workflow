@@ -38,10 +38,11 @@ export const es = {
   shippingProfileId: Number(config.etsy.shippingProfileId) || 0,
   returnPolicyId: Number(config.etsy.returnPolicyId) || 0,
   productionPartnerId: Number(process.env.ETSY_PRODUCTION_PARTNER_ID) || 0,
+  readinessStateId: Number(process.env.ETSY_READINESS_STATE_ID) || 0,
   currency: config.pod.currency,
   priceCents: config.pod.priceCents,
 };
-export const isEtsyListingReady = () => Boolean(es.taxonomyId && es.shippingProfileId);
+export const isEtsyListingReady = () => Boolean(es.taxonomyId && es.shippingProfileId && es.readinessStateId);
 
 /** Connected = a token and a known shop. A connection that failed half-way counts as not connected. */
 export async function isEtsyConnected(): Promise<boolean> {
@@ -187,6 +188,8 @@ export async function createDraftListing(input: DraftListingInput): Promise<{ li
     type: "physical",
     is_supply: false,
   };
+  // Etsy requires a processing profile ("readiness state") on physical listings.
+  body.readiness_state_id = es.readinessStateId;
   if (es.returnPolicyId) body.return_policy_id = es.returnPolicyId;
   if (es.productionPartnerId) body.production_partner_ids = [es.productionPartnerId];
   return etsy("POST", `/shops/${await shopId()}/listings`, body);
@@ -263,6 +266,18 @@ export const getReturnPolicies = async () =>
     "GET",
     `/shops/${await shopId()}/policies/return`,
   )).results;
+
+/** Processing profiles: made to order or ready to ship, with a processing time. */
+export const getReadinessStates = async () =>
+  (await etsy<{
+    results: {
+      readiness_state_id: number;
+      readiness_state: string;
+      min_processing_time: number;
+      max_processing_time: number;
+      processing_time_unit: string;
+    }[];
+  }>("GET", `/shops/${await shopId()}/readiness-state-definitions`)).results;
 
 export const getProductionPartners = async () =>
   (await etsy<{ results: { production_partner_id: number; partner_name: string }[] }>("GET", `/shops/${await shopId()}/production-partners`)).results;
