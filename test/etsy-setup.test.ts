@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultPriceCents, findTaxonomyId, mostUsedId, pickReadinessState, pickProductionPartner, pickShippingProfile } from "../src/lib/etsySetup.js";
+import { defaultPriceCents, findTaxonomyId, mostUsedId, pickReadinessState, readinessLabel, pickProductionPartner, pickShippingProfile } from "../src/lib/etsySetup.js";
 
 describe("Etsy setup", () => {
   it("prefers the shipping profile Printful created", () => {
@@ -20,6 +20,14 @@ describe("Etsy setup", () => {
     expect(pickReadinessState(states)?.readiness_state_id).toBe(2);
     expect(pickReadinessState([states[0]])?.readiness_state_id).toBe(1);
     expect(pickReadinessState([])).toBeNull();
+  });
+
+  it("describes a processing profile with whatever fields Etsy sends", () => {
+    expect(readinessLabel({ readiness_state: "made_to_order", min_processing_time: 2, max_processing_time: 5, processing_time_unit: "days" })).toBe(
+      "made_to_order, 2–5 days",
+    );
+    expect(readinessLabel({ readiness_state: "made_to_order", min_processing_days: 1, max_processing_days: 3 })).toBe("made_to_order, 1–3 days");
+    expect(readinessLabel({ readiness_state: "made_to_order" })).toBe("made_to_order");
   });
 
   it("takes the return policy most listings use", () => {

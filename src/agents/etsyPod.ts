@@ -8,7 +8,7 @@ import * as printful from "../integrations/printful.js";
 import { registerApprovalExecutor, requestApproval } from "../lib/approvals.js";
 import { recordCost } from "../lib/budget.js";
 import { askJson, askText } from "../lib/claude.js";
-import { DesignLayoutError, designUrl, designsDir, prepareDesign, sanitizeSvg, saveDesign, sideSize } from "../lib/design.js";
+import { DesignLayoutError, designUrl, designsDir, getPrintSize, prepareDesign, sanitizeSvg, saveDesign, sideSize } from "../lib/design.js";
 import { toEurCents } from "../lib/money.js";
 import { findEtsySetup } from "../lib/etsySetup.js";
 import { findPrintfulSetup } from "../lib/printfulSetup.js";
@@ -156,7 +156,18 @@ async function designWithRetry(idea: Idea): Promise<{ svg: string; png: Buffer }
 }
 
 async function uploadListings(payload: Record<string, unknown>, { log, taskId }: TaskContext) {
-  const ids = (payload.listingIds as string[]) ?? [];
+  // Without ids (e.g. started from chat): every local draft that never reached Etsy, such as
+  // the ones made while DRY_RUN was on.
+  const ids =
+    (payload.listingIds as string[] | undefined) ??
+    (
+      await db.listing.findMany({
+        where: { source: "agent", status: "draft", etsyListingId: null, designFile: { not: "" } },
+        orderBy: { createdAt: "asc" },
+        take: 10,
+        select: { id: true },
+      })
+    ).map((l) => l.id);
   if (config.dryRun || !etsy.isEtsyConfigured()) {
     await log.info(`Dry run: ${ids.length} listing(s) kept as local drafts`, { ids }, taskId);
     return { uploaded: 0, dryRun: true };
@@ -182,7 +193,7 @@ async function uploadListings(payload: Record<string, unknown>, { log, taskId }:
     let rank = 1;
     if (printful.isPrintfulConfigured() && !config.publicUrl.includes("localhost")) {
       try {
-        for (const url of (await printful.generateMockup(designUrl(listing.designFile))).slice(0, 5)) {
+        for (const url of (await printful.generateMockup(designUrl(listing.designFile), getPrintSize())).slice(0, 5)) {
           const img = Buffer.from(await (await fetch(url)).arrayBuffer());
           await etsy.uploadListingImage(etsyId, img, rank++);
         }

@@ -42,6 +42,15 @@ export function pickReadinessState<T extends { readiness_state: string }>(states
   return states.find((r) => r.readiness_state === "made_to_order") ?? states[0] ?? null;
 }
 
+/** "made_to_order, 2–5 days"; Etsy's field names vary, so only the parts that are present. */
+export function readinessLabel(r: Record<string, unknown>): string {
+  const min = r.min_processing_time ?? r.min_processing_days;
+  const max = r.max_processing_time ?? r.max_processing_days;
+  const unit = r.processing_time_unit ?? (r.min_processing_days != null ? "days" : "");
+  const time = min != null && max != null ? `, ${min}–${max} ${unit}`.trimEnd() : "";
+  return `${r.readiness_state ?? "?"}${time}`;
+}
+
 /** Printful by name; a shop with exactly one production partner uses that one. */
 export function pickProductionPartner<T extends { partner_name: string }>(partners: T[]): T | null {
   return partners.find((p) => /printful/i.test(p.partner_name ?? "")) ?? (partners.length === 1 ? partners[0] : null);
@@ -126,7 +135,7 @@ export async function findEtsySetup(): Promise<EtsySetup> {
     taxonomyId,
     productionPartnerId: partner?.production_partner_id ?? null,
     readinessStateId: readiness.readiness_state_id,
-    readinessLabel: `${readiness.readiness_state}, ${readiness.min_processing_time}–${readiness.max_processing_time} ${readiness.processing_time_unit}`,
+    readinessLabel: readinessLabel(readiness),
     partnersSeen: partners.map((p) => `${p.partner_name} (#${p.production_partner_id})`),
   };
   await setSetting(KEY, setup);

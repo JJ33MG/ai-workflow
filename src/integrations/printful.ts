@@ -58,14 +58,21 @@ export const getPrintfiles = (productId: number) =>
   printful<PrintfileInfo>("GET", `/mockup-generator/printfiles/${productId}`);
 
 /** Generates a product mockup from a public design URL. Polls until done (max ~2 min). */
-export async function generateMockup(designUrl: string): Promise<string[]> {
+/** `size` is the full print file in pixels; the design covers the whole print area. */
+export async function generateMockup(designUrl: string, size: { width: number; height: number }): Promise<string[]> {
   const { task_key } = await printful<{ task_key: string }>(
     "POST",
     `/mockup-generator/create-task/${pf.productId}`,
     {
       variant_ids: [pf.variantId],
       format: "jpg",
-      files: [{ placement: pf.placement, image_url: designUrl }],
+      files: [
+        {
+          placement: pf.placement,
+          image_url: designUrl,
+          position: { area_width: size.width, area_height: size.height, width: size.width, height: size.height, top: 0, left: 0 },
+        },
+      ],
     },
   );
   for (let i = 0; i < 24; i++) {
