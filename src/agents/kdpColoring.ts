@@ -4,6 +4,7 @@ import sharp from "sharp";
 import { z } from "zod";
 import { config } from "../config.js";
 import { db } from "../db.js";
+import { BudgetExceededError } from "../lib/budget.js";
 import { askJson, askText } from "../lib/claude.js";
 import { buildCover, buildInterior, inkedEdges, renderPage } from "../lib/coloring.js";
 import { sanitizeSvg } from "../lib/design.js";
@@ -177,6 +178,8 @@ async function createBook(payload: Record<string, unknown>, { log, taskId }: Tas
   try {
     const results = await mapLimited(plan.pages.slice(0, pictures), PARALLEL_PAGES, async (p, i) => {
       const drawn = await drawPage(p.subject, plan.theme, plan.ageRange).catch(async (err: Error) => {
+        // An empty budget is not a bad page: stop the book instead of "rejecting" every page.
+        if (err instanceof BudgetExceededError) throw err;
         await log.warn(`Page "${p.subject}" failed: ${err.message}`, undefined, taskId);
         return null;
       });
