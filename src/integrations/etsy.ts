@@ -120,7 +120,39 @@ async function accessToken(): Promise<string> {
   return refreshed.access_token;
 }
 
+// Etsy allows only a few requests per second per app. All calls go through one queue with a
+// short gap, and a 429 is retried after a pause instead of failing the task.
+const MIN_GAP_MS = 250;
+const RATE_LIMIT_RETRIES = 4;
+let queue: Promise<unknown> = Promise.resolve();
+let lastCall = 0;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+function throttled<T>(fn: () => Promise<T>): Promise<T> {
+  const run = queue.then(async () => {
+    const wait = lastCall + MIN_GAP_MS - Date.now();
+    if (wait > 0) await sleep(wait);
+    lastCall = Date.now();
+    return fn();
+  });
+  queue = run.catch(() => undefined);
+  return run;
+}
+
 async function etsy<T>(method: string, path: string, body?: unknown | FormData): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await throttled(() => etsyRequest(method, path, body));
+    if (res.status === 429 && attempt < RATE_LIMIT_RETRIES) {
+      const retryAfter = Number(res.headers.get("retry-after"));
+      await sleep(retryAfter > 0 ? retryAfter * 1000 : 1000 * 2 ** attempt);
+      continue;
+    }
+    if (!res.ok) throw new Error(`Etsy ${method} ${path} failed: ${res.status} ${await res.text()}`);
+    return (await res.json()) as T;
+  }
+}
+
+async function etsyRequest(method: string, path: string, body?: unknown | FormData): Promise<Response> {
   const headers: Record<string, string> = {
     "x-api-key": apiKeyHeader(),
     authorization: `Bearer ${await accessToken()}`,
@@ -131,9 +163,7 @@ async function etsy<T>(method: string, path: string, body?: unknown | FormData):
     headers["content-type"] = "application/json";
     payload = JSON.stringify(body);
   }
-  const res = await fetch(`${API}${path}`, { method, headers, body: payload });
-  if (!res.ok) throw new Error(`Etsy ${method} ${path} failed: ${res.status} ${await res.text()}`);
-  return (await res.json()) as T;
+  return fetch(`${API}${path}`, { method, headers, body: payload });
 }
 
 export interface DraftListingInput {
@@ -205,6 +235,8 @@ export interface EtsyListing {
   state: string;
   url: string;
   price: { amount: number; divisor: number; currency_code: string };
+  shipping_profile_id?: number | null;
+  return_policy_id?: number | null;
 }
 
 /** Every active listing in the shop, including ones placed by hand or through Printful. */

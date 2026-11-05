@@ -5,6 +5,7 @@ import { config } from "../config.js";
 import { getSetting, setSetting } from "../db.js";
 import {
   es,
+  getActiveListings,
   getProductionPartners,
   getReturnPolicies,
   getShippingProfiles,
@@ -33,6 +34,18 @@ export function pickShippingProfile<T extends { title: string }>(profiles: T[]):
 
 export function pickProductionPartner<T extends { partner_name: string }>(partners: T[]): T | null {
   return partners.find((p) => /printful/i.test(p.partner_name)) ?? null;
+}
+
+/** The id most of the shop's existing listings use (e.g. the return policy picked by hand in Shop Manager). */
+export function mostUsedId<K extends string>(listings: Partial<Record<K, number | null>>[], key: K): number | null {
+  const counts = new Map<number, number>();
+  for (const l of listings) {
+    const id = l[key];
+    if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  let best: number | null = null;
+  for (const [id, n] of counts) if (best === null || n > counts.get(best)!) best = id;
+  return best;
 }
 
 /** Depth-first search for the "Mugs" category in Etsy's seller taxonomy. */
@@ -71,8 +84,13 @@ export async function findEtsySetup(): Promise<EtsySetup> {
   const shop = await getShop();
   const profile = pickShippingProfile(await getShippingProfiles());
   if (!profile) throw new Error("No shipping profile in the Etsy shop. Connect Printful to Etsy (it creates one) or add one in Shop Manager.");
-  const returns = (await getReturnPolicies())[0];
-  if (!returns) throw new Error("No return policy in the Etsy shop. Add one in Shop Manager → Settings → Policies.");
+  // Shops whose policy was chosen per listing may list no return policy here; then use the one
+  // the existing listings carry.
+  const returnPolicyId =
+    (await getReturnPolicies())[0]?.return_policy_id ?? mostUsedId(await getActiveListings(), "return_policy_id");
+  if (!returnPolicyId) {
+    throw new Error("No return policy in the Etsy shop or on its listings. Add one in Shop Manager → Settings → Policies.");
+  }
   const taxonomyId = findTaxonomyId(await getTaxonomy());
   if (!taxonomyId) throw new Error('Could not find the "Mugs" category in Etsy\'s taxonomy');
   const partner = pickProductionPartner(await getProductionPartners());
@@ -83,7 +101,7 @@ export async function findEtsySetup(): Promise<EtsySetup> {
     priceCents: defaultPriceCents(shop.currency_code),
     shippingProfileId: profile.shipping_profile_id,
     shippingProfileTitle: profile.title,
-    returnPolicyId: returns.return_policy_id,
+    returnPolicyId,
     taxonomyId,
     productionPartnerId: partner?.production_partner_id ?? null,
   };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultPriceCents, findTaxonomyId, pickProductionPartner, pickShippingProfile } from "../src/lib/etsySetup.js";
+import { defaultPriceCents, findTaxonomyId, mostUsedId, pickProductionPartner, pickShippingProfile } from "../src/lib/etsySetup.js";
 
 describe("Etsy setup", () => {
   it("prefers the shipping profile Printful created", () => {
@@ -10,6 +10,12 @@ describe("Etsy setup", () => {
     expect(pickShippingProfile(profiles)?.shipping_profile_id).toBe(2);
     expect(pickShippingProfile([profiles[0]])?.shipping_profile_id).toBe(1);
     expect(pickShippingProfile([])).toBeNull();
+  });
+
+  it("takes the return policy most listings use", () => {
+    const listings = [{ return_policy_id: 5 }, { return_policy_id: 9 }, { return_policy_id: 9 }, { return_policy_id: null }];
+    expect(mostUsedId(listings, "return_policy_id")).toBe(9);
+    expect(mostUsedId([{ return_policy_id: null }], "return_policy_id")).toBeNull();
   });
 
   it("finds Printful as production partner, or nothing", () => {
