@@ -41,7 +41,7 @@ export const es = {
   currency: config.pod.currency,
   priceCents: config.pod.priceCents,
 };
-export const isEtsyListingReady = () => Boolean(es.taxonomyId && es.shippingProfileId && es.returnPolicyId);
+export const isEtsyListingReady = () => Boolean(es.taxonomyId && es.shippingProfileId);
 
 /** Connected = a token and a known shop. A connection that failed half-way counts as not connected. */
 export async function isEtsyConnected(): Promise<boolean> {
@@ -183,11 +183,11 @@ export async function createDraftListing(input: DraftListingInput): Promise<{ li
     when_made: "made_to_order",
     taxonomy_id: es.taxonomyId,
     shipping_profile_id: es.shippingProfileId,
-    return_policy_id: es.returnPolicyId,
     tags: input.tags,
     type: "physical",
     is_supply: false,
   };
+  if (es.returnPolicyId) body.return_policy_id = es.returnPolicyId;
   if (es.productionPartnerId) body.production_partner_ids = [es.productionPartnerId];
   return etsy("POST", `/shops/${await shopId()}/listings`, body);
 }

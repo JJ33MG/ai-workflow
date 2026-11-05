@@ -163,7 +163,7 @@ async function uploadListings(payload: Record<string, unknown>, { log, taskId }:
   }
 
   if (!etsy.isEtsyListingReady()) {
-    throw new Error("Etsy shop settings are not known yet (shipping profile, return policy, category). Run etsy_setup first.");
+    throw new Error("Etsy shop settings are not known yet (shipping profile, category). Run etsy_setup first.");
   }
   const uploaded: string[] = [];
   for (const id of ids) {
@@ -296,7 +296,8 @@ async function etsySetup(_payload: Record<string, unknown>, { log, taskId }: Tas
   const s = await findEtsySetup();
   await log.info(
     `Etsy ingesteld: winkel "${s.shopName}" (${s.currency}), prijs ${(s.priceCents / 100).toFixed(2)}, verzendprofiel "${s.shippingProfileTitle}"` +
-      (s.productionPartnerId ? ", productiepartner Printful" : " · let op: Printful staat nog niet als productiepartner in je winkel"),
+      (s.productionPartnerId ? ", productiepartner Printful" : " · let op: Printful staat nog niet als productiepartner in je winkel") +
+      (s.returnPolicyId ? "" : " · geen apart retourbeleid gevonden: listings gebruiken het beleid van je winkel"),
     s,
     taskId,
   );

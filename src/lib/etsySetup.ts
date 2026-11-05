@@ -22,7 +22,7 @@ export interface EtsySetup {
   priceCents: number;
   shippingProfileId: number;
   shippingProfileTitle: string;
-  returnPolicyId: number;
+  returnPolicyId: number | null;
   taxonomyId: number;
   productionPartnerId: number | null;
 }
@@ -69,7 +69,7 @@ function apply(s: EtsySetup) {
   es.currency = s.currency;
   es.priceCents = s.priceCents;
   es.shippingProfileId = s.shippingProfileId;
-  es.returnPolicyId = s.returnPolicyId;
+  es.returnPolicyId = s.returnPolicyId ?? 0;
   es.taxonomyId = s.taxonomyId;
   es.productionPartnerId = s.productionPartnerId ?? 0;
 }
@@ -88,9 +88,8 @@ export async function findEtsySetup(): Promise<EtsySetup> {
   // the existing listings carry.
   const returnPolicyId =
     (await getReturnPolicies())[0]?.return_policy_id ?? mostUsedId(await getActiveListings(), "return_policy_id");
-  if (!returnPolicyId) {
-    throw new Error("No return policy in the Etsy shop or on its listings. Add one in Shop Manager → Settings → Policies.");
-  }
+  // Listings made through Printful often carry none; Etsy then applies the shop's own policy text.
+  // Optional, so it never blocks the shop (a policy added later is picked up by running etsy_setup again).
   const taxonomyId = findTaxonomyId(await getTaxonomy());
   if (!taxonomyId) throw new Error('Could not find the "Mugs" category in Etsy\'s taxonomy');
   const partner = pickProductionPartner(await getProductionPartners());
