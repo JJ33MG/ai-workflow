@@ -20,7 +20,13 @@ describe("Etsy setup", () => {
 
   it("finds Printful as production partner, or nothing", () => {
     expect(pickProductionPartner([{ production_partner_id: 7, partner_name: "Printful" }])?.production_partner_id).toBe(7);
-    expect(pickProductionPartner([{ production_partner_id: 8, partner_name: "Local print shop" }])).toBeNull();
+    expect(pickProductionPartner([{ production_partner_id: 8, partner_name: "Local print shop" }])?.production_partner_id).toBe(8);
+    expect(
+      pickProductionPartner([
+        { production_partner_id: 8, partner_name: "Local print shop" },
+        { production_partner_id: 9, partner_name: "Embroidery studio" },
+      ]),
+    ).toBeNull();
   });
 
   it("finds the Mugs category deep in the taxonomy", () => {

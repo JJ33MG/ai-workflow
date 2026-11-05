@@ -296,7 +296,9 @@ async function etsySetup(_payload: Record<string, unknown>, { log, taskId }: Tas
   const s = await findEtsySetup();
   await log.info(
     `Etsy ingesteld: winkel "${s.shopName}" (${s.currency}), prijs ${(s.priceCents / 100).toFixed(2)}, verzendprofiel "${s.shippingProfileTitle}"` +
-      (s.productionPartnerId ? ", productiepartner Printful" : " · let op: Printful staat nog niet als productiepartner in je winkel") +
+      (etsy.es.productionPartnerId
+        ? `, productiepartner #${etsy.es.productionPartnerId}`
+        : ` · let op: geen productiepartner gevonden (Etsy gaf: ${s.partnersSeen?.join(", ") || "geen enkele"})`) +
       (s.returnPolicyId ? "" : " · geen apart retourbeleid gevonden: listings gebruiken het beleid van je winkel"),
     s,
     taskId,

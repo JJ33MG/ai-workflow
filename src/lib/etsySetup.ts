@@ -25,6 +25,8 @@ export interface EtsySetup {
   returnPolicyId: number | null;
   taxonomyId: number;
   productionPartnerId: number | null;
+  /** What Etsy returned, so a missing partner can be diagnosed from the log. */
+  partnersSeen?: string[];
 }
 
 /** Prefer the shipping profile Printful made for its products; otherwise the first one. */
@@ -32,8 +34,9 @@ export function pickShippingProfile<T extends { title: string }>(profiles: T[]):
   return profiles.find((p) => /printful/i.test(p.title)) ?? profiles[0] ?? null;
 }
 
+/** Printful by name; a shop with exactly one production partner uses that one. */
 export function pickProductionPartner<T extends { partner_name: string }>(partners: T[]): T | null {
-  return partners.find((p) => /printful/i.test(p.partner_name)) ?? null;
+  return partners.find((p) => /printful/i.test(p.partner_name ?? "")) ?? (partners.length === 1 ? partners[0] : null);
 }
 
 /** The id most of the shop's existing listings use (e.g. the return policy picked by hand in Shop Manager). */
@@ -71,7 +74,7 @@ function apply(s: EtsySetup) {
   es.shippingProfileId = s.shippingProfileId;
   es.returnPolicyId = s.returnPolicyId ?? 0;
   es.taxonomyId = s.taxonomyId;
-  es.productionPartnerId = s.productionPartnerId ?? 0;
+  es.productionPartnerId = s.productionPartnerId ?? (Number(process.env.ETSY_PRODUCTION_PARTNER_ID) || 0);
 }
 
 export async function loadEtsySetup(): Promise<boolean> {
@@ -92,7 +95,8 @@ export async function findEtsySetup(): Promise<EtsySetup> {
   // Optional, so it never blocks the shop (a policy added later is picked up by running etsy_setup again).
   const taxonomyId = findTaxonomyId(await getTaxonomy());
   if (!taxonomyId) throw new Error('Could not find the "Mugs" category in Etsy\'s taxonomy');
-  const partner = pickProductionPartner(await getProductionPartners());
+  const partners = await getProductionPartners();
+  const partner = pickProductionPartner(partners);
 
   const setup: EtsySetup = {
     shopName: shop.shop_name,
@@ -103,6 +107,7 @@ export async function findEtsySetup(): Promise<EtsySetup> {
     returnPolicyId,
     taxonomyId,
     productionPartnerId: partner?.production_partner_id ?? null,
+    partnersSeen: partners.map((p) => `${p.partner_name} (#${p.production_partner_id})`),
   };
   await setSetting(KEY, setup);
   apply(setup);
