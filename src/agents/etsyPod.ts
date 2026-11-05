@@ -193,9 +193,15 @@ async function uploadListings(payload: Record<string, unknown>, { log, taskId }:
     let rank = 1;
     if (printful.isPrintfulConfigured() && !config.publicUrl.includes("localhost")) {
       try {
-        for (const url of (await printful.generateMockup(designUrl(listing.designFile), getPrintSize())).slice(0, 8)) {
+        const photos = (await printful.generateMockup(designUrl(listing.designFile), getPrintSize())).slice(0, 8);
+        for (const url of photos) {
           const img = Buffer.from(await (await fetch(url)).arrayBuffer());
           await etsy.uploadListingImage(etsyId, img, rank++);
+        }
+        if (photos.length < 2) {
+          await log.warn(`Slechts ${photos.length} mokfoto van Printful voor ${listing.title}: voeg er een toe in Shop Manager`, { etsyId }, taskId);
+        } else {
+          await log.info(`${photos.length} mokfoto's geüpload voor ${listing.title}`, { etsyId }, taskId);
         }
       } catch (err) {
         await log.warn(`Mockup failed for ${listing.title}: ${(err as Error).message}`, undefined, taskId);

@@ -29,3 +29,50 @@ describe("Printful setup", () => {
     expect(printfileFor(info, 999)).toBeNull();
   });
 });
+
+describe("Printful mockups", () => {
+  async function run(handler: (path: string, body: Record<string, unknown> | undefined) => unknown) {
+    const { vi } = await import("vitest");
+    const calls: { path: string; body?: Record<string, unknown> }[] = [];
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      const path = String(url).replace(/^https:\/\/[^/]+/, "");
+      const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+      calls.push({ path, body });
+      const result = handler(path, body);
+      const ok = !(result instanceof Error);
+      return new Response(JSON.stringify(ok ? { result } : { error: { message: (result as Error).message } }), { status: ok ? 200 : 400 });
+    });
+    vi.useFakeTimers();
+    try {
+      const { generateMockup } = await import("../src/integrations/printful.js");
+      const promise = generateMockup("https://example.com/d.png", { width: 2700, height: 1050 });
+      for (let i = 0; i < 10; i++) await vi.advanceTimersByTimeAsync(5000);
+      return { urls: await promise, calls };
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
+  }
+
+  it("asks for every view and keeps the extra angles", async () => {
+    const { urls, calls } = await run((path) => {
+      if (path.startsWith("/mockup-generator/printfiles")) return { printfiles: [], variant_printfiles: [], options: ["Front", "Left", "Right"] };
+      if (path.startsWith("/mockup-generator/create-task")) return { task_key: "k1" };
+      return { status: "completed", mockups: [{ mockup_url: "a.jpg", extra: [{ url: "b.jpg" }, { url: "c.jpg" }] }] };
+    });
+    expect(urls).toEqual(["a.jpg", "b.jpg", "c.jpg"]);
+    const create = calls.filter((c) => c.path.startsWith("/mockup-generator/create-task"));
+    expect(create).toHaveLength(1);
+    expect(create[0].body?.options).toEqual(["Front", "Left", "Right"]);
+    expect((create[0].body?.files as { position?: unknown }[])[0].position).toMatchObject({ area_width: 2700, area_height: 1050 });
+  });
+
+  it("falls back to the plain mockup when the views are refused", async () => {
+    const { urls } = await run((path, body) => {
+      if (path.startsWith("/mockup-generator/printfiles")) return { printfiles: [], variant_printfiles: [], options: ["Bogus"] };
+      if (path.startsWith("/mockup-generator/create-task")) return body?.options ? new Error("Invalid option") : { task_key: "k2" };
+      return { status: "completed", mockups: [{ mockup_url: "plain.jpg" }] };
+    });
+    expect(urls).toEqual(["plain.jpg"]);
+  });
+});

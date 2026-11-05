@@ -52,39 +52,26 @@ export const listCatalog = () => printful<{ id: number; title: string; type: str
 export interface PrintfileInfo {
   printfiles: { printfile_id: number; width: number; height: number; dpi: number }[];
   variant_printfiles: { variant_id: number; placements: Record<string, number> }[];
+  /** Mockup views and styles the generator offers for this product. */
+  options?: string[];
+  option_groups?: string[];
 }
 
 export const getPrintfiles = (productId: number) =>
   printful<PrintfileInfo>("GET", `/mockup-generator/printfiles/${productId}`);
 
-/** Generates a product mockup from a public design URL. Polls until done (max ~2 min). */
-/** `size` is the full print file in pixels; the design covers the whole print area. */
-export async function generateMockup(designUrl: string, size: { width: number; height: number }): Promise<string[]> {
-  const { task_key } = await printful<{ task_key: string }>(
-    "POST",
-    `/mockup-generator/create-task/${pf.productId}`,
-    {
-      variant_ids: [pf.variantId],
-      format: "jpg",
-      files: [
-        {
-          placement: pf.placement,
-          image_url: designUrl,
-          position: { area_width: size.width, area_height: size.height, width: size.width, height: size.height, top: 0, left: 0 },
-        },
-      ],
-    },
-  );
+type MockupTask = Record<string, unknown>;
+
+/** Starts one mockup task and polls until done (max ~2 min). Returns every photo, extra angles included. */
+async function runMockupTask(body: MockupTask): Promise<string[]> {
+  const { task_key } = await printful<{ task_key: string }>("POST", `/mockup-generator/create-task/${pf.productId}`, body);
   for (let i = 0; i < 24; i++) {
     await new Promise((r) => setTimeout(r, 5000));
     const task = await printful<{
       status: string;
       error?: string;
       mockups?: { mockup_url: string; extra?: { url: string }[] }[];
-    }>(
-      "GET",
-      `/mockup-generator/task?task_key=${encodeURIComponent(task_key)}`,
-    );
+    }>("GET", `/mockup-generator/task?task_key=${encodeURIComponent(task_key)}`);
     // Each mockup has its main photo plus "extra" angles (left, right, in use).
     if (task.status === "completed") {
       return (task.mockups ?? []).flatMap((m) => [m.mockup_url, ...(m.extra ?? []).map((e) => e.url)]).filter(Boolean);
@@ -92,6 +79,47 @@ export async function generateMockup(designUrl: string, size: { width: number; h
     if (task.status === "failed") throw new Error(`Printful mockup failed: ${task.error ?? "unknown"}`);
   }
   throw new Error("Printful mockup timed out");
+}
+
+/**
+ * Product photos from a public design URL. `size` is the full print file in pixels; the design
+ * covers the whole print area. Asks for every view Printful offers for the product (front, left,
+ * right, ...); if that request is refused or yields fewer than two photos, the plain mockup is
+ * added. A listing should never go up with a single mug photo.
+ */
+export async function generateMockup(designUrl: string, size: { width: number; height: number }): Promise<string[]> {
+  const base: MockupTask = {
+    variant_ids: [pf.variantId],
+    format: "jpg",
+    files: [
+      {
+        placement: pf.placement,
+        image_url: designUrl,
+        position: { area_width: size.width, area_height: size.height, width: size.width, height: size.height, top: 0, left: 0 },
+      },
+    ],
+  };
+  const info = await getPrintfiles(pf.productId).catch(() => null);
+  const views: MockupTask = {};
+  if (info?.options?.length) views.options = info.options;
+  if (info?.option_groups?.length) views.option_groups = info.option_groups;
+
+  let urls: string[] = [];
+  let viewError: Error | null = null;
+  if (Object.keys(views).length) {
+    urls = await runMockupTask({ ...base, ...views }).catch((err: Error) => {
+      viewError = err;
+      return [];
+    });
+  }
+  if (urls.length < 2) {
+    try {
+      urls = [...urls, ...(await runMockupTask(base))];
+    } catch (err) {
+      if (!urls.length) throw viewError ?? err;
+    }
+  }
+  return [...new Set(urls)];
 }
 
 export interface OrderRecipient {
