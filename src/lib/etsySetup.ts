@@ -85,12 +85,16 @@ export async function loadEtsySetup(): Promise<boolean> {
 
 export async function findEtsySetup(): Promise<EtsySetup> {
   const shop = await getShop();
-  const profile = pickShippingProfile(await getShippingProfiles());
+  const profiles = await getShippingProfiles();
+  const listings = await getActiveListings();
+  // The profile the shop's own mugs use wins: Printful makes one per product (11 oz, 20 oz, ...).
+  const usedId = mostUsedId(listings, "shipping_profile_id");
+  const profile = profiles.find((p) => p.shipping_profile_id === usedId) ?? pickShippingProfile(profiles);
   if (!profile) throw new Error("No shipping profile in the Etsy shop. Connect Printful to Etsy (it creates one) or add one in Shop Manager.");
   // Shops whose policy was chosen per listing may list no return policy here; then use the one
   // the existing listings carry.
   const returnPolicyId =
-    (await getReturnPolicies())[0]?.return_policy_id ?? mostUsedId(await getActiveListings(), "return_policy_id");
+    (await getReturnPolicies())[0]?.return_policy_id ?? mostUsedId(listings, "return_policy_id");
   // Listings made through Printful often carry none; Etsy then applies the shop's own policy text.
   // Optional, so it never blocks the shop (a policy added later is picked up by running etsy_setup again).
   const taxonomyId = findTaxonomyId(await getTaxonomy());
