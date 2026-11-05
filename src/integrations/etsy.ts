@@ -6,7 +6,8 @@ import { getSetting, setSetting } from "../db.js";
 // refreshed with the stored refresh token.
 const API = "https://openapi.etsy.com/v3/application";
 const TOKEN_URL = "https://api.etsy.com/v3/public/oauth/token";
-const SCOPES = ["listings_r", "listings_w", "transactions_r"];
+// shops_r: /users/me, the shop, its shipping profiles, return policies and production partners.
+const SCOPES = ["shops_r", "listings_r", "listings_w", "transactions_r"];
 const TOKEN_KEY = "etsy.oauth.token";
 const PENDING_KEY = "etsy.oauth.pending";
 
@@ -42,8 +43,10 @@ export const es = {
 };
 export const isEtsyListingReady = () => Boolean(es.taxonomyId && es.shippingProfileId && es.returnPolicyId);
 
+/** Connected = a token and a known shop. A connection that failed half-way counts as not connected. */
 export async function isEtsyConnected(): Promise<boolean> {
-  return (await getSetting<StoredToken>(TOKEN_KEY)) !== null;
+  if ((await getSetting<StoredToken>(TOKEN_KEY)) === null) return false;
+  return Boolean(config.etsy.shopId || (await getSetting<string>(SHOP_KEY)));
 }
 
 const redirectUri = () => `${config.publicUrl}/auth/etsy/callback`;
