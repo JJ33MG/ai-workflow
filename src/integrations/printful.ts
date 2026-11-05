@@ -77,11 +77,18 @@ export async function generateMockup(designUrl: string, size: { width: number; h
   );
   for (let i = 0; i < 24; i++) {
     await new Promise((r) => setTimeout(r, 5000));
-    const task = await printful<{ status: string; error?: string; mockups?: { mockup_url: string }[] }>(
+    const task = await printful<{
+      status: string;
+      error?: string;
+      mockups?: { mockup_url: string; extra?: { url: string }[] }[];
+    }>(
       "GET",
       `/mockup-generator/task?task_key=${encodeURIComponent(task_key)}`,
     );
-    if (task.status === "completed") return (task.mockups ?? []).map((m) => m.mockup_url);
+    // Each mockup has its main photo plus "extra" angles (left, right, in use).
+    if (task.status === "completed") {
+      return (task.mockups ?? []).flatMap((m) => [m.mockup_url, ...(m.extra ?? []).map((e) => e.url)]).filter(Boolean);
+    }
     if (task.status === "failed") throw new Error(`Printful mockup failed: ${task.error ?? "unknown"}`);
   }
   throw new Error("Printful mockup timed out");

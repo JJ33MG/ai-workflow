@@ -193,7 +193,7 @@ async function uploadListings(payload: Record<string, unknown>, { log, taskId }:
     let rank = 1;
     if (printful.isPrintfulConfigured() && !config.publicUrl.includes("localhost")) {
       try {
-        for (const url of (await printful.generateMockup(designUrl(listing.designFile), getPrintSize())).slice(0, 5)) {
+        for (const url of (await printful.generateMockup(designUrl(listing.designFile), getPrintSize())).slice(0, 8)) {
           const img = Buffer.from(await (await fetch(url)).arrayBuffer());
           await etsy.uploadListingImage(etsyId, img, rank++);
         }
