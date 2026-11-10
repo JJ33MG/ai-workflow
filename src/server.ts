@@ -225,6 +225,21 @@ app.get("/auth/etsy/callback", async (req, res) => {
   }
 });
 
+// Public privacy policy: Pinterest and Meta ask for one when you create a developer app.
+app.get("/privacy", (_req, res) => {
+  res.type("html").send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Privacy policy · AllyouwishDesigns</title><style>body{font:16px/1.6 system-ui,sans-serif;max-width:680px;margin:40px auto;padding:0 16px;color:#222}</style></head><body>
+<h1>Privacy policy</h1>
+<p>This app is the private marketing and shop tool of AllyouwishDesigns (<a href="https://www.etsy.com/shop/AllyouwishDesigns">our Etsy shop</a>). It is used only by the shop owner.</p>
+<h2>What it does</h2>
+<p>With the owner's permission it publishes posts about our own products to the owner's own Pinterest, Facebook and Instagram accounts, and reads the owner's own Etsy shop data (listings, views, orders) to run the shop.</p>
+<h2>Data</h2>
+<p>We store only the access tokens the owner grants and the IDs of the posts we create. We do not collect, sell or share personal data of other users. Order details from Etsy are used only to fulfil those orders.</p>
+<h2>Removing access</h2>
+<p>The owner can revoke access at any time in the settings of Pinterest, Facebook, Instagram or Etsy. To have any stored data deleted, contact us through our Etsy shop.</p>
+</body></html>`);
+});
+
 // Pinterest OAuth: open /auth/pinterest/start?token=ADMIN_TOKEN in a browser once.
 app.get("/auth/pinterest/start", requireAdmin, async (_req, res) => {
   res.redirect(await pinterest.buildAuthUrl());
