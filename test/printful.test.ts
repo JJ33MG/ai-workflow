@@ -76,3 +76,12 @@ describe("Printful mockups", () => {
     expect(urls).toEqual(["plain.jpg"]);
   });
 });
+
+describe("Printful rate limit", () => {
+  it("waits as long as Printful asks", async () => {
+    const { retryAfterSeconds } = await import("../src/integrations/printful.js");
+    expect(retryAfterSeconds("You've recently sent too many requests. Please try again after 41 seconds.", null)).toBe(41);
+    expect(retryAfterSeconds(undefined, "12")).toBe(12);
+    expect(retryAfterSeconds("Too many requests", null)).toBe(60);
+  });
+});

@@ -202,6 +202,12 @@ export async function uploadListingImage(listingId: string, png: Buffer, rank = 
   await etsy("POST", `/shops/${await shopId()}/listings/${listingId}/images`, form);
 }
 
+/** How many photos a listing has on Etsy. */
+export async function getListingImageCount(listingId: string): Promise<number> {
+  const res = await etsy<{ count: number }>("GET", `/listings/${listingId}/images`);
+  return res.count;
+}
+
 export async function activateListing(listingId: string): Promise<void> {
   await etsy("PATCH", `/shops/${await shopId()}/listings/${listingId}`, { state: "active" });
 }

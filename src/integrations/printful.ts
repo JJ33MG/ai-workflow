@@ -16,18 +16,36 @@ export const pf = {
 export const hasPrintfulToken = () => Boolean(config.printful.token);
 export const isPrintfulConfigured = () => Boolean(config.printful.token && pf.productId && pf.variantId);
 
+const RATE_LIMIT_RETRIES = 4;
+
+/** Seconds Printful asks us to wait: "Please try again after 41 seconds", or the Retry-After header. */
+export function retryAfterSeconds(message: string | undefined, header: string | null): number {
+  const fromText = Number(message?.match(/after\s+(\d+)\s+second/i)?.[1]);
+  if (fromText > 0) return fromText;
+  const fromHeader = Number(header);
+  return fromHeader > 0 ? fromHeader : 60;
+}
+
 async function printful<T>(method: string, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = { authorization: `Bearer ${config.printful.token}` };
   if (pf.storeId) headers["X-PF-Store-Id"] = pf.storeId;
   if (body !== undefined) headers["content-type"] = "application/json";
-  const res = await fetch(`${API}${path}`, {
-    method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const json = (await res.json().catch(() => ({}))) as { code?: number; result?: T; error?: { message?: string } };
-  if (!res.ok) throw new Error(`Printful ${method} ${path} failed: ${res.status} ${json.error?.message ?? ""}`);
-  return json.result as T;
+  // The mockup generator allows only a few tasks per minute: on a 429, wait as long as asked and retry.
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(`${API}${path}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    const json = (await res.json().catch(() => ({}))) as { code?: number; result?: T; error?: { message?: string } };
+    if (res.status === 429 && attempt < RATE_LIMIT_RETRIES) {
+      const wait = retryAfterSeconds(json.error?.message, res.headers.get("retry-after"));
+      await new Promise((r) => setTimeout(r, (wait + 2) * 1000));
+      continue;
+    }
+    if (!res.ok) throw new Error(`Printful ${method} ${path} failed: ${res.status} ${json.error?.message ?? ""}`);
+    return json.result as T;
+  }
 }
 
 export interface CatalogProduct {

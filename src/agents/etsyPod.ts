@@ -155,6 +155,59 @@ async function designWithRetry(idea: Idea): Promise<{ svg: string; png: Buffer }
   }
 }
 
+const MIN_MUG_PHOTOS = 2;
+
+/** Uploads Printful mug photos to an Etsy listing from `startRank` on. Returns how many were added. */
+async function addMockups(
+  listing: { title: string; designFile: string },
+  etsyId: string,
+  startRank: number,
+  log: TaskContext["log"],
+  taskId?: string,
+): Promise<number> {
+  if (!printful.isPrintfulConfigured() || config.publicUrl.includes("localhost")) return 0; // Printful needs a public URL
+  try {
+    const photos = (await printful.generateMockup(designUrl(listing.designFile), getPrintSize())).slice(0, 8);
+    let rank = startRank;
+    for (const url of photos) {
+      const img = Buffer.from(await (await fetch(url)).arrayBuffer());
+      await etsy.uploadListingImage(etsyId, img, rank++);
+    }
+    if (photos.length < MIN_MUG_PHOTOS) {
+      await log.warn(`Slechts ${photos.length} mokfoto van Printful voor ${listing.title}`, { etsyId }, taskId);
+    } else {
+      await log.info(`${photos.length} mokfoto's geüpload voor ${listing.title}`, { etsyId }, taskId);
+    }
+    return photos.length;
+  } catch (err) {
+    await log.warn(`Mockup failed for ${listing.title}: ${(err as Error).message}`, { etsyId }, taskId);
+    return 0;
+  }
+}
+
+/**
+ * Listings on Etsy with too few photos (e.g. Printful refused the mockup) get their mug photos
+ * added in front of the flat design. Safe to re-run: listings that have enough are skipped.
+ */
+async function addPhotos(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
+  if (config.dryRun || !etsy.isEtsyConfigured()) return { skipped: "dry run or Etsy not connected" };
+  const listings = await db.listing.findMany({
+    where: { source: "agent", etsyListingId: { not: null }, status: { in: ["uploaded", "active"] }, designFile: { not: "" } },
+    orderBy: { createdAt: "desc" },
+    take: 40,
+  });
+  let fixed = 0;
+  for (const listing of listings) {
+    const etsyId = listing.etsyListingId!;
+    const count = await etsy.getListingImageCount(etsyId).catch(() => null);
+    if (count === null || count > MIN_MUG_PHOTOS) continue; // gone from Etsy, or already has the design plus 2 photos
+    if ((await addMockups(listing, etsyId, 1, log, taskId)) >= MIN_MUG_PHOTOS) fixed++;
+    if (taskId) await db.task.update({ where: { id: taskId }, data: { status: "running" } });
+  }
+  await log.info(`Foto's aangevuld bij ${fixed} listing(s)`, undefined, taskId);
+  return { checked: listings.length, fixed };
+}
+
 async function uploadListings(payload: Record<string, unknown>, { log, taskId }: TaskContext) {
   // Without ids (e.g. started from chat): every local draft that never reached Etsy, such as
   // the ones made while DRY_RUN was on.
@@ -193,27 +246,13 @@ async function uploadListings(payload: Record<string, unknown>, { log, taskId }:
       data: { etsyListingId: etsyId, status: "uploaded", priceCents: etsy.es.priceCents, currency: etsy.es.currency },
     });
 
-    // Prefer a Printful mockup (needs a public URL); fall back to the flat design.
-    let rank = 1;
-    if (printful.isPrintfulConfigured() && !config.publicUrl.includes("localhost")) {
-      try {
-        const photos = (await printful.generateMockup(designUrl(listing.designFile), getPrintSize())).slice(0, 8);
-        for (const url of photos) {
-          const img = Buffer.from(await (await fetch(url)).arrayBuffer());
-          await etsy.uploadListingImage(etsyId, img, rank++);
-        }
-        if (photos.length < 2) {
-          await log.warn(`Slechts ${photos.length} mokfoto van Printful voor ${listing.title}: voeg er een toe in Shop Manager`, { etsyId }, taskId);
-        } else {
-          await log.info(`${photos.length} mokfoto's geüpload voor ${listing.title}`, { etsyId }, taskId);
-        }
-      } catch (err) {
-        await log.warn(`Mockup failed for ${listing.title}: ${(err as Error).message}`, undefined, taskId);
-      }
-    }
+    // Printful mug photos first; the flat design always goes last.
+    const rank = 1 + (await addMockups(listing, etsyId, 1, log, taskId));
     const design = await readFile(path.join(designsDir(), listing.designFile));
     await etsy.uploadListingImage(etsyId, design, rank);
     uploaded.push(id);
+    // Heartbeat: waiting on Printful's rate limit must not make the task look stuck.
+    if (taskId) await db.task.update({ where: { id: taskId }, data: { status: "running" } });
   }
 
   if (uploaded.length === 0) return { uploaded: 0 };
@@ -444,7 +483,7 @@ export const etsyPodAgent: AgentDefinition = {
   name: "Etsy-agent",
   phase: 1,
   businessId: "etsy-pod",
-  chatTasks: ["create_listings", "upload_listings", "sync_sales", "sync_listings", "printful_setup", "etsy_setup"],
+  chatTasks: ["create_listings", "upload_listings", "sync_sales", "sync_listings", "printful_setup", "etsy_setup", "add_photos"],
   description: "Zoekt cadeau-niches, ontwerpt mokken, zet ze op Etsy en maakt van Etsy-verkopen Printful-bestellingen.",
   dependsOn: ["database", "claude", "etsy", "printful"],
   taskInfo: {
@@ -455,6 +494,7 @@ export const etsyPodAgent: AgentDefinition = {
     sync_listings: "Alle actieve listings van je Etsy-winkel ophalen, ook die je met de hand plaatste",
     printful_setup: "Bij Printful de API-winkel, de 11 oz mok en de exacte printmaat opzoeken en opslaan",
     etsy_setup: "Bij Etsy de munt, het verzendprofiel, het retourbeleid, de categorie Mokken en de productiepartner opzoeken",
+    add_photos: "Listings op Etsy met te weinig mokfoto's aanvullen met Printful-foto's",
     fulfil_receipt: "De Printful-bestelling maken voor een Etsy-verkoop (automatisch bevestigd onder de uitgavelimiet)",
   },
   handlers: {
@@ -466,5 +506,6 @@ export const etsyPodAgent: AgentDefinition = {
     printful_setup: printfulSetup,
     etsy_setup: etsySetup,
     fulfil_receipt: fulfilReceipt,
+    add_photos: addPhotos,
   },
 };
