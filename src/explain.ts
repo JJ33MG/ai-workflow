@@ -119,6 +119,24 @@ export const NODES: BrainNode[] = [
     },
   },
   {
+    id: "agent:marketing",
+    kind: "agent",
+    label: "Marketing-agent",
+    explain: {
+      what: "Zorgt voor bezoekers en verkopen, met een eigen strategie per bedrijf.",
+      how: [
+        "Elke maandag om 09:00 bekijkt hij per bedrijf de cijfers: bezoeken, favorieten, verkopen, welke producten en niches het goed doen.",
+        "Hij werkt de strategie van dat bedrijf bij en kiest tot 3 nieuwe acties: wat hij zelf mag doen, doet hij meteen; de rest wordt een to-do voor jou.",
+        "Zelf doet hij alleen gratis dingen: titels en tags van zwakke Etsy-listings vernieuwen, en de Etsy-agent meer laten ontwerpen voor niches die werken.",
+        "Na 14 dagen meet hij elke actie tegen de listings die hij niet aanraakte. Werkt het slechter, dan zet hij de oude titels en tags terug.",
+        "Wat werkt, komt in het gedeelde brein. Bij de andere bedrijven stelt hij dan voor om hetzelfde te proberen, aangepast aan dat bedrijf.",
+        "Alles wat geld kost (zoals Etsy Ads) wordt altijd een to-do met de kosten erbij: jij beslist.",
+      ],
+      where: "Bedrijven → per bedrijf het blok Marketing (strategie, acties, jouw to-do's), en Chat → Marketing-agent.",
+      you: "Doe je to-do's en klik op Gedaan, zodat hij weet wanneer hij het resultaat moet beoordelen.",
+    },
+  },
+  {
     id: "biz:etsy-pod",
     kind: "business",
     label: "Etsy-winkel",
@@ -284,6 +302,9 @@ export const EDGES: [string, string][] = [
   ["brain", "svc:database"],
   ["brain", "svc:server"],
   ["agent:ceo", "svc:telegram"],
+  ["brain", "agent:marketing"],
+  ["agent:marketing", "biz:etsy-pod"],
+  ["agent:marketing", "biz:kdp-coloring"],
   ["agent:etsy-pod", "biz:etsy-pod"],
   ["agent:kdp-coloring", "biz:kdp-coloring"],
   ["biz:etsy-pod", "svc:etsy"],
@@ -318,6 +339,7 @@ export const PLAN: PlanItem[] = [
   { id: "dashboard", phase: "Fundament", title: "Dashboard: brein, bedrijven, agents, chat, problemen", detail: "Alles op één plek, met uitleg en oplossingen per fout.", owner: "systeem", status: "done" },
   { id: "chat", phase: "Fundament", title: "Chat met elke agent", detail: "Agents antwoorden uit hun eigen gegevens en kunnen hun taken starten (nooit iets dat geld kost).", owner: "systeem", status: "done" },
   { id: "etsy-agent", phase: "Etsy-winkel", title: "Etsy-agent: ontwerpen, teksten, kwaliteitscontrole", detail: "20 mokken gemaakt. Controleert randen, centreert en zet het ontwerp op beide kanten.", owner: "systeem", status: "done" },
+  { id: "marketing-agent", phase: "Groei", title: "Marketing-agent", detail: "Strategie per bedrijf, gratis acties zelf, gemeten na 14 dagen; wat werkt gaat naar de andere bedrijven.", owner: "systeem", status: "done", node: "agent:marketing" },
   { id: "kdp-agent", phase: "Kleurboeken", title: "Kleurboek-agent", detail: "Gebouwd en getest op de printmaten; nog geen echt boek gemaakt.", owner: "systeem", status: "done" },
 
   // Jouw stappen

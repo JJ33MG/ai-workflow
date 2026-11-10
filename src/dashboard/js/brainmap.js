@@ -36,6 +36,7 @@ const POS = {
   "agent:kdp-coloring": [400, 470],
   "agent:ceo": [800, 220],
   "agent:debug": [800, 470],
+  "agent:marketing": [600, 560],
   "biz:etsy-pod": [195, 220],
   "biz:kdp-coloring": [195, 470],
   "svc:etsy": [112, 90],

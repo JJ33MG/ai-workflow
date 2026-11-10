@@ -15,7 +15,7 @@ describe.skipIf(!url)("with database", async () => {
 
   beforeAll(syncAgents);
   beforeEach(async () => {
-    for (const t of ["task", "log", "sale", "cost", "approval", "knowledge", "chatMessage"] as const) {
+    for (const t of ["task", "log", "sale", "cost", "approval", "knowledge", "chatMessage", "marketingPlay"] as const) {
       await (db[t] as { deleteMany: () => Promise<unknown> }).deleteMany();
     }
   });
@@ -70,7 +70,7 @@ describe.skipIf(!url)("with database", async () => {
     const d = await collectBriefingData();
     expect(d.revenue.monthToDate).toBe(2000);
     expect(d.costs.monthToDate).toBe(50);
-    expect(d.agents.map((a) => a.id).sort()).toEqual(["ceo", "debug", "etsy-pod", "kdp-coloring"]);
+    expect(d.agents.map((a) => a.id).sort()).toEqual(["ceo", "debug", "etsy-pod", "kdp-coloring", "marketing"]);
   });
 
   it("shows an escalated task on the dashboard with its fix", async () => {
@@ -204,5 +204,46 @@ describe.skipIf(!url)("with database", async () => {
   it("blocks Claude calls once the daily budget is spent", async () => {
     await db.cost.create({ data: { agentId: "ceo", category: "claude_api", amountCents: 100_000, currency: "EUR" } });
     await expect(assertApiBudget()).rejects.toBeInstanceOf(BudgetExceededError);
+  });
+  it("marketing: niche focus feeds the shared brain, and an SEO play is measured and judged", async () => {
+    const log = { info: async () => {}, warn: async () => {}, error: async () => {} };
+    const marketing = agents.get("marketing")!;
+
+    const focus = await db.marketingPlay.create({
+      data: { businessId: "etsy-pod", tactic: "etsy_niche_focus", title: "Meer verpleegkunde", why: "Veel favorieten", input: { niches: ["nurses"] } },
+    });
+    await marketing.handlers.run_play({ playId: focus.id }, { log });
+    expect((await db.marketingPlay.findUniqueOrThrow({ where: { id: focus.id } })).status).toBe("running");
+    expect(await db.knowledge.count({ where: { kind: "niche", title: "nurses" } })).toBe(1);
+    // Safe to re-run: nothing is added twice.
+    await marketing.handlers.run_play({ playId: focus.id }, { log });
+    expect(await db.knowledge.count({ where: { kind: "niche", title: "nurses" } })).toBe(1);
+
+    await db.listing.deleteMany({ where: { etsyListingId: { in: ["m1", "m2"] } } });
+    const base = { niche: "x", description: "", tags: [], priceCents: 2199, currency: "EUR", designSvg: "", designFile: "", status: "active" };
+    await db.listing.create({ data: { ...base, title: "Changed", etsyListingId: "m1", views: 38 } });
+    await db.listing.create({ data: { ...base, title: "Control", etsyListingId: "m2", views: 48 } });
+    const seo = await db.marketingPlay.create({
+      data: {
+        businessId: "etsy-pod",
+        tactic: "etsy_seo_refresh",
+        title: "Titels vernieuwen",
+        why: "Weinig bezoeken",
+        status: "running",
+        startedAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000 - 1000),
+        baseline: {
+          target: [{ listingId: "m1", views: 10, ageDays: 10 }],
+          control: [{ listingId: "m2", views: 20, ageDays: 10 }],
+          previous: [{ listingId: "m1", oldTitle: "Old", oldTags: [] }],
+        },
+      },
+    });
+    await marketing.handlers.measure_plays({}, { log });
+    const measured = await db.marketingPlay.findUniqueOrThrow({ where: { id: seo.id } });
+    expect(measured.status).toBe("measured");
+    expect(measured.verdict).toBe("worked");
+    expect(measured.liftPct).toBeCloseTo(100, 0);
+    expect(await db.knowledge.count({ where: { kind: "lesson", tags: { has: "marketing" } } })).toBe(1);
+    await db.listing.deleteMany({ where: { etsyListingId: { in: ["m1", "m2"] } } });
   });
 });

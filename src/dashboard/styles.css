@@ -1747,3 +1747,37 @@ svg.map .dim {
     display: none;
   }
 }
+
+/* Marketing panel */
+.panel-head-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.strategy {
+  display: grid;
+  gap: 6px;
+}
+.strategy p {
+  margin: 0;
+  max-width: 75ch;
+}
+.todos h3 {
+  margin: 16px 0 0;
+  font-size: 14px;
+}
+.plan-box.todo .instructions {
+  white-space: pre-line;
+  font-size: 13.5px;
+}
+.row-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+.chip-todo {
+  background: var(--warning-bg);
+  color: var(--text);
+}

@@ -110,6 +110,21 @@ app.post("/api/plan/:id", requireAdmin, async (req, res) => {
   }
 });
 
+// Jarne's marketing to-dos: "done" starts the clock (judged at a later review), "skip" drops it.
+app.post("/api/marketing/plays/:id", requireAdmin, async (req, res) => {
+  const action = String((req.body as { action?: string }).action ?? "");
+  const play = await db.marketingPlay.findUnique({ where: { id: String(req.params.id) } });
+  if (!play || play.status !== "todo" || !["done", "skip"].includes(action)) {
+    res.status(400).json({ error: "Deze actie kan niet (meer) worden aangepast" });
+    return;
+  }
+  await db.marketingPlay.update({
+    where: { id: play.id },
+    data: action === "done" ? { status: "running", startedAt: new Date() } : { status: "skipped", note: "Overgeslagen door Jarne" },
+  });
+  res.json({ message: action === "done" ? `Gedaan: ${play.title}. Wordt bij een volgende review beoordeeld.` : `Overgeslagen: ${play.title}` });
+});
+
 // Failed task actions. Retry starts it fresh; dismiss hides it from problems.
 app.post("/api/tasks/:id/:action", requireAdmin, async (req, res) => {
   const { id, action } = req.params as { id: string; action: string };

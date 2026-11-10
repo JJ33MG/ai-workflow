@@ -1,0 +1,44 @@
+import { describe, expect, it } from "vitest";
+import { computeLift, tacticsFor, verdictFor } from "../src/lib/marketing.js";
+
+describe("Marketing measurement", () => {
+  const before = (id: string, views: number, ageDays: number) => ({ listingId: id, views, ageDays });
+
+  it("measures the changed listings against the untouched ones", () => {
+    // Target: 10 views over 10 days (1/day), then 28 in 14 days (2/day): x2.
+    // Control: 20 views over 10 days (2/day), then 28 in 14 days (2/day): x1.
+    const lift = computeLift(
+      { before: [before("a", 10, 10)], viewsNow: { a: 38, b: 48 } },
+      { before: [before("b", 20, 10)], viewsNow: { a: 38, b: 48 } },
+      14,
+    );
+    expect(lift.liftPct).toBe(100);
+    expect(lift.targetViewsAfter).toBe(28);
+  });
+
+  it("takes out what happened to the whole shop", () => {
+    // Both doubled: the change itself did nothing.
+    const now = { a: 38, b: 76 };
+    const lift = computeLift({ before: [before("a", 10, 10)], viewsNow: now }, { before: [before("b", 20, 10)], viewsNow: now }, 14);
+    expect(lift.liftPct).toBe(0);
+  });
+
+  it("ignores listings that ended and has no answer without earlier views", () => {
+    expect(computeLift({ before: [before("a", 10, 10)], viewsNow: {} }, { before: [], viewsNow: {} }, 14).liftPct).toBeNull();
+    expect(computeLift({ before: [before("a", 0, 10)], viewsNow: { a: 5 } }, { before: [], viewsNow: {} }, 14).liftPct).toBeNull();
+  });
+
+  it("only calls it when there are enough views", () => {
+    expect(verdictFor(50, 10)).toBe("unclear");
+    expect(verdictFor(50, 40)).toBe("worked");
+    expect(verdictFor(-30, 40)).toBe("worse");
+    expect(verdictFor(5, 40)).toBe("no_effect");
+    expect(verdictFor(null, 100)).toBe("unclear");
+  });
+
+  it("offers each business only its own tactics, and manual everywhere", () => {
+    expect(tacticsFor("etsy-pod").map((t) => t.id)).toEqual(["etsy_seo_refresh", "etsy_niche_focus", "manual"]);
+    expect(tacticsFor("kdp-coloring").map((t) => t.id)).toEqual(["manual"]);
+    expect(tacticsFor("kdp-coloring").every((t) => !t.auto)).toBe(true);
+  });
+});

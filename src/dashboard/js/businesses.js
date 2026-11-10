@@ -1,5 +1,5 @@
 import { moneyChart } from "./charts.js";
-import { AGENT_LABEL, STAGE, notStarted, api, empty, eur, fill, h, kpi, money, openSection, stamp, state, statusPill, table, ago } from "./core.js";
+import { AGENT_LABEL, STAGE, act, notStarted, api, empty, eur, fill, h, kpi, money, openSection, stamp, state, statusPill, table, ago } from "./core.js";
 import { openChat } from "./chat.js";
 import { targetLabel } from "./overview.js";
 
@@ -167,7 +167,84 @@ function renderDetail(d, b, detail) {
           ),
   );
 
-  fill("business-detail", head, kpis, h("div", { class: "grid-2" }, chartPanel, teamPanel), productsPanel, salesPanel);
+  fill("business-detail", head, kpis, marketingPanel(detail), h("div", { class: "grid-2" }, chartPanel, teamPanel), productsPanel, salesPanel);
+}
+
+/** Marketing play states and verdicts as shown on the dashboard. */
+const PLAY_STATUS = {
+  proposed: ["wordt uitgevoerd", ""],
+  running: ["loopt", "uploaded"],
+  todo: ["voor jou", "todo"],
+  measured: ["gemeten", "active"],
+  skipped: ["overgeslagen", ""],
+  failed: ["mislukt", "failed"],
+};
+const VERDICT = { worked: "werkt", no_effect: "geen effect", worse: "slechter, teruggedraaid", unclear: "nog onduidelijk" };
+
+function marketingPanel(detail) {
+  const m = detail?.marketing;
+  const s = m?.strategy;
+  const todos = (m?.plays ?? []).filter((p) => p.status === "todo");
+  const others = (m?.plays ?? []).filter((p) => p.status !== "todo");
+  return h(
+    "div",
+    { class: "panel" },
+    h(
+      "div",
+      { class: "panel-head-row" },
+      h("h2", {}, "Marketing"),
+      h("button", { class: "btn btn-sm", onclick: () => openChat("marketing") }, "Chat met de marketing-agent"),
+    ),
+    !detail
+      ? empty("Laden…")
+      : !s
+        ? empty("Nog geen strategie. De marketing-agent maakt er elke maandag om 09:00 een, of vraag het in Chat.")
+        : h(
+            "div",
+            { class: "strategy" },
+            h("p", {}, s.summary),
+            s.focus.length > 0 && h("div", {}, h("strong", {}, "Focus: "), s.focus.join(" · ")),
+            s.channels.length > 0 &&
+              h("div", { class: "muted" }, "Kanalen: ", s.channels.map((c) => `${c.name} (${c.when === "now" ? "nu" : "later"}: ${c.role})`).join(" · ")),
+            h("div", { class: "muted" }, `Bijgewerkt ${ago(s.updatedAt)}`),
+          ),
+    todos.length > 0 &&
+      h(
+        "div",
+        { class: "todos" },
+        h("h3", {}, `Voor jou (${todos.length})`),
+        todos.map((p) =>
+          h(
+            "div",
+            { class: "plan-box todo" },
+            h("strong", {}, p.title),
+            h("div", { class: "muted" }, p.why),
+            p.instructions && h("div", { class: "instructions" }, p.instructions),
+            h(
+              "div",
+              { class: "row-actions" },
+              h("button", { class: "btn btn-sm btn-primary", onclick: (e) => act(e.currentTarget, `/api/marketing/plays/${p.id}`, { action: "done" }) }, "Gedaan"),
+              h("button", { class: "btn btn-sm", onclick: (e) => act(e.currentTarget, `/api/marketing/plays/${p.id}`, { action: "skip" }) }, "Overslaan"),
+            ),
+          ),
+        ),
+      ),
+    others.length > 0 &&
+      table(
+        ["Actie", "Status", "Resultaat"],
+        others.map((p) => {
+          const [label, chip] = PLAY_STATUS[p.status] ?? [p.status, ""];
+          const result = p.verdict ? `${VERDICT[p.verdict] ?? p.verdict}${p.liftPct != null ? ` (${p.liftPct > 0 ? "+" : ""}${p.liftPct}%)` : ""}` : "—";
+          return h(
+            "tr",
+            {},
+            h("td", {}, h("div", {}, p.title, p.copied ? h("span", { class: "muted" }, " · overgenomen van een ander bedrijf") : null), h("div", { class: "muted" }, p.note ?? p.why)),
+            h("td", { class: "nowrap" }, h("span", { class: `chip ${chip ? `chip-${chip}` : ""}` }, label)),
+            h("td", {}, result),
+          );
+        }),
+      ),
+  );
 }
 
 function costLine(byCategory) {

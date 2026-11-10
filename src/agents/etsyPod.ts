@@ -315,6 +315,8 @@ export async function upsertEtsyListings(
       priceCents: etsy.moneyToCents(l.price),
       currency: l.price.currency_code,
       status: "active",
+      views: l.views ?? 0,
+      favorites: l.num_favorers ?? 0,
     };
     const known = await db.listing.findUnique({ where: { etsyListingId } });
     if (known) {

@@ -144,6 +144,9 @@ model Listing {
   /// Main photo from Etsy, for listings the agent didn't design itself.
   imageUrl         String?
   etsyListingId    String?  @unique
+  /// Etsy's own counters, refreshed by the hourly listing sync; the marketing agent measures with them.
+  views            Int      @default(0)
+  favorites        Int      @default(0)
   printfulVariant  Int?
   error            String?
   createdAt        DateTime @default(now())
@@ -188,4 +191,36 @@ model ColoringBook {
   error       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+/// One marketing experiment of the marketing agent: a tactic tried on part of a business,
+/// measured against the rest. What works is shared with the other businesses.
+model MarketingPlay {
+  id           String    @id @default(cuid())
+  businessId   String
+  /// Key of a tactic in src/lib/marketing.ts; "manual" = a step Jarne does himself.
+  tactic       String
+  title        String
+  why          String
+  /// For manual plays: what to do, step by step.
+  instructions String    @default("")
+  /// proposed | running | todo | measured | skipped | failed
+  status       String    @default("proposed")
+  /// Tactic input, e.g. { listingCount: 5 } or { niches: [...] }.
+  input        Json?
+  /// What the play changed and the numbers before, so it can be measured (and undone).
+  baseline     Json?
+  result       Json?
+  /// worked | no_effect | worse | unclear
+  verdict      String?
+  liftPct      Float?
+  note         String?
+  /// The play in another business this one adapts.
+  copiedFrom   String?
+  startedAt    DateTime?
+  measuredAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([businessId, status])
 }

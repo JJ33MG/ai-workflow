@@ -5,6 +5,7 @@ import { config } from "./config.js";
 import { db } from "./db.js";
 import { apiSpendTodayCents } from "./lib/budget.js";
 import { runHealthChecks, type CheckStatus, type HealthCheck } from "./lib/health.js";
+import { getStrategy } from "./lib/marketing.js";
 import { startOfDay, startOfMonth, toEurCents } from "./lib/money.js";
 import { allGuides, diagnose } from "./lib/troubleshoot.js";
 import { buildBrain, planWithStatus } from "./brain.js";
@@ -344,8 +345,30 @@ export async function buildBusinessDetail(id: string, now = new Date()) {
   const byCategory: Record<string, number> = {};
   for (const c of costBreakdown) byCategory[c.category] = (byCategory[c.category] ?? 0) + toEurCents(c.amountCents, c.currency);
 
+  const [strategy, plays] = await Promise.all([
+    getStrategy(id),
+    db.marketingPlay.findMany({ where: { businessId: id }, orderBy: { createdAt: "desc" }, take: 15 }),
+  ]);
+
   return {
     id,
+    marketing: {
+      strategy,
+      plays: plays.map((p) => ({
+        id: p.id,
+        tactic: p.tactic,
+        title: p.title,
+        why: p.why,
+        instructions: p.instructions,
+        status: p.status,
+        verdict: p.verdict,
+        liftPct: p.liftPct,
+        note: p.note,
+        copied: Boolean(p.copiedFrom),
+        createdAt: p.createdAt,
+        startedAt: p.startedAt,
+      })),
+    },
     series: [...days.values()].map((d) => ({ ...d, revenue: Math.round(d.revenue), costs: Math.round(d.costs) })),
     costsByCategory: byCategory,
     products: def.products && team.length ? await def.products() : [],

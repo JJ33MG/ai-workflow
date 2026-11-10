@@ -1,10 +1,11 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { agents } from "./agents/index.js";
-import { businessById } from "./businesses.js";
+import { BUSINESSES, businessById } from "./businesses.js";
 import { buildDashboard } from "./dashboard.js";
 import { db } from "./db.js";
 import { chatWithTools, isClaudeConfigured, type ChatTool } from "./lib/claude.js";
 import { agentLogger } from "./lib/logger.js";
+import { TACTICS, getStrategy, liveListingStats } from "./lib/marketing.js";
 import { enqueue } from "./lib/tasks.js";
 
 const HISTORY_TURNS = 20;
@@ -160,10 +161,25 @@ async function snapshot(agentId: string) {
     // Jarne's own steps (ticked on the dashboard): what he did by hand outside the system.
     jarneSteps: d.plan.filter((p) => p.owner === "jarne").map((p) => ({ step: p.title, status: p.status })),
     notes:
-      "Until the Etsy connection is approved the system cannot see the Etsy shop: products Jarne placed there by hand " +
-      "(see jarneSteps) and their sales are missing from these numbers. Once connected, the shop is synced every hour.",
+      "The Etsy shop is connected and synced every hour, including listings Jarne placed by hand. Amazon KDP has no API: " +
+      "books are uploaded by Jarne and their sales are not in these numbers.",
+    marketing: agentId === "marketing" ? await marketingSnapshot() : undefined,
     recentLog: mine(d.activity).slice(0, 40).map((l) => `${new Date(l.createdAt).toISOString()} ${l.agentId} ${l.level}: ${l.message}`),
     sharedBrain: knowledge.map((k) => ({ kind: k.kind, title: k.title, body: k.body })),
+  };
+}
+
+/** Strategies and plays per business, for the marketing agent's chat. */
+async function marketingSnapshot() {
+  const plays = await db.marketingPlay.findMany({ orderBy: { createdAt: "desc" }, take: 30 });
+  const strategies = Object.fromEntries(
+    (await Promise.all(BUSINESSES.map(async (b) => [b.id, await getStrategy(b.id)] as const))).filter(([, s]) => s),
+  );
+  return {
+    strategies,
+    plays: plays.map((p) => ({ business: p.businessId, tactic: p.tactic, title: p.title, status: p.status, verdict: p.verdict, liftPct: p.liftPct, note: p.note })),
+    tactics: TACTICS.map((t) => ({ id: t.id, businesses: t.businesses, auto: t.auto, description: t.description })),
+    etsyListings: (await liveListingStats()).map((l) => ({ title: l.title, views: l.views, favorites: l.favorites, ageDays: l.ageDays })),
   };
 }
 

@@ -202,6 +202,11 @@ export async function uploadListingImage(listingId: string, png: Buffer, rank = 
   await etsy("POST", `/shops/${await shopId()}/listings/${listingId}/images`, form);
 }
 
+/** New title and tags for a listing (the marketing agent's SEO refresh). Free on Etsy. */
+export async function updateListingSeo(listingId: string, title: string, tags: string[]): Promise<void> {
+  await etsy("PATCH", `/shops/${await shopId()}/listings/${listingId}`, { title, tags });
+}
+
 /** How many photos a listing has on Etsy. */
 export async function getListingImageCount(listingId: string): Promise<number> {
   const res = await etsy<{ count: number }>("GET", `/listings/${listingId}/images`);
@@ -246,6 +251,8 @@ export interface EtsyListing {
   price: { amount: number; divisor: number; currency_code: string };
   shipping_profile_id?: number | null;
   return_policy_id?: number | null;
+  views?: number;
+  num_favorers?: number;
 }
 
 /** Every active listing in the shop, including ones placed by hand or through Printful. */
