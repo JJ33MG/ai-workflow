@@ -1,6 +1,7 @@
 import { config } from "../config.js";
 import { db } from "../db.js";
 import { isEtsyConfigured, isEtsyConnected, isEtsyListingReady } from "../integrations/etsy.js";
+import { isMetaConfigured, metaConnection } from "../integrations/meta.js";
 import { isPinterestConfigured, isPinterestConnected, pinterestUser } from "../integrations/pinterest.js";
 import { hasPrintfulToken, isPrintfulConfigured, pf } from "../integrations/printful.js";
 import { schedulerState } from "../scheduler.js";
@@ -167,6 +168,35 @@ export async function runHealthChecks(now = new Date()): Promise<HealthCheck[]> 
   } else {
     checks.push({ id: "pinterest", label: "Pinterest", status: "ok", detail: `Gekoppeld als ${(await pinterestUser()) ?? "?"}` });
   }
+
+  const metaConn = isMetaConfigured() ? await metaConnection() : null;
+  checks.push(
+    !isMetaConfigured()
+      ? {
+          id: "meta",
+          label: "Instagram + Facebook",
+          status: "off",
+          detail: "Niet gekoppeld: de marketing-agent post nog niet op Instagram en Facebook",
+          fix: "Maak een Facebook-pagina en een Instagram-bedrijfsaccount, koppel ze, maak een app op developers.facebook.com, zet META_APP_ID en META_APP_SECRET in Railway en open /auth/meta/start?token=ADMIN_TOKEN.",
+        }
+      : !metaConn
+        ? {
+            id: "meta",
+            label: "Instagram + Facebook",
+            status: "error",
+            detail: "Sleutels ingesteld, maar de accounts zijn niet gekoppeld",
+            fix: "Open /auth/meta/start?token=ADMIN_TOKEN en geef toegang tot je pagina en Instagram.",
+          }
+        : metaConn.instagramId
+          ? { id: "meta", label: "Instagram + Facebook", status: "ok", detail: `Pagina ${metaConn.pageName} · Instagram ${metaConn.instagramUsername}` }
+          : {
+              id: "meta",
+              label: "Instagram + Facebook",
+              status: "warn",
+              detail: `Pagina ${metaConn.pageName} gekoppeld, maar geen Instagram-bedrijfsaccount aan die pagina`,
+              fix: "Koppel je Instagram-bedrijfsaccount aan de Facebook-pagina (Instagram → Instellingen → Account → Gedeelde profielen) en koppel opnieuw.",
+            },
+  );
 
   if (!config.dryRun && config.publicUrl.includes("localhost")) {
     checks.push({

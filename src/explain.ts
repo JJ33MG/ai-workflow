@@ -241,6 +241,22 @@ export const NODES: BrainNode[] = [
     },
   },
   {
+    id: "svc:meta",
+    kind: "service",
+    label: "Instagram + Facebook",
+    explain: {
+      what: "Je Facebook-pagina en Instagram-bedrijfsaccount, gekoppeld via één Meta-app. Elke post laat een product uit je winkel zien.",
+      how: [
+        "Je koppelt één keer; daarna vraagt de marketing-agent één keer jouw akkoord om te starten.",
+        "Elke dag om 19:00 deelt hij een live Etsy-listing (standaard 1 per dag) op beide platformen, met de productfoto, de meest gefavoriete eerst.",
+        "Op Facebook staat de link naar de listing in de post. Op Instagram zijn links niet klikbaar: daar verwijst hij naar de link in je bio, die naar je Etsy-winkel moet wijzen.",
+        "Lukt één platform niet, dan gaat het andere gewoon door; de fout staat in Activiteit.",
+      ],
+      where: "Overzicht → Systemen → Instagram + Facebook, Activiteit, en Bedrijven → Etsy-winkel → Marketing.",
+      you: "Facebook-pagina en Instagram-bedrijfsaccount maken en aan elkaar koppelen, de Etsy-link in je Instagram-bio zetten, dan de Meta-app maken (ik help).",
+    },
+  },
+  {
     id: "svc:printful",
     kind: "service",
     label: "Printful",
@@ -320,6 +336,7 @@ export const EDGES: [string, string][] = [
   ["brain", "agent:marketing"],
   ["agent:marketing", "biz:etsy-pod"],
   ["agent:marketing", "svc:pinterest"],
+  ["agent:marketing", "svc:meta"],
   ["agent:marketing", "biz:kdp-coloring"],
   ["agent:etsy-pod", "biz:etsy-pod"],
   ["agent:kdp-coloring", "biz:kdp-coloring"],
@@ -356,6 +373,7 @@ export const PLAN: PlanItem[] = [
   { id: "chat", phase: "Fundament", title: "Chat met elke agent", detail: "Agents antwoorden uit hun eigen gegevens en kunnen hun taken starten (nooit iets dat geld kost).", owner: "systeem", status: "done" },
   { id: "etsy-agent", phase: "Etsy-winkel", title: "Etsy-agent: ontwerpen, teksten, kwaliteitscontrole", detail: "20 mokken gemaakt. Controleert randen, centreert en zet het ontwerp op beide kanten.", owner: "systeem", status: "done" },
   { id: "pinterest-connect", phase: "Groei", title: "Pinterest koppelen", detail: "Bedrijfsaccount, app op developers.pinterest.com, sleutels in Railway, dan /auth/pinterest/start.", owner: "jarne", status: "todo", node: "svc:pinterest" },
+  { id: "meta-connect", phase: "Groei", title: "Instagram + Facebook koppelen", detail: "Facebook-pagina en Instagram-bedrijfsaccount maken en koppelen, Meta-app, sleutels in Railway, dan /auth/meta/start.", owner: "jarne", status: "todo", node: "svc:meta" },
   { id: "marketing-agent", phase: "Groei", title: "Marketing-agent", detail: "Strategie per bedrijf, gratis acties zelf, gemeten na 14 dagen; wat werkt gaat naar de andere bedrijven.", owner: "systeem", status: "done", node: "agent:marketing" },
   { id: "kdp-agent", phase: "Kleurboeken", title: "Kleurboek-agent", detail: "Gebouwd en getest op de printmaten; nog geen echt boek gemaakt.", owner: "systeem", status: "done" },
 

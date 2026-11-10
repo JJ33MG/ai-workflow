@@ -11,6 +11,7 @@ import { ChatUnavailableError, chatHistory, sendChat } from "./chat.js";
 import { buildBusinessDetail, buildDashboard } from "./dashboard.js";
 import { db } from "./db.js";
 import * as etsy from "./integrations/etsy.js";
+import * as meta from "./integrations/meta.js";
 import * as pinterest from "./integrations/pinterest.js";
 import { decide } from "./lib/approvals.js";
 import { loadEtsySetup } from "./lib/etsySetup.js";
@@ -238,6 +239,23 @@ app.get("/auth/pinterest/callback", async (req, res) => {
     res.send(`Pinterest connected (${user}). You can close this tab.`);
   } catch (err) {
     res.status(400).send(`Pinterest connection failed: ${(err as Error).message}`);
+  }
+});
+
+// Instagram + Facebook (one Meta app): open /auth/meta/start?token=ADMIN_TOKEN in a browser once.
+app.get("/auth/meta/start", requireAdmin, async (_req, res) => {
+  res.redirect(await meta.buildAuthUrl());
+});
+
+app.get("/auth/meta/callback", async (req, res) => {
+  try {
+    const c = await meta.handleCallback(String(req.query.code ?? ""), String(req.query.state ?? ""));
+    const what = c.instagramUsername ? `Facebook-pagina ${c.pageName} en Instagram ${c.instagramUsername}` : `Facebook-pagina ${c.pageName} (geen Instagram gekoppeld)`;
+    await agentLogger("marketing").info(`Meta gekoppeld: ${what}`);
+    await enqueue("marketing", "meta_posts");
+    res.send(`Connected: ${what}. You can close this tab.`);
+  } catch (err) {
+    res.status(400).send(`Instagram/Facebook connection failed: ${(err as Error).message}`);
   }
 });
 

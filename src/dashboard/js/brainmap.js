@@ -41,6 +41,7 @@ const POS = {
   "biz:kdp-coloring": [195, 470],
   "svc:etsy": [112, 90],
   "svc:pinterest": [400, 95],
+  "svc:meta": [812, 95],
   "svc:printful": [112, 345],
   "svc:kdp": [112, 600],
   "svc:telegram": [1088, 90],

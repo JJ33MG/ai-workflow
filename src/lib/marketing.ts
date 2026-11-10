@@ -38,7 +38,7 @@ export const TACTICS: Tactic[] = [
     id: "manual",
     businesses: "any",
     description:
-      "A step Jarne does himself (e.g. Etsy Ads with a small daily budget, Amazon ads, a social post, a shop banner; Pinterest pinning is automatic once connected). " +
+      "A step Jarne does himself (e.g. Etsy Ads with a small daily budget, Amazon ads, a social post, a shop banner; Pinterest, Facebook and Instagram posting is automatic once connected). " +
       "Give clear step-by-step instructions and any cost. Anything that costs money is always manual and Jarne's decision.",
     auto: false,
   },
@@ -128,16 +128,22 @@ export async function businessMetrics(businessId: string, teamAgentIds: string[]
       n.favorites += s.favorites;
       byNiche.set(s.niche, n);
     }
-    const pinnedIds = new Set(
-      (await db.socialPost.findMany({ where: { platform: "pinterest", businessId }, select: { refId: true } })).map((p) => p.refId),
-    );
+    // Per platform: how many listings were shared, and whether they get more Etsy visits than the rest.
+    const posts = await db.socialPost.findMany({ where: { businessId }, select: { platform: true, refId: true } });
     const rate = (xs: ListingStat[]) => (xs.length ? Math.round((xs.reduce((n, s) => n + s.viewsPerDay, 0) / xs.length) * 100) / 100 : null);
-    const pinterest = {
-      pinnedListings: pinnedIds.size,
-      avgViewsPerDayPinned: rate(stats.filter((s) => pinnedIds.has(s.id))),
-      avgViewsPerDayNotPinned: rate(stats.filter((s) => !pinnedIds.has(s.id))),
-      note: "Daily pinning runs by itself once Pinterest is connected; no play needed for it.",
-    };
+    const social = Object.fromEntries(
+      [...new Set(posts.map((p) => p.platform))].map((platform) => {
+        const shared = new Set(posts.filter((p) => p.platform === platform).map((p) => p.refId));
+        return [
+          platform,
+          {
+            sharedListings: shared.size,
+            avgViewsPerDayShared: rate(stats.filter((s) => shared.has(s.id))),
+            avgViewsPerDayNotShared: rate(stats.filter((s) => !shared.has(s.id))),
+          },
+        ];
+      }),
+    );
     const brief = (s: ListingStat) => ({ title: s.title, niche: s.niche, views: s.views, favorites: s.favorites, ageDays: s.ageDays });
     return {
       ...base,
@@ -147,7 +153,8 @@ export async function businessMetrics(businessId: string, teamAgentIds: string[]
       totalFavorites: stats.reduce((n, s) => n + s.favorites, 0),
       bestListings: [...stats].reverse().slice(0, 5).map(brief),
       weakestListings: stats.slice(0, 5).map(brief),
-      pinterest,
+      social,
+      socialNote: "Pinterest, Facebook and Instagram post daily by themselves once connected; no play needed for them.",
       niches: [...byNiche.entries()].map(([niche, n]) => ({ niche, ...n })).sort((a, b) => b.views - a.views).slice(0, 15),
     };
   }

@@ -64,6 +64,16 @@ export const config = {
     pinsPerDay: num("PINTEREST_PINS_PER_DAY", 3),
   },
 
+  meta: {
+    appId: str("META_APP_ID"),
+    appSecret: str("META_APP_SECRET"),
+    // Optional: which Facebook Page to post to when the account manages several.
+    pageId: str("META_PAGE_ID"),
+    graphVersion: str("META_GRAPH_VERSION", "v21.0"),
+    // One post a day per platform: steady, and well below Instagram's limit of 50 a day.
+    postsPerDay: num("META_POSTS_PER_DAY", 1),
+  },
+
   printful: {
     token: str("PRINTFUL_TOKEN"),
     storeId: str("PRINTFUL_STORE_ID"),

@@ -50,3 +50,35 @@ describe("Pinterest boards", () => {
     expect(sameBoard("Gifts for Nurses", "Gifts for Teachers")).toBe(false);
   });
 });
+
+describe("Instagram + Facebook", () => {
+  const page = (id: string, ig?: string) => ({ id, name: `Page ${id}`, access_token: `t${id}`, ...(ig ? { instagram_business_account: { id: ig } } : {}) });
+
+  it("posts to the Page with Instagram, unless a Page is named", async () => {
+    const { pickPage } = await import("../src/integrations/meta.js");
+    expect(pickPage([page("1"), page("2", "ig2")], "")?.id).toBe("2");
+    expect(pickPage([page("1"), page("2", "ig2")], "1")?.id).toBe("1");
+    expect(pickPage([page("1")], "9")).toBeNull();
+    expect(pickPage([], "")).toBeNull();
+  });
+
+  it("publishes to Instagram in two steps: container, then publish", async () => {
+    const { vi } = await import("vitest");
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      const u = new URL(String(url));
+      calls.push(`${init?.method ?? "GET"} ${u.pathname.replace(/^\/v[\d.]+/, "")}`);
+      const body = u.pathname.endsWith("/media") ? { id: "c1" } : u.pathname.endsWith("/media_publish") ? { id: "post1" } : { status_code: "FINISHED" };
+      return new Response(JSON.stringify(body), { status: 200 });
+    });
+    try {
+      const { postToInstagram } = await import("../src/integrations/meta.js");
+      const conn = { pageId: "p", pageName: "Shop", pageToken: "t", instagramId: "ig", instagramUsername: "shop" };
+      expect(await postToInstagram(conn, "https://img/x.jpg", "Hi", 0)).toBe("post1");
+      expect(calls).toEqual(["POST /ig/media", "GET /c1", "POST /ig/media_publish"]);
+      await expect(postToInstagram({ ...conn, instagramId: null }, "https://img/x.jpg", "Hi", 0)).rejects.toThrow(/No Instagram/);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
