@@ -218,11 +218,26 @@ export const NODES: BrainNode[] = [
     explain: {
       what: "De marktplaats waar de mokken verkocht worden.",
       how: [
-        "Nu: jouw winkel wordt handmatig gevuld via Printful.",
-        "Automatisch (later): het systeem zet listings op Etsy en haalt verkopen op. Daarvoor moet Etsy een developer-app goedkeuren en moet je de winkel één keer koppelen.",
+        "Gekoppeld: het systeem zet nieuwe listings als concept op Etsy, vraagt jouw akkoord om te publiceren en haalt elk uur listings, bezoeken en verkopen op.",
+        "Listings die je zelf plaatst (bijvoorbeeld via Printful) worden ook opgehaald; die bestellingen laat het aan Printful zelf over.",
       ],
-      where: "Overzicht → Systemen → Etsy, en Bouwplan.",
-      you: "Etsy-winkel openen (loopt), later de developer-app aanvragen.",
+      where: "Overzicht → Systemen → Etsy, en Bedrijven → Etsy-winkel.",
+    },
+  },
+  {
+    id: "svc:pinterest",
+    kind: "service",
+    label: "Pinterest",
+    explain: {
+      what: "Een zoekmachine voor ideeën: mensen zoeken er cadeaus. Elke pin linkt naar een product in je winkel.",
+      how: [
+        "Je koppelt je Pinterest-bedrijfsaccount één keer; daarna vraagt de marketing-agent één keer jouw akkoord om te starten.",
+        "Elke dag om 18:00 pint hij een paar live Etsy-listings (standaard 3), de meest gefavoriete eerst, nooit twee keer dezelfde.",
+        "Claude schrijft per pin een zoekvriendelijke titel en beschrijving en kiest een bord (bijvoorbeeld 'Gifts for Nurses'); ontbreekt het bord, dan maakt hij het.",
+        "Bij de wekelijkse review vergelijkt hij de bezoeken van gepinde en niet-gepinde listings.",
+      ],
+      where: "Overzicht → Systemen → Pinterest, Activiteit, en Bedrijven → Etsy-winkel → Marketing.",
+      you: "Pinterest-bedrijfsaccount en een app op developers.pinterest.com maken (ik help), dan koppelen.",
     },
   },
   {
@@ -304,6 +319,7 @@ export const EDGES: [string, string][] = [
   ["agent:ceo", "svc:telegram"],
   ["brain", "agent:marketing"],
   ["agent:marketing", "biz:etsy-pod"],
+  ["agent:marketing", "svc:pinterest"],
   ["agent:marketing", "biz:kdp-coloring"],
   ["agent:etsy-pod", "biz:etsy-pod"],
   ["agent:kdp-coloring", "biz:kdp-coloring"],
@@ -339,6 +355,7 @@ export const PLAN: PlanItem[] = [
   { id: "dashboard", phase: "Fundament", title: "Dashboard: brein, bedrijven, agents, chat, problemen", detail: "Alles op één plek, met uitleg en oplossingen per fout.", owner: "systeem", status: "done" },
   { id: "chat", phase: "Fundament", title: "Chat met elke agent", detail: "Agents antwoorden uit hun eigen gegevens en kunnen hun taken starten (nooit iets dat geld kost).", owner: "systeem", status: "done" },
   { id: "etsy-agent", phase: "Etsy-winkel", title: "Etsy-agent: ontwerpen, teksten, kwaliteitscontrole", detail: "20 mokken gemaakt. Controleert randen, centreert en zet het ontwerp op beide kanten.", owner: "systeem", status: "done" },
+  { id: "pinterest-connect", phase: "Groei", title: "Pinterest koppelen", detail: "Bedrijfsaccount, app op developers.pinterest.com, sleutels in Railway, dan /auth/pinterest/start.", owner: "jarne", status: "todo", node: "svc:pinterest" },
   { id: "marketing-agent", phase: "Groei", title: "Marketing-agent", detail: "Strategie per bedrijf, gratis acties zelf, gemeten na 14 dagen; wat werkt gaat naar de andere bedrijven.", owner: "systeem", status: "done", node: "agent:marketing" },
   { id: "kdp-agent", phase: "Kleurboeken", title: "Kleurboek-agent", detail: "Gebouwd en getest op de printmaten; nog geen echt boek gemaakt.", owner: "systeem", status: "done" },
 

@@ -42,3 +42,11 @@ describe("Marketing measurement", () => {
     expect(tacticsFor("kdp-coloring").every((t) => !t.auto)).toBe(true);
   });
 });
+
+describe("Pinterest boards", () => {
+  it("matches board names loosely, so no duplicate boards appear", async () => {
+    const { sameBoard } = await import("../src/integrations/pinterest.js");
+    expect(sameBoard("Gifts for Nurses", " gifts for  nurses ")).toBe(true);
+    expect(sameBoard("Gifts for Nurses", "Gifts for Teachers")).toBe(false);
+  });
+});

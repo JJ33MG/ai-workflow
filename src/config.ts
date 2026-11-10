@@ -55,6 +55,15 @@ export const config = {
     autoPublish: bool("ETSY_AUTO_PUBLISH", false),
   },
 
+  pinterest: {
+    appId: str("PINTEREST_APP_ID"),
+    appSecret: str("PINTEREST_APP_SECRET"),
+    // Trial-access apps only work against the sandbox: https://api-sandbox.pinterest.com
+    apiUrl: str("PINTEREST_API_URL", "https://api.pinterest.com"),
+    // Few pins a day, every day: steady pinning works better on Pinterest than bursts, and looks less like spam.
+    pinsPerDay: num("PINTEREST_PINS_PER_DAY", 3),
+  },
+
   printful: {
     token: str("PRINTFUL_TOKEN"),
     storeId: str("PRINTFUL_STORE_ID"),

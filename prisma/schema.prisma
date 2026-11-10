@@ -224,3 +224,20 @@ model MarketingPlay {
 
   @@index([businessId, status])
 }
+
+/// A post the marketing agent placed on a social platform (e.g. a Pinterest pin for a listing).
+model SocialPost {
+  id         String   @id @default(cuid())
+  platform   String // pinterest
+  businessId String
+  /// What it promotes, e.g. a Listing id.
+  refId      String
+  externalId String
+  board      String?
+  title      String
+  link       String
+  createdAt  DateTime @default(now())
+
+  @@unique([platform, refId])
+  @@index([businessId, createdAt])
+}

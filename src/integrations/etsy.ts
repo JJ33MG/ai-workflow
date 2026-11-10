@@ -308,6 +308,12 @@ export async function getMainImageUrl(listingId: number): Promise<string | null>
   return res.results.sort((a, b) => a.rank - b.rank)[0]?.url_570xN ?? null;
 }
 
+/** The listing's main photo at full size (for Pinterest, which prefers large images). */
+export async function getLargeImageUrl(listingId: string): Promise<string | null> {
+  const res = await etsy<{ results: { url_fullxfull: string; rank: number }[] }>("GET", `/listings/${listingId}/images`);
+  return res.results.sort((a, b) => a.rank - b.rank)[0]?.url_fullxfull ?? null;
+}
+
 /** Etsy amounts are { amount, divisor }; convert to minor units (cents). */
 export function moneyToCents(m: { amount: number; divisor: number }): number {
   return Math.round((m.amount / m.divisor) * 100);

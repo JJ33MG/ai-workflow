@@ -11,8 +11,10 @@ import { ChatUnavailableError, chatHistory, sendChat } from "./chat.js";
 import { buildBusinessDetail, buildDashboard } from "./dashboard.js";
 import { db } from "./db.js";
 import * as etsy from "./integrations/etsy.js";
+import * as pinterest from "./integrations/pinterest.js";
 import { decide } from "./lib/approvals.js";
 import { loadEtsySetup } from "./lib/etsySetup.js";
+import { agentLogger } from "./lib/logger.js";
 import { loadPrintfulSetup } from "./lib/printfulSetup.js";
 import { hasPrintfulToken } from "./integrations/printful.js";
 import { designsDir } from "./lib/design.js";
@@ -219,6 +221,23 @@ app.get("/auth/etsy/callback", async (req, res) => {
     res.send("Etsy connected. You can close this tab.");
   } catch (err) {
     res.status(400).send(`Etsy connection failed: ${(err as Error).message}`);
+  }
+});
+
+// Pinterest OAuth: open /auth/pinterest/start?token=ADMIN_TOKEN in a browser once.
+app.get("/auth/pinterest/start", requireAdmin, async (_req, res) => {
+  res.redirect(await pinterest.buildAuthUrl());
+});
+
+app.get("/auth/pinterest/callback", async (req, res) => {
+  try {
+    const user = await pinterest.handleCallback(String(req.query.code ?? ""), String(req.query.state ?? ""));
+    await agentLogger("marketing").info(`Pinterest gekoppeld: ${user}`);
+    // Asks Jarne's go-ahead first (new platform), then pins daily.
+    await enqueue("marketing", "pinterest_pins");
+    res.send(`Pinterest connected (${user}). You can close this tab.`);
+  } catch (err) {
+    res.status(400).send(`Pinterest connection failed: ${(err as Error).message}`);
   }
 });
 

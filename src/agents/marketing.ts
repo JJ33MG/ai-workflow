@@ -4,8 +4,10 @@
 import { z } from "zod";
 import { businessById } from "../businesses.js";
 import { config } from "../config.js";
-import { db } from "../db.js";
+import { db, getSetting, setSetting } from "../db.js";
 import * as etsy from "../integrations/etsy.js";
+import * as pinterest from "../integrations/pinterest.js";
+import { registerApprovalExecutor, requestApproval } from "../lib/approvals.js";
 import { askJson } from "../lib/claude.js";
 import {
   MEASURE_AFTER_DAYS,
@@ -302,6 +304,101 @@ async function measurePlays(_payload: Record<string, unknown>, { log, taskId }: 
   return { measured: due.length };
 }
 
+// ---------- Pinterest ----------
+
+const PinSchema = z.object({
+  pins: z.array(
+    z.object({
+      listingId: z.string(),
+      board: z.string(),
+      title: z.string(),
+      description: z.string(),
+      altText: z.string(),
+    }),
+  ),
+});
+
+const PINTEREST_OK_KEY = "pinterest.approved";
+const MAX_BOARDS = 20;
+
+/**
+ * Pins a few live Etsy listings a day, each linking to its listing. A new platform needs Jarne's
+ * go-ahead once; after that it runs daily. Never pins a listing twice.
+ */
+async function pinterestPins(payload: Record<string, unknown>, { log, taskId }: TaskContext) {
+  if (!pinterest.isPinterestConfigured() || !(await pinterest.isPinterestConnected())) return { skipped: "Pinterest niet gekoppeld" };
+  if (config.dryRun) return { skipped: "dry run" };
+  if (!(await getSetting<boolean>(PINTEREST_OK_KEY))) {
+    const pending = await db.approval.count({ where: { kind: "pinterest_start", status: "pending" } });
+    if (!pending) {
+      await requestApproval({
+        agentId: ID,
+        kind: "pinterest_start",
+        title: "Marketing-agent laten pinnen op Pinterest",
+        details: `Elke dag ${config.pinterest.pinsPerDay} pins van je live Etsy-listings, met een link naar de listing. Gratis.`,
+      });
+    }
+    return { skipped: "wacht op akkoord" };
+  }
+
+  const pinned = new Set((await db.socialPost.findMany({ where: { platform: "pinterest" }, select: { refId: true } })).map((p) => p.refId));
+  const count = Math.min(10, Math.max(1, Number(payload.count) || config.pinterest.pinsPerDay));
+  // Most-favourited first: proven interest; then the newest.
+  const candidates = (await db.listing.findMany({ where: { status: "active", etsyListingId: { not: null } }, orderBy: [{ favorites: "desc" }, { createdAt: "desc" }] }))
+    .filter((l) => !pinned.has(l.id))
+    .slice(0, count);
+  if (!candidates.length) return { pinned: 0, note: "alle live listings zijn al gepind" };
+
+  const boards = await pinterest.listBoards();
+  const { pins } = await askJson({
+    agentId: ID,
+    purpose: "pinterest_pins",
+    effort: "low",
+    schema: PinSchema,
+    system:
+      "You write Pinterest pins that send people to Etsy gift products. Pinterest is a search engine: people search for gift ideas. " +
+      "Title: at most 100 characters, the search phrase first (e.g. 'Funny Gift for Nurses'), no clickbait, no ALL CAPS. " +
+      "Description: 2-3 natural sentences with the phrases people search (recipient, occasion, product), at most 450 characters, 2-4 hashtags at the end. " +
+      "Alt text: what the photo shows, for people who can't see it. Board: a short searchable board name grouping similar gifts " +
+      "(e.g. 'Gifts for Nurses', 'Funny Coffee Mugs'); reuse an existing board when it fits. Write in the language of the listing.",
+    prompt: `Existing boards: ${JSON.stringify(boards.map((b) => b.name))}
+Listings:
+${JSON.stringify(
+      candidates.map((l) => ({ listingId: l.id, title: l.title, niche: l.niche, tags: l.tags })),
+    )}`,
+  });
+
+  let done = 0;
+  for (const l of candidates) {
+    const pin = pins.find((p) => p.listingId === l.id);
+    if (!pin) continue;
+    const imageUrl = await etsy.getLargeImageUrl(l.etsyListingId!).catch(() => null);
+    if (!imageUrl) continue;
+    let board = boards.find((b) => pinterest.sameBoard(b.name, pin.board));
+    if (!board) {
+      if (boards.length >= MAX_BOARDS) board = boards[0];
+      else {
+        board = await pinterest.createBoard(pin.board.slice(0, 50), `${pin.board}: gift ideas from our shop.`);
+        boards.push(board);
+      }
+    }
+    const link = `https://www.etsy.com/listing/${l.etsyListingId}`;
+    const created = await pinterest.createPin({ boardId: board.id, title: pin.title, description: pin.description, altText: pin.altText, link, imageUrl });
+    await db.socialPost.create({
+      data: { platform: "pinterest", businessId: "etsy-pod", refId: l.id, externalId: created.id, board: board.name, title: pin.title, link },
+    });
+    done++;
+  }
+  await log.info(`Pinterest: ${done} pin(s) geplaatst`, undefined, taskId);
+  return { pinned: done };
+}
+
+registerApprovalExecutor("pinterest_start", async () => {
+  await setSetting(PINTEREST_OK_KEY, true);
+  await enqueue(ID, "pinterest_pins");
+  return "Pinterest staat aan: de eerste pins worden nu geplaatst, daarna elke dag om 18:00.";
+});
+
 export const marketingAgent: AgentDefinition = {
   id: ID,
   name: "Marketing-agent",
@@ -310,11 +407,12 @@ export const marketingAgent: AgentDefinition = {
   description:
     "Maakt per bedrijf een eigen marketingstrategie, voert kleine experimenten uit, meet ze en neemt over wat werkt naar de andere bedrijven.",
   dependsOn: ["database", "claude"],
-  chatTasks: ["marketing_review", "measure_plays"],
+  chatTasks: ["marketing_review", "measure_plays", "pinterest_pins"],
   taskInfo: {
     marketing_review: "Per bedrijf de cijfers bekijken, de strategie bijwerken en nieuwe marketingacties kiezen (elke maandag)",
     run_play: "Een marketingactie uitvoeren: titels en tags vernieuwen of de Etsy-agent op niches richten (gratis)",
     measure_plays: "Marketingacties na 14 dagen meten tegen de rest; wat slechter doet wordt teruggedraaid",
+    pinterest_pins: "Elke dag een paar live Etsy-listings pinnen op Pinterest, met een link naar de listing (gratis)",
   },
-  handlers: { marketing_review: marketingReview, run_play: runPlay, measure_plays: measurePlays },
+  handlers: { marketing_review: marketingReview, run_play: runPlay, measure_plays: measurePlays, pinterest_pins: pinterestPins },
 };

@@ -116,6 +116,7 @@ export function buildBrain({ checks, agents, businesses, approvals, plan }: Inpu
   if (status["svc:etsy"].state === "off" && doing("etsy-shop")) {
     status["svc:etsy"] = { state: "warn", label: "Wacht op Etsy", detail: "Etsy controleert je identiteit." };
   }
+  status["svc:pinterest"] = fromCheck("pinterest");
   status["svc:printful"] = fromCheck("printful", { planId: "printful-account", label: "Handmatig in gebruik", detail: "Je gebruikt Printful zelf; het systeem heeft nog geen Printful-sleutel." });
   status["svc:kdp"] = done("kdp-account")
     ? { state: "manual", label: "Handmatig", detail: "Account bestaat; boeken upload je zelf (Amazon heeft geen koppeling)." }

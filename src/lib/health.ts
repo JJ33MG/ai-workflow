@@ -1,6 +1,7 @@
 import { config } from "../config.js";
 import { db } from "../db.js";
 import { isEtsyConfigured, isEtsyConnected, isEtsyListingReady } from "../integrations/etsy.js";
+import { isPinterestConfigured, isPinterestConnected, pinterestUser } from "../integrations/pinterest.js";
 import { hasPrintfulToken, isPrintfulConfigured, pf } from "../integrations/printful.js";
 import { schedulerState } from "../scheduler.js";
 import { apiSpendTodayCents } from "./budget.js";
@@ -146,6 +147,26 @@ export async function runHealthChecks(now = new Date()): Promise<HealthCheck[]> 
           fix: "Stel PRINTFUL_TOKEN, PRINTFUL_PRODUCT_ID en PRINTFUL_VARIANT_ID in (zie npm run printful:catalog).",
         },
   );
+
+  if (!isPinterestConfigured()) {
+    checks.push({
+      id: "pinterest",
+      label: "Pinterest",
+      status: "off",
+      detail: "Niet gekoppeld: de marketing-agent pint nog niet",
+      fix: "Maak een app op developers.pinterest.com, zet PINTEREST_APP_ID en PINTEREST_APP_SECRET in Railway en open /auth/pinterest/start?token=ADMIN_TOKEN.",
+    });
+  } else if (!(await isPinterestConnected())) {
+    checks.push({
+      id: "pinterest",
+      label: "Pinterest",
+      status: "error",
+      detail: "Sleutels ingesteld, maar het account is niet gekoppeld",
+      fix: "Open /auth/pinterest/start?token=ADMIN_TOKEN en geef toegang.",
+    });
+  } else {
+    checks.push({ id: "pinterest", label: "Pinterest", status: "ok", detail: `Gekoppeld als ${(await pinterestUser()) ?? "?"}` });
+  }
 
   if (!config.dryRun && config.publicUrl.includes("localhost")) {
     checks.push({
