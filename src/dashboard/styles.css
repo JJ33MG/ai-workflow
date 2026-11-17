@@ -1781,3 +1781,7 @@ svg.map .dim {
   background: var(--warning-bg);
   color: var(--text);
 }
+
+.product-actions {
+  padding: 0 12px 12px;
+}

@@ -241,6 +241,11 @@ export async function getListingsByState(state: "active" | "draft" | "inactive")
   }
 }
 
+/** Replaces a listing's description. Free on Etsy. */
+export async function updateListingDescription(listingId: string, description: string): Promise<void> {
+  await etsy("PATCH", `/shops/${await shopId()}/listings/${listingId}`, { description });
+}
+
 /** Sets the return policy on one listing. Free on Etsy. */
 export async function setListingReturnPolicy(listingId: string, returnPolicyId: number): Promise<void> {
   await etsy("PATCH", `/shops/${await shopId()}/listings/${listingId}`, { return_policy_id: returnPolicyId });
@@ -297,6 +302,7 @@ export interface EtsyListing {
   shipping_profile_id?: number | null;
   return_policy_id?: number | null;
   num_favorers?: number;
+  listing_type?: string;
 }
 
 /** Every active listing in the shop, including ones placed by hand or through Printful. */

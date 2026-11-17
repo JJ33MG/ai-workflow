@@ -13,6 +13,7 @@ const PRODUCT_STATUS = {
   ready: "klaar om te uploaden",
   published: "gepubliceerd",
   ended: "beëindigd",
+  rejected: "afgekeurd",
 };
 
 let selected = null;
@@ -133,7 +134,7 @@ function renderDetail(d, b, detail) {
         : h(
             "div",
             { class: "products" },
-            detail.products.map((p) =>
+            [...detail.products].sort((x, y) => Number(y.status === "uploaded") - Number(x.status === "uploaded")).map((p) =>
               h(
                 "div",
                 { class: "product" },
@@ -146,6 +147,14 @@ function renderDetail(d, b, detail) {
                   h("span", {}, money(p.priceCents, p.currency)),
                   h("span", { class: "muted" }, `${p.salesCount} verkocht`),
                 ),
+                b.id === "etsy-pod" &&
+                  p.status === "uploaded" &&
+                  h(
+                    "div",
+                    { class: "row-actions product-actions" },
+                    h("button", { class: "btn btn-sm btn-primary", onclick: (e) => act(e.currentTarget, `/api/listings/${p.id}/publish`) }, "Publiceren"),
+                    h("button", { class: "btn btn-sm", onclick: (e) => act(e.currentTarget, `/api/listings/${p.id}/reject`) }, "Afkeuren"),
+                  ),
               ),
             ),
           ),

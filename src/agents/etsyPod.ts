@@ -52,6 +52,36 @@ export function normaliseListing<T extends { title: string; tags: string[] }>(l:
   return { ...l, title: l.title.slice(0, 140).trim(), tags };
 }
 
+/**
+ * Etsy requires sellers to say in the description when an item was created with AI (Creativity
+ * Standards). Every listing gets this paragraph; MARKER finds it so it is never added twice.
+ */
+export const AI_DISCLOSURE_MARKER = "AI design tools";
+export const AI_DISCLOSURE =
+  "About this design: it was created by our shop with the help of AI design tools, then reviewed and finalized by us. " +
+  "It is printed and shipped by our print-on-demand production partner.";
+export const AI_DISCLOSURE_DIGITAL =
+  "About this design: it was created by our shop with the help of AI design tools, then reviewed and finalized by us. " +
+  "This is a digital download: no physical item is shipped.";
+
+/** The description with the AI disclosure at the end, unless it already has one. */
+export function withAiDisclosure(description: string, digital = false): string {
+  if (description.includes(AI_DISCLOSURE_MARKER)) return description;
+  return `${description.trimEnd()}\n\n${digital ? AI_DISCLOSURE_DIGITAL : AI_DISCLOSURE}`;
+}
+
+/** Etsy's API returns text with HTML entities (&#39;, &amp;); stored and sent back as plain text. */
+export function decodeEntities(text: string): string {
+  return text
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+}
+
 /** A variant a listing sells, with the print file made for it. Stored on Listing.variants. */
 export interface ListingVariant extends CatalogVariant {
   sku: string;
@@ -171,7 +201,7 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
   const created: string[] = [];
   for (const idea of ideas.slice(0, count)) {
     try {
-      const { svg } = await designWithRetry(idea);
+      const { svg } = await designWithRetry(idea, log, taskId);
       const chosen = [
         ...idea.listings.filter((l) => l.product !== PRINTABLE.id).slice(0, perDesign),
         ...idea.listings.filter((l) => l.product === PRINTABLE.id).slice(0, 1),
@@ -185,7 +215,7 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
             data: {
               niche: idea.niche,
               title: text.title,
-              description: text.description,
+              description: withAiDisclosure(text.description, true),
               tags: text.tags,
               productType: PRINTABLE.id,
               priceCents: PRINTABLE.priceCents,
@@ -208,7 +238,7 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
           data: {
             niche: idea.niche,
             title: text.title,
-            description: text.description,
+            description: withAiDisclosure(text.description),
             tags: text.tags,
             productType: entry.typeId,
             priceCents: Math.min(...entry.variants.map((v) => v.priceCents)),
@@ -232,13 +262,60 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
   return { created: created.length };
 }
 
-const DESIGN_ATTEMPTS = 2;
+const DESIGN_ATTEMPTS = 3;
+
+const DesignReviewSchema = z.object({
+  textAsRendered: z.string(),
+  ok: z.boolean(),
+  problems: z.array(z.string()),
+});
+
+/** Rules every design must follow; the reviewer checks the rendered result against the same list. */
+const DESIGN_RULES =
+  "Typography only, set straight and level: never put text on a curve or path, never rotate or tilt words or single letters, " +
+  "never use textLength, lengthAdjust or letter squeezing. Every word separated by a real space. " +
+  "Nothing smaller than one tenth of the canvas height: tiny captions, coordinates, call signs or fake small print are unreadable on a mug, leave them out. " +
+  "At most 3 text sizes and 2 colours; one simple icon at most, beside the text, never behind or touching it. " +
+  "Frames, banners and boxes only when every letter stays well inside them with clear space around it; when in doubt, no frame. " +
+  "No brand names, logos, characters, celebrities, song lyrics, film or TV quotes, sports teams or trademarked phrases.";
 
 /**
- * Asks Claude for one side of the mug, renders it and checks nothing is cut off.
- * Claude can't measure rendered text, so a layout miss is sent back once as feedback.
+ * A second pair of eyes on the rendered design, as a buyer and a print shop would see it: exact
+ * spelling and spacing of the slogan, nothing colliding or cut off, readable on a mug, and no
+ * trademark risk. Uses the review model (cheaper than the designer).
  */
-async function designWithRetry(idea: Idea): Promise<{ svg: string; png: Buffer }> {
+export async function reviewDesign(png: Buffer, slogan: string) {
+  const small = await sharp(png).flatten({ background: "#ffffff" }).resize(1000, 800, { fit: "inside" }).png().toBuffer();
+  return askJson({
+    agentId: ID,
+    purpose: "pod_design_review",
+    model: config.kdp.reviewModel,
+    effort: "low",
+    maxTokens: 2000,
+    schema: DesignReviewSchema,
+    images: [small],
+    system:
+      "You are the quality check of a print shop. Be strict: this design goes on a mug or shirt sold to real customers, and a typo, " +
+      "collision or trademark gets the product returned or the shop banned. First write down exactly the text you see (textAsRendered), " +
+      "then judge it.",
+    prompt:
+      `Intended text: "${slogan}"\n\nReject (ok=false) if any of these is true, and list each problem briefly:\n` +
+      "- the text differs from the intended text: a misspelling, a missing or extra word, words run together without a space;\n" +
+      "- any letter touches or crosses a frame, banner, box, icon, line or other text, or sits outside its frame;\n" +
+      "- text is on a curve, rotated, tilted, uneven or squashed;\n" +
+      "- any text is too small to read on a mug (tiny captions or small print);\n" +
+      "- an icon or ornament is unclear, broken, overlapping, or looks like clip-art gone wrong;\n" +
+      "- the layout looks unbalanced or amateurish;\n" +
+      "- it names or imitates a brand, character, celebrity, film/TV/song quote or trademarked phrase, or could offend.\n" +
+      `Design rules it should follow: ${DESIGN_RULES}`,
+  });
+}
+
+/**
+ * Asks Claude for one side of the mug, renders it, checks nothing is cut off and has it reviewed.
+ * Claude can't see its own rendering, so a layout miss or a failed review is sent back as feedback.
+ */
+async function designWithRetry(idea: Idea, log?: TaskContext["log"], taskId?: string): Promise<{ svg: string; png: Buffer }> {
   const side = sideSize();
   const mx = Math.round(side.width * 0.08);
   const my = Math.round(side.height * 0.08);
@@ -250,26 +327,36 @@ async function designWithRetry(idea: Idea): Promise<{ svg: string; png: Buffer }
         purpose: "pod_design_svg",
         effort: "medium",
         system:
-          "You are a typography designer. Output one standalone SVG document and nothing else. " +
+          "You are a typography designer for gift products. Output one standalone SVG document and nothing else. " +
           `It is one side of a mug: use viewBox="0 0 ${side.width} ${side.height}" and a transparent background; ` +
           "the same design is printed on the other side automatically, so draw it once. " +
           "Use only <text>, <tspan>, <path>, <rect>, <circle>, <line>, <polygon>, <g>, <defs>, <use href=\"#id\"> and gradients. " +
           "Use only generic font families (serif, sans-serif, monospace). No images, links, scripts or external references. " +
-          "Dark ink colours that print well on a white mug. Keep icons and ornaments clear of the letters, never on top of them. " +
+          "Dark ink colours that print well on a white mug. " +
           `Keep every element inside x ${mx}–${side.width - mx} and y ${my}–${side.height - my}. ` +
           "You cannot measure text, so size it conservatively: a line of N characters needs a font-size of at most " +
-          `${Math.round(((side.width - 2 * mx) / 0.62) / 10)}0/N for sans-serif capitals; split long slogans over more lines.`,
-        prompt: `Slogan: "${idea.slogan}"\nNiche: ${idea.niche}\nBrief: ${idea.designBrief}${feedback}`,
+          `${Math.round(((side.width - 2 * mx) / 0.62) / 10)}0/N for sans-serif capitals; split long slogans over more lines. ` +
+          DESIGN_RULES,
+        prompt: `Slogan (print exactly this text): "${idea.slogan}"\nNiche: ${idea.niche}\nBrief: ${idea.designBrief}${feedback}`,
       }),
     );
+    let png: Buffer;
     try {
-      return { svg, png: await prepareDesign(svg) };
+      png = await prepareDesign(svg);
     } catch (err) {
       if (!(err instanceof DesignLayoutError) || attempt >= DESIGN_ATTEMPTS) throw err;
       feedback =
         `\n\nYour previous version was cut off at the ${err.edges.join(" and ")} edge. ` +
         "Make the text smaller or split it over more lines, and keep clear of the margins.";
+      continue;
     }
+    const verdict = await reviewDesign(await sharp(Buffer.from(svg), { density: 150 }).png().toBuffer(), idea.slogan);
+    if (verdict.ok) return { svg, png };
+    await log?.info(`Ontwerp afgekeurd (${idea.slogan}): ${verdict.problems.join("; ")}`, { attempt }, taskId);
+    if (attempt >= DESIGN_ATTEMPTS) throw new Error(`Design failed the quality check: ${verdict.problems.join("; ")}`);
+    feedback =
+      `\n\nThe quality check rejected your previous version (it read: "${verdict.textAsRendered}"). Problems: ${verdict.problems.join("; ")}. ` +
+      "Draw it again, simpler, and avoid every one of these problems.";
   }
 }
 
@@ -388,7 +475,7 @@ async function uploadPrintable(
   if (!etsyId) {
     const draft = await etsy.createDraftListing({
       title: listing.title,
-      description: listing.description,
+      description: withAiDisclosure(listing.description, true),
       priceCents: PRINTABLE.priceCents,
       tags: listing.tags,
       taxonomyId: entry.taxonomyId,
@@ -458,7 +545,7 @@ async function uploadListings(payload: Record<string, unknown>, { log, taskId }:
     if (!etsyId) {
       const draft = await etsy.createDraftListing({
         title: listing.title,
-        description: listing.description,
+        description: withAiDisclosure(listing.description),
         // The current price, also for drafts made before it changed.
         priceCents: variants.length ? Math.min(...variants.map((v) => v.priceCents)) : etsy.es.priceCents,
         tags: listing.tags,
@@ -495,7 +582,9 @@ async function uploadListings(payload: Record<string, unknown>, { log, taskId }:
       agentId: ID,
       kind: "etsy_publish",
       title: `${ask.length} Etsy-listing(s) publiceren`,
-      details: `De concepten staan op Etsy. Publiceren kost $0,20 listingkosten per stuk.`,
+      details:
+        `De concepten staan op Etsy. Bekijk elk ontwerp eerst (Etsy eist menselijke controle per listing) op ` +
+        `${config.publicUrl}/dashboard/ → Bedrijven → Etsy-winkel, en keur ze daar per stuk goed of af. Publiceren kost $0,20 per stuk.`,
       amountCents: ask.length * ETSY_LISTING_FEE_USD_CENTS,
       currency: "USD",
       payload: { listingIds: ask },
@@ -553,9 +642,9 @@ export async function upsertEtsyListings(
   for (const l of listings) {
     const etsyListingId = String(l.listing_id);
     const fields = {
-      title: l.title.slice(0, 140),
-      description: l.description,
-      tags: l.tags,
+      title: decodeEntities(l.title).slice(0, 140),
+      description: decodeEntities(l.description),
+      tags: l.tags.map(decodeEntities),
       priceCents: etsy.moneyToCents(l.price),
       currency: l.price.currency_code,
       status: "active",
@@ -635,6 +724,7 @@ async function maintenance(_payload: Record<string, unknown>, { log, taskId }: T
   });
   await enqueueOnce(ID, "add_photos");
   await enqueueOnce(ID, "fix_return_policy");
+  await enqueueOnce(ID, "add_ai_disclosure");
   if (stuck) await enqueueOnce(ID, "upload_listings");
   await log.info(`Dagelijks onderhoud gestart: foto's aanvullen, retourbeleid${stuck ? `, ${stuck} vastgelopen concept(en) uploaden` : ""}`, undefined, taskId);
   return { stuckDrafts: stuck };
@@ -662,6 +752,27 @@ export function estimatedProfitCents(priceCents: number, costUsd: number): numbe
   const cost = costUsd * 100 * config.budget.usdToEur;
   const fees = priceCents * 0.105 + 30 + 20 * config.budget.usdToEur;
   return Math.round(priceCents - cost - fees);
+}
+
+/**
+ * Adds the AI disclosure Etsy requires to every live and draft listing that lacks it, including
+ * the designs placed by hand. Free on Etsy, safe to re-run.
+ */
+async function addAiDisclosure(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
+  if (config.dryRun || !etsy.isEtsyConfigured() || !(await etsy.isEtsyConnected())) return { skipped: "dry run or Etsy not connected" };
+  const listings = [...(await etsy.getListingsByState("active")), ...(await etsy.getListingsByState("draft"))];
+  let added = 0;
+  for (const l of listings) {
+    const current = decodeEntities(l.description);
+    if (current.includes(AI_DISCLOSURE_MARKER)) continue;
+    const description = withAiDisclosure(current, l.listing_type === "download");
+    await etsy.updateListingDescription(String(l.listing_id), description);
+    await db.listing.updateMany({ where: { etsyListingId: String(l.listing_id) }, data: { description } });
+    added++;
+    if (taskId && added % 10 === 0) await db.task.update({ where: { id: taskId }, data: { status: "running" } });
+  }
+  await log.info(`AI-vermelding toegevoegd aan ${added} listing(s) (Etsy-regel)`, undefined, taskId);
+  return { added, checked: listings.length };
 }
 
 async function etsySetup(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
@@ -820,7 +931,7 @@ export const etsyPodAgent: AgentDefinition = {
   name: "Etsy-agent",
   phase: 1,
   businessId: "etsy-pod",
-  chatTasks: ["create_listings", "upload_listings", "sync_sales", "sync_listings", "printful_setup", "etsy_setup", "add_photos", "fix_return_policy", "catalog_setup", "maintenance"],
+  chatTasks: ["create_listings", "upload_listings", "sync_sales", "sync_listings", "printful_setup", "etsy_setup", "add_photos", "fix_return_policy", "catalog_setup", "maintenance", "add_ai_disclosure"],
   description: "Zoekt cadeau-niches, ontwerpt mokken, zet ze op Etsy en maakt van Etsy-verkopen Printful-bestellingen.",
   dependsOn: ["database", "claude", "etsy", "printful"],
   taskInfo: {
@@ -832,6 +943,7 @@ export const etsyPodAgent: AgentDefinition = {
     printful_setup: "Bij Printful de API-winkel, de 11 oz mok en de exacte printmaat opzoeken en opslaan",
     etsy_setup: "Bij Etsy de munt, het verzendprofiel, het retourbeleid, de categorie Mokken en de productiepartner opzoeken",
     add_photos: "Listings op Etsy met te weinig mokfoto's aanvullen met Printful-foto's",
+    add_ai_disclosure: "De AI-vermelding die Etsy verplicht toevoegen aan elke listing die ze nog mist",
     maintenance: "Dagelijks onderhoud: ontbrekende productfoto's aanvullen, retourbeleid op elke listing, vastgelopen concepten alsnog uploaden",
     catalog_setup: "Het productaanbod opzoeken: per product (mokken, T-shirts, hoodies, totebags, posters) de Printful-varianten en de Etsy-categorie en het verzendprofiel",
     fix_return_policy: "Het retourbeleid van de winkel op alle listings zetten die er nog geen hebben (live en concept)",
@@ -850,5 +962,6 @@ export const etsyPodAgent: AgentDefinition = {
     fix_return_policy: fixReturnPolicy,
     catalog_setup: catalogSetup,
     maintenance,
+    add_ai_disclosure: addAiDisclosure,
   },
 };

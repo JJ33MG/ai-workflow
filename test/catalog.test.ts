@@ -172,3 +172,19 @@ describe("Printable wall art", () => {
     expect(PRINTABLE.formats.length).toBeLessThanOrEqual(5); // Etsy's limit per listing
   });
 });
+
+describe("Etsy rules and clean text", () => {
+  it("adds the AI disclosure Etsy requires once, with the right wording for downloads", async () => {
+    const { withAiDisclosure, AI_DISCLOSURE_MARKER } = await import("../src/agents/etsyPod.js");
+    const once = withAiDisclosure("A funny mug.");
+    expect(once).toContain(AI_DISCLOSURE_MARKER);
+    expect(once).toContain("production partner");
+    expect(withAiDisclosure(once)).toBe(once);
+    expect(withAiDisclosure("A print.", true)).toContain("digital download");
+  });
+
+  it("turns Etsy's HTML entities back into plain text", async () => {
+    const { decodeEntities } = await import("../src/agents/etsyPod.js");
+    expect(decodeEntities("I&#39;m on 20 Meters &amp; more &quot;fun&quot;")).toBe('I\'m on 20 Meters & more "fun"');
+  });
+});

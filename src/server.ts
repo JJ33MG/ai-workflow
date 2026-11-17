@@ -132,6 +132,23 @@ app.post("/api/marketing/campaigns", requireAdmin, async (req, res) => {
   }
 });
 
+// Reviewing listings one by one (Etsy requires individual human oversight): publish or reject a draft.
+app.post("/api/listings/:id/:action", requireAdmin, async (req, res) => {
+  const { id, action } = req.params as { id: string; action: string };
+  const listing = await db.listing.findUnique({ where: { id } });
+  if (!listing || !["publish", "reject"].includes(action) || listing.status !== "uploaded") {
+    res.status(400).json({ error: "Deze listing kan niet (meer) gepubliceerd of afgekeurd worden" });
+    return;
+  }
+  if (action === "reject") {
+    await db.listing.update({ where: { id }, data: { status: "rejected" } });
+    res.json({ message: `Afgekeurd: ${listing.title}. Het concept blijft onzichtbaar op Etsy; verwijder het daar als je wilt.` });
+    return;
+  }
+  await enqueue("etsy-pod", "publish_listings", { listingIds: [id] });
+  res.json({ message: `Wordt gepubliceerd: ${listing.title}` });
+});
+
 // Jarne's marketing to-dos: "done" starts the clock (judged at a later review), "skip" drops it.
 app.post("/api/marketing/plays/:id", requireAdmin, async (req, res) => {
   const action = String((req.body as { action?: string }).action ?? "");
