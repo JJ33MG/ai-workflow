@@ -14,6 +14,7 @@ import { catalogEntry, enabledTypes, findCatalog, type CatalogEntry, type Catalo
 import { DesignLayoutError, designUrl, designsDir, getPrintSize, prepareDesign, renderPrintFile, renderPrintable, sanitizeSvg, saveDesign, sideSize } from "../lib/design.js";
 import { startOfDay, toEurCents } from "../lib/money.js";
 import { findEtsySetup, mostUsedId, saveReturnPolicy } from "../lib/etsySetup.js";
+import { campaignBrief, todayIso } from "../lib/marketing.js";
 import { findPrintfulSetup } from "../lib/printfulSetup.js";
 import { enqueue, enqueueOnce } from "../lib/tasks.js";
 import type { AgentDefinition, TaskContext } from "./types.js";
@@ -155,7 +156,7 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
       "Write titles and descriptions for real buyers, not keyword lists. Each description must state the product facts given, " +
       "that the item is printed on demand by a production partner, and that sizes/colours are chosen from the menu.",
     prompt:
-      `${digest}\n\n${instructions ? `Jarne's direction for this batch (follow it): ${instructions}\n\n` : ""}` +
+      `Today: ${todayIso()}.\n${await campaignBrief(ID)}\n\n${digest}\n\n${instructions ? `Jarne's direction for this batch (follow it): ${instructions}\n\n` : ""}` +
       `Products you can put a design on:\n${productList}${printableLine}\n\n` +
       `Propose ${count} new designs. For each give: niche, slogan (the exact printed text, max ~8 words), designBrief (layout and typographic style), ` +
       `and listings: for ${perDesign} products from the list that suit this design and its buyer (a mug almost always fits; pick apparel, totes and posters ` +

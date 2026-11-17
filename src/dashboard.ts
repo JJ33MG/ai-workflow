@@ -5,7 +5,7 @@ import { config } from "./config.js";
 import { db } from "./db.js";
 import { apiSpendTodayCents } from "./lib/budget.js";
 import { runHealthChecks, type CheckStatus, type HealthCheck } from "./lib/health.js";
-import { getStrategy } from "./lib/marketing.js";
+import { activeCampaigns, getStrategy } from "./lib/marketing.js";
 import { startOfDay, startOfMonth, toEurCents } from "./lib/money.js";
 import { allGuides, diagnose } from "./lib/troubleshoot.js";
 import { buildBrain, planWithStatus } from "./brain.js";
@@ -346,15 +346,17 @@ export async function buildBusinessDetail(id: string, now = new Date()) {
   const byCategory: Record<string, number> = {};
   for (const c of costBreakdown) byCategory[c.category] = (byCategory[c.category] ?? 0) + toEurCents(c.amountCents, c.currency);
 
-  const [strategy, plays] = await Promise.all([
+  const [strategy, plays, campaigns] = await Promise.all([
     getStrategy(id),
     db.marketingPlay.findMany({ where: { businessId: id }, orderBy: { createdAt: "desc" }, take: 15 }),
+    activeCampaigns(id),
   ]);
 
   return {
     id,
     marketing: {
       strategy,
+      campaigns: campaigns.map((c) => ({ name: c.name, direction: c.direction, until: c.until })),
       plays: plays.map((p) => ({
         id: p.id,
         tactic: p.tactic,

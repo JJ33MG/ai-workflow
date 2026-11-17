@@ -15,6 +15,8 @@ import * as meta from "./integrations/meta.js";
 import * as pinterest from "./integrations/pinterest.js";
 import { decide, decideAll } from "./lib/approvals.js";
 import { loadCatalog } from "./lib/catalogSetup.js";
+import { addCampaign } from "./lib/marketing.js";
+import { businessById } from "./businesses.js";
 import { loadEtsySetup } from "./lib/etsySetup.js";
 import { agentLogger } from "./lib/logger.js";
 import { loadPrintfulSetup } from "./lib/printfulSetup.js";
@@ -109,6 +111,22 @@ app.post("/api/plan/:id", requireAdmin, async (req, res) => {
   try {
     const item = await setPlanStatus(String(req.params.id), status as "done" | "doing" | "todo");
     res.json({ message: status === "done" ? `Afgevinkt: ${item.title}` : `Bijgewerkt: ${item.title}`, item });
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+  }
+});
+
+// A seasonal campaign started by hand (the marketing agent starts its own through plays).
+app.post("/api/marketing/campaigns", requireAdmin, async (req, res) => {
+  const b = req.body as { businessId?: string; name?: string; direction?: string; from?: string; until?: string };
+  if (!b.businessId || !businessById(b.businessId) || !b.name || !b.direction || !b.from || !b.until) {
+    res.status(400).json({ error: "businessId, name, direction, from en until zijn verplicht" });
+    return;
+  }
+  try {
+    const c = await addCampaign({ businessId: b.businessId, name: b.name.slice(0, 80), direction: b.direction.slice(0, 1500), from: b.from, until: b.until });
+    await agentLogger("marketing").info(`Campagne gestart: ${c.name} (${c.from} t/m ${c.until})`, c);
+    res.json({ message: `Campagne gestart: ${c.name}`, campaign: c });
   } catch (err) {
     res.status(400).json({ error: (err as Error).message });
   }

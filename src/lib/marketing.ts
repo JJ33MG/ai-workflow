@@ -35,6 +35,14 @@ export const TACTICS: Tactic[] = [
     auto: true,
   },
   {
+    id: "campaign",
+    businesses: "any",
+    description:
+      "Start a seasonal campaign (input: campaign {name, direction, from, until} with dates YYYY-MM-DD): while it runs, the business's " +
+      "agents follow the direction (themes to design, seasonal search terms, order-by dates to mention). Plan holidays 2-4 weeks ahead. Free.",
+    auto: true,
+  },
+  {
     id: "manual",
     businesses: "any",
     description:
@@ -64,6 +72,54 @@ export interface Strategy {
 const strategyKey = (businessId: string) => `marketing.strategy.${businessId}`;
 export const getStrategy = (businessId: string) => getSetting<Strategy>(strategyKey(businessId));
 export const saveStrategy = (businessId: string, s: Strategy) => setSetting(strategyKey(businessId), s);
+
+// ---------- campaigns ----------
+
+/**
+ * A seasonal push (Black Friday, Christmas, Mother's Day …): while it runs, the business's agents
+ * follow its direction (what to design, which search terms, what to say in descriptions).
+ */
+export interface Campaign {
+  id: string;
+  businessId: string;
+  name: string;
+  direction: string;
+  /** YYYY-MM-DD, inclusive. */
+  from: string;
+  until: string;
+  createdAt: string;
+}
+
+const CAMPAIGNS_KEY = "marketing.campaigns";
+export const getCampaigns = async () => (await getSetting<Campaign[]>(CAMPAIGNS_KEY)) ?? [];
+
+const dayOf = (d: Date) => d.toLocaleDateString("sv-SE", { timeZone: config.timezone }); // YYYY-MM-DD
+export const todayIso = (now = new Date()) => dayOf(now);
+
+export async function activeCampaigns(businessId: string, now = new Date()): Promise<Campaign[]> {
+  const today = dayOf(now);
+  return (await getCampaigns()).filter((c) => c.businessId === businessId && c.from <= today && today <= c.until);
+}
+
+/** Adds a campaign; one that ended more than 60 days ago is dropped to keep the list short. */
+export async function addCampaign(c: Omit<Campaign, "id" | "createdAt">, now = new Date()): Promise<Campaign> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(c.from) || !/^\d{4}-\d{2}-\d{2}$/.test(c.until) || c.until < c.from) {
+    throw new Error("Campaign dates must be YYYY-MM-DD and until must not be before from");
+  }
+  const cutoff = dayOf(new Date(now.getTime() - 60 * DAY));
+  const campaign: Campaign = { ...c, id: `c${now.getTime().toString(36)}`, createdAt: now.toISOString() };
+  const list = (await getCampaigns()).filter((x) => x.until >= cutoff);
+  await setSetting(CAMPAIGNS_KEY, [...list, campaign]);
+  return campaign;
+}
+
+/** One line per running campaign, for prompts. */
+export async function campaignBrief(businessId: string, now = new Date()): Promise<string> {
+  const active = await activeCampaigns(businessId, now);
+  return active.length
+    ? `Running campaigns (follow them):\n${active.map((c) => `- ${c.name} (until ${c.until}): ${c.direction}`).join("\n")}`
+    : "No campaign running.";
+}
 
 // ---------- numbers ----------
 

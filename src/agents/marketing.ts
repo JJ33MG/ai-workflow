@@ -12,7 +12,9 @@ import { registerApprovalExecutor, requestApproval } from "../lib/approvals.js";
 import { askJson } from "../lib/claude.js";
 import {
   MEASURE_AFTER_DAYS,
+  addCampaign,
   businessMetrics,
+  campaignBrief,
   computeLift,
   getStrategy,
   liveListingStats,
@@ -21,6 +23,7 @@ import {
   saveStrategy,
   signalByEtsyListing,
   tacticsFor,
+  todayIso,
   verdictFor,
   type ViewSnapshot,
 } from "../lib/marketing.js";
@@ -47,6 +50,7 @@ const ReviewSchema = z.object({
       instructions: z.string(),
       listingCount: z.number().int().nullable(),
       niches: z.array(z.string()),
+      campaign: z.object({ name: z.string(), direction: z.string(), from: z.string(), until: z.string() }).nullable(),
       copiedFrom: z.string().nullable(),
     }),
   ),
@@ -109,7 +113,8 @@ async function marketingReview(payload: Record<string, unknown>, ctx: TaskContex
         "that costs money must be a 'manual' play with the cost stated, so Jarne decides. Write strategy, titles, reasons and instructions " +
         "in Dutch for Jarne; listing texts stay in the shop's language.",
       prompt: [
-        `Business: ${b.name} (${b.kind}). ${b.description} Sells on: ${b.channels.join(", ")}.`,
+        `Today: ${todayIso()}. Business: ${b.name} (${b.kind}). ${b.description} Sells on: ${b.channels.join(", ")}.`,
+        await campaignBrief(b.id),
         `Current strategy: ${strategy ? JSON.stringify(strategy) : "none yet: write the first one."}`,
         `Numbers: ${JSON.stringify(metrics)}`,
         `Tactics you can use here: ${JSON.stringify(tactics.map((t) => ({ id: t.id, auto: t.auto, description: t.description })))}`,
@@ -122,7 +127,7 @@ async function marketingReview(payload: Record<string, unknown>, ctx: TaskContex
           : "No plays to judge (verdicts: []).",
         instructions ? `Jarne's direction for this review: ${instructions}` : "",
         `Propose at most ${MAX_NEW_PLAYS} new plays; ${open.length} are still open, so propose fewer if that is plenty. ` +
-          "listingCount only for etsy_seo_refresh (else null); niches only for etsy_niche_focus (else []).",
+          "listingCount only for etsy_seo_refresh (else null); niches only for etsy_niche_focus (else []); campaign only for the campaign tactic (else null).",
       ].join("\n\n"),
     });
 
@@ -150,7 +155,7 @@ async function marketingReview(payload: Record<string, unknown>, ctx: TaskContex
           why: p.why,
           instructions: p.instructions,
           status: tactic.auto ? "proposed" : "todo",
-          input: { listingCount: p.listingCount, niches: p.niches },
+          input: { listingCount: p.listingCount, niches: p.niches, campaign: p.campaign },
           copiedFrom: p.copiedFrom && proven.some((x) => x.id === p.copiedFrom) ? p.copiedFrom : null,
         },
       });
@@ -170,12 +175,24 @@ async function marketingReview(payload: Record<string, unknown>, ctx: TaskContex
 async function runPlay(payload: Record<string, unknown>, { log, taskId }: TaskContext) {
   const play = await db.marketingPlay.findUniqueOrThrow({ where: { id: String(payload.playId) } });
   if (play.status !== "proposed") return { skipped: `play is ${play.status}` }; // safe to re-run
-  const input = (play.input ?? {}) as { listingCount?: number | null; niches?: string[] };
+  const input = (play.input ?? {}) as {
+    listingCount?: number | null;
+    niches?: string[];
+    campaign?: { name: string; direction: string; from: string; until: string } | null;
+  };
   const skip = async (note: string) => {
     await db.marketingPlay.update({ where: { id: play.id }, data: { status: "skipped", note } });
     await log.info(`Marketing-actie overgeslagen: ${play.title} (${note})`, undefined, taskId);
     return { skipped: note };
   };
+
+  if (play.tactic === "campaign") {
+    if (!input.campaign) return skip("geen campagne opgegeven");
+    const c = await addCampaign({ businessId: play.businessId, ...input.campaign });
+    await db.marketingPlay.update({ where: { id: play.id }, data: { status: "running", startedAt: new Date(), baseline: c as unknown as object } });
+    await log.info(`Campagne gestart: ${c.name} (${c.from} t/m ${c.until})`, c, taskId);
+    return { campaign: c.id };
+  }
 
   if (play.tactic === "etsy_niche_focus") {
     const niches = (input.niches ?? []).slice(0, 5);
@@ -216,7 +233,7 @@ async function runPlay(payload: Record<string, unknown>, { log, taskId }: TaskCo
         "Title: at most 140 characters, the main search phrase a buyer types first, then gift occasion and recipient, natural and readable, " +
         "no keyword lists, no repeated words, no ALL CAPS, no trademarks. Tags: 13, each at most 20 characters, multi-word phrases buyers search, " +
         "no repeats of each other, no trademarks. Keep it truthful to the product. Write in the language of the current title.",
-      prompt: `Listings with the weakest signal (current title, tags, niche):\n${JSON.stringify(
+      prompt: `${await campaignBrief(play.businessId)}\nIf a campaign runs, work its seasonal search terms into titles and tags where they fit.\n\nListings with the weakest signal (current title, tags, niche):\n${JSON.stringify(
         targets.map((t) => ({ etsyListingId: t.etsyListingId, title: t.title, tags: t.tags, niche: t.niche })),
       )}`,
     });

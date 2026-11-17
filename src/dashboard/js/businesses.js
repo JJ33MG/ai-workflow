@@ -208,6 +208,13 @@ function marketingPanel(detail) {
               h("div", { class: "muted" }, "Kanalen: ", s.channels.map((c) => `${c.name} (${c.when === "now" ? "nu" : "later"}: ${c.role})`).join(" · ")),
             h("div", { class: "muted" }, `Bijgewerkt ${ago(s.updatedAt)}`),
           ),
+    (m?.campaigns ?? []).length > 0 &&
+      h(
+        "div",
+        { class: "todos" },
+        h("h3", {}, "Lopende campagnes"),
+        m.campaigns.map((c) => h("div", { class: "plan-box" }, h("strong", {}, `${c.name} (t/m ${c.until})`), h("div", { class: "muted" }, c.direction))),
+      ),
     todos.length > 0 &&
       h(
         "div",

@@ -269,4 +269,16 @@ describe.skipIf(!url)("with database", async () => {
     expect(await decideAll("etsy_publish")).toMatch(/^2 goedgekeurd/);
     expect(await db.approval.count({ where: { status: "pending" } })).toBe(1);
   });
+  it("runs a campaign only between its dates, per business", async () => {
+    const { addCampaign, activeCampaigns, campaignBrief } = await import("../src/lib/marketing.js");
+    const { setSetting } = await import("../src/db.js");
+    await setSetting("marketing.campaigns", []);
+    await addCampaign({ businessId: "etsy-pod", name: "Kerst", direction: "Christmas gifts", from: "2026-11-20", until: "2026-12-15" }, new Date("2026-11-18T12:00:00Z"));
+    expect(await activeCampaigns("etsy-pod", new Date("2026-11-19T12:00:00Z"))).toHaveLength(0);
+    expect(await activeCampaigns("etsy-pod", new Date("2026-12-01T12:00:00Z"))).toHaveLength(1);
+    expect(await activeCampaigns("kdp-coloring", new Date("2026-12-01T12:00:00Z"))).toHaveLength(0);
+    expect(await campaignBrief("etsy-pod", new Date("2026-12-01T12:00:00Z"))).toContain("Kerst (until 2026-12-15): Christmas gifts");
+    await expect(addCampaign({ businessId: "etsy-pod", name: "x", direction: "y", from: "2026-12-10", until: "2026-12-01" })).rejects.toThrow();
+    await setSetting("marketing.campaigns", []);
+  });
 });

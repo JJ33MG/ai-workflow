@@ -37,9 +37,8 @@ describe("Marketing measurement", () => {
   });
 
   it("offers each business only its own tactics, and manual everywhere", () => {
-    expect(tacticsFor("etsy-pod").map((t) => t.id)).toEqual(["etsy_seo_refresh", "etsy_niche_focus", "manual"]);
-    expect(tacticsFor("kdp-coloring").map((t) => t.id)).toEqual(["manual"]);
-    expect(tacticsFor("kdp-coloring").every((t) => !t.auto)).toBe(true);
+    expect(tacticsFor("etsy-pod").map((t) => t.id)).toEqual(["etsy_seo_refresh", "etsy_niche_focus", "campaign", "manual"]);
+    expect(tacticsFor("kdp-coloring").map((t) => t.id)).toEqual(["campaign", "manual"]);
   });
 });
 
