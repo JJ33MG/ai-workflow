@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { estimatedProfitCents, mockupGroups, orderItemsFor, type ListingVariant } from "../src/agents/etsyPod.js";
 import { PRODUCT_TYPES, buildInventory, inkFor, offeredVariants, productType, skuFor, variantFromSku } from "../src/lib/catalog.js";
-import { placementFor, taxonomyFor } from "../src/lib/catalogSetup.js";
+import { placementFor, profileMatches, taxonomyFor } from "../src/lib/catalogSetup.js";
 import { lightInk } from "../src/lib/design.js";
 
 const tee = productType("tshirt")!;
@@ -138,6 +138,13 @@ describe("Catalog setup", () => {
     };
     expect(placementFor(info, 7, ["front"])).toEqual({ placement: "front", width: 1800, height: 2400 });
     expect(placementFor(info, 7, ["default"])).toEqual({ placement: "front", width: 1800, height: 2400 });
+  });
+
+  it("matches shipping profiles by product, not by the word Printful", () => {
+    expect(profileMatches(productType("poster")!, "Printful: Mugs (20oz) (#PF-FRG50)")).toBe(false);
+    expect(profileMatches(productType("poster")!, "Printful: Posters (#PF-1)")).toBe(true);
+    expect(profileMatches(productType("mug")!, "Printful: Mugs (20oz) (#PF-FRG50)")).toBe(true);
+    expect(profileMatches(tee, "Printful: T-Shirts")).toBe(true);
   });
 
   it("finds the first Etsy category the type names", () => {

@@ -51,6 +51,9 @@ export function placementFor(info: PrintfileInfo, variantId: number, preferred: 
   return file ? { placement, width: file.width, height: file.height } : null;
 }
 
+/** "Printful: Mugs (20oz)" must not count as a poster profile because "Printful" contains "print". */
+export const profileMatches = (type: ProductType, title: string) => type.shippingProfile.test(title.replace(/\bprintful\b:?/gi, ""));
+
 /** The first category whose name matches, in the order the type lists them. */
 export function taxonomyFor(type: ProductType, tree: TaxonomyNode[]): number | null {
   for (const name of type.etsyTaxonomy) {
@@ -97,8 +100,8 @@ export async function findCatalog(): Promise<CatalogEntry[]> {
       }
       // Mugs use the profile the shop's own mugs use (found by etsy_setup); others need their own.
       const profile = type.shippingProfile.test("mug") && es.shippingProfileId
-        ? profiles.find((p) => p.shipping_profile_id === es.shippingProfileId) ?? profiles.find((p) => type.shippingProfile.test(p.title))
-        : profiles.find((p) => type.shippingProfile.test(p.title));
+        ? profiles.find((p) => p.shipping_profile_id === es.shippingProfileId) ?? profiles.find((p) => profileMatches(type, p.title))
+        : profiles.find((p) => profileMatches(type, p.title));
       const taxonomyId = taxonomyFor(type, tree);
       const entry: CatalogEntry = {
         ...base,
