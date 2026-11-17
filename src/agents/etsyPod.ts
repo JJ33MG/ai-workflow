@@ -511,7 +511,7 @@ async function catalogSetup(_payload: Record<string, unknown>, { log, taskId }: 
   const lines = entries.map((e) => {
     if (!e.enabled) return `✗ ${e.label}: ${e.reason}`;
     const margins = e.variants.map((v) => estimatedProfitCents(v.priceCents, v.costUsd));
-    return `✓ ${e.label}: ${e.variants.length} varianten, winst ca. €${(Math.min(...margins) / 100).toFixed(2)}–${(Math.max(...margins) / 100).toFixed(2)} per stuk`;
+    return `✓ ${e.label}: ${e.variants.length} varianten, winst ca. €${(Math.min(...margins) / 100).toFixed(2)}–${(Math.max(...margins) / 100).toFixed(2)} per stuk, verzendprofiel "${e.shippingProfileTitle}"`;
   });
   await log.info(`Productaanbod: ${on.length} van ${entries.length} soorten actief\n${lines.join("\n")}`, { entries: entries.map((e) => ({ type: e.typeId, enabled: e.enabled, reason: e.reason })) }, taskId);
   return { enabled: on.map((e) => e.typeId), off: entries.filter((e) => !e.enabled).map((e) => e.typeId) };
