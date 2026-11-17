@@ -12,7 +12,7 @@ import { askJson, askText } from "../lib/claude.js";
 import { PRINTABLE, buildInventory, productType, skuFor, variantFromSku } from "../lib/catalog.js";
 import { catalogEntry, enabledTypes, findCatalog, type CatalogEntry, type CatalogVariant } from "../lib/catalogSetup.js";
 import { DesignLayoutError, designUrl, designsDir, getPrintSize, prepareDesign, renderPrintFile, renderPrintable, sanitizeSvg, saveDesign, sideSize } from "../lib/design.js";
-import { toEurCents } from "../lib/money.js";
+import { startOfDay, toEurCents } from "../lib/money.js";
 import { findEtsySetup, mostUsedId, saveReturnPolicy } from "../lib/etsySetup.js";
 import { findPrintfulSetup } from "../lib/printfulSetup.js";
 import { enqueue, enqueueOnce } from "../lib/tasks.js";
@@ -487,20 +487,32 @@ async function uploadListings(payload: Record<string, unknown>, { log, taskId }:
   }
 
   if (uploaded.length === 0) return { uploaded: 0 };
-  if (config.etsy.autoPublish) {
-    await enqueue(ID, "publish_listings", { listingIds: uploaded });
-  } else {
+  const { now, ask } = await splitForAutoPublish(uploaded);
+  if (now.length) await enqueue(ID, "publish_listings", { listingIds: now });
+  if (ask.length) {
     await requestApproval({
       agentId: ID,
       kind: "etsy_publish",
-      title: `${uploaded.length} Etsy-listing(s) publiceren`,
+      title: `${ask.length} Etsy-listing(s) publiceren`,
       details: `De concepten staan op Etsy. Publiceren kost $0,20 listingkosten per stuk.`,
-      amountCents: uploaded.length * ETSY_LISTING_FEE_USD_CENTS,
+      amountCents: ask.length * ETSY_LISTING_FEE_USD_CENTS,
       currency: "USD",
-      payload: { listingIds: uploaded },
+      payload: { listingIds: ask },
     });
   }
-  return { uploaded: uploaded.length };
+  return { uploaded: uploaded.length, publishedNow: now.length, waitingForApproval: ask.length };
+}
+
+/** Listings published today (each one is a recorded Etsy listing fee). */
+async function publishedToday(): Promise<number> {
+  return db.cost.count({ where: { agentId: ID, category: "etsy_fee", occurredAt: { gte: startOfDay(new Date(), config.timezone) } } });
+}
+
+/** Which new listings go live right away (within the daily allowance) and which wait for Jarne. */
+export async function splitForAutoPublish(ids: string[]): Promise<{ now: string[]; ask: string[] }> {
+  if (config.etsy.autoPublish) return { now: ids, ask: [] };
+  const room = Math.max(0, config.etsy.autoPublishPerDay - (await publishedToday()));
+  return { now: ids.slice(0, room), ask: ids.slice(room) };
 }
 
 async function publishListings(payload: Record<string, unknown>, { log, taskId }: TaskContext) {
@@ -608,6 +620,23 @@ async function fixReturnPolicy(_payload: Record<string, unknown>, { log, taskId 
   }
   await log.info(`Retourbeleid #${policyId} gezet op ${fixed} listing(s); nieuwe listings krijgen het voortaan ook`, undefined, taskId);
   return { policyId, fixed };
+}
+
+/**
+ * Daily upkeep after the morning's listings are up: fills in missing product photos, puts the
+ * return policy on listings without one, and uploads drafts that never reached Etsy. Each step is
+ * its own task, so a failure shows up in Problems with its own reason.
+ */
+async function maintenance(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
+  if (config.dryRun || !etsy.isEtsyConfigured() || !(await etsy.isEtsyConnected())) return { skipped: "dry run or Etsy not connected" };
+  const stuck = await db.listing.count({
+    where: { source: "agent", status: "draft", designFile: { not: "" }, createdAt: { lt: new Date(Date.now() - 2 * 60 * 60 * 1000) } },
+  });
+  await enqueueOnce(ID, "add_photos");
+  await enqueueOnce(ID, "fix_return_policy");
+  if (stuck) await enqueueOnce(ID, "upload_listings");
+  await log.info(`Dagelijks onderhoud gestart: foto's aanvullen, retourbeleid${stuck ? `, ${stuck} vastgelopen concept(en) uploaden` : ""}`, undefined, taskId);
+  return { stuckDrafts: stuck };
 }
 
 /** Looks up the product range (Printful variants, Etsy categories and shipping profiles) and reports it. */
@@ -790,7 +819,7 @@ export const etsyPodAgent: AgentDefinition = {
   name: "Etsy-agent",
   phase: 1,
   businessId: "etsy-pod",
-  chatTasks: ["create_listings", "upload_listings", "sync_sales", "sync_listings", "printful_setup", "etsy_setup", "add_photos", "fix_return_policy", "catalog_setup"],
+  chatTasks: ["create_listings", "upload_listings", "sync_sales", "sync_listings", "printful_setup", "etsy_setup", "add_photos", "fix_return_policy", "catalog_setup", "maintenance"],
   description: "Zoekt cadeau-niches, ontwerpt mokken, zet ze op Etsy en maakt van Etsy-verkopen Printful-bestellingen.",
   dependsOn: ["database", "claude", "etsy", "printful"],
   taskInfo: {
@@ -802,6 +831,7 @@ export const etsyPodAgent: AgentDefinition = {
     printful_setup: "Bij Printful de API-winkel, de 11 oz mok en de exacte printmaat opzoeken en opslaan",
     etsy_setup: "Bij Etsy de munt, het verzendprofiel, het retourbeleid, de categorie Mokken en de productiepartner opzoeken",
     add_photos: "Listings op Etsy met te weinig mokfoto's aanvullen met Printful-foto's",
+    maintenance: "Dagelijks onderhoud: ontbrekende productfoto's aanvullen, retourbeleid op elke listing, vastgelopen concepten alsnog uploaden",
     catalog_setup: "Het productaanbod opzoeken: per product (mokken, T-shirts, hoodies, totebags, posters) de Printful-varianten en de Etsy-categorie en het verzendprofiel",
     fix_return_policy: "Het retourbeleid van de winkel op alle listings zetten die er nog geen hebben (live en concept)",
     fulfil_receipt: "De Printful-bestelling maken voor een Etsy-verkoop (automatisch bevestigd onder de uitgavelimiet)",
@@ -818,5 +848,6 @@ export const etsyPodAgent: AgentDefinition = {
     add_photos: addPhotos,
     fix_return_policy: fixReturnPolicy,
     catalog_setup: catalogSetup,
+    maintenance,
   },
 };

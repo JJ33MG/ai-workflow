@@ -246,4 +246,27 @@ describe.skipIf(!url)("with database", async () => {
     expect(await db.knowledge.count({ where: { kind: "lesson", tags: { has: "marketing" } } })).toBe(1);
     await db.listing.deleteMany({ where: { etsyListingId: { in: ["m1", "m2"] } } });
   });
+  it("publishes up to the daily allowance by itself and asks for the rest", async () => {
+    const { splitForAutoPublish } = await import("../src/agents/etsyPod.js");
+    const { config } = await import("../src/config.js");
+    const before = config.etsy.autoPublishPerDay;
+    try {
+      config.etsy.autoPublishPerDay = 3;
+      await db.cost.create({ data: { agentId: "etsy-pod", category: "etsy_fee", amountCents: 20, currency: "USD" } });
+      expect(await splitForAutoPublish(["a", "b", "c", "d"])).toEqual({ now: ["a", "b"], ask: ["c", "d"] });
+      config.etsy.autoPublishPerDay = 0;
+      expect(await splitForAutoPublish(["a"])).toEqual({ now: [], ask: ["a"] });
+    } finally {
+      config.etsy.autoPublishPerDay = before;
+    }
+  });
+
+  it("approves every pending listing publication at once, but nothing else", async () => {
+    const { decideAll } = await import("../src/lib/approvals.js");
+    await requestApproval({ agentId: "etsy-pod", kind: "etsy_publish", title: "a", details: "" });
+    await requestApproval({ agentId: "etsy-pod", kind: "etsy_publish", title: "b", details: "" });
+    await requestApproval({ agentId: "etsy-pod", kind: "printful_order_confirm", title: "order", details: "" });
+    expect(await decideAll("etsy_publish")).toMatch(/^2 goedgekeurd/);
+    expect(await db.approval.count({ where: { status: "pending" } })).toBe(1);
+  });
 });

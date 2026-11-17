@@ -53,6 +53,9 @@ export const config = {
     taxonomyId: num("ETSY_TAXONOMY_ID", 0),
     // Etsy charges a listing fee on publish, so going live is a separate step.
     autoPublish: bool("ETSY_AUTO_PUBLISH", false),
+    // Without ETSY_AUTO_PUBLISH: up to this many new listings a day go live by themselves ($0.20 each);
+    // the rest still waits for Jarne's approval. 0 = always ask.
+    autoPublishPerDay: num("ETSY_AUTO_PUBLISH_PER_DAY", 0),
   },
 
   pinterest: {

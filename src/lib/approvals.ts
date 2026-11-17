@@ -65,3 +65,13 @@ export async function decide(id: string, approve: boolean): Promise<string> {
     return `Goedgekeurd, maar uitvoeren mislukte: ${message}`;
   }
 }
+
+/** Approves every pending decision of one kind in one go (e.g. all "publish listings" requests). */
+export async function decideAll(kind: string): Promise<string> {
+  const pending = await db.approval.findMany({ where: { kind, status: "pending" }, orderBy: { createdAt: "asc" } });
+  if (!pending.length) return "Er wacht niets van deze soort.";
+  const results: string[] = [];
+  for (const a of pending) results.push(await decide(a.id, true));
+  const failed = results.filter((r) => /mislukt/i.test(r)).length;
+  return `${pending.length} goedgekeurd${failed ? `, ${failed} mislukt (zie Problemen)` : ""}.`;
+}

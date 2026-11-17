@@ -13,7 +13,7 @@ import { db } from "./db.js";
 import * as etsy from "./integrations/etsy.js";
 import * as meta from "./integrations/meta.js";
 import * as pinterest from "./integrations/pinterest.js";
-import { decide } from "./lib/approvals.js";
+import { decide, decideAll } from "./lib/approvals.js";
 import { loadCatalog } from "./lib/catalogSetup.js";
 import { loadEtsySetup } from "./lib/etsySetup.js";
 import { agentLogger } from "./lib/logger.js";
@@ -21,7 +21,7 @@ import { loadPrintfulSetup } from "./lib/printfulSetup.js";
 import { hasPrintfulToken } from "./integrations/printful.js";
 import { designsDir } from "./lib/design.js";
 import { enqueue, enqueueOnce } from "./lib/tasks.js";
-import { startCommandPolling } from "./lib/telegram.js";
+import { notify, startCommandPolling } from "./lib/telegram.js";
 import { startScheduler } from "./scheduler.js";
 
 const app = express();
@@ -178,6 +178,11 @@ app.get("/api/approvals", requireAdmin, async (_req, res) => {
   res.json(await db.approval.findMany({ where: { status: "pending" }, orderBy: { createdAt: "asc" } }));
 });
 
+// All pending "publish listings" decisions at once.
+app.post("/api/approvals-all/etsy_publish", requireAdmin, async (_req, res) => {
+  res.json({ message: await decideAll("etsy_publish") });
+});
+
 app.post("/api/approvals/:id/:decision", requireAdmin, async (req, res) => {
   const { id, decision } = req.params as { id: string; decision: string };
   if (decision !== "approve" && decision !== "reject") {
@@ -224,6 +229,24 @@ app.get("/auth/etsy/callback", async (req, res) => {
   } catch (err) {
     res.status(400).send(`Etsy connection failed: ${(err as Error).message}`);
   }
+});
+
+// Railway calls this when a deploy fails or the server crashes, so Jarne hears it in Telegram.
+// The secret in the path (RAILWAY_HOOK_SECRET) keeps strangers from sending fake alerts.
+app.post("/hooks/railway/:secret", async (req, res) => {
+  const secret = process.env.RAILWAY_HOOK_SECRET ?? "";
+  const given = String(req.params.secret);
+  if (!secret || given.length !== secret.length || !timingSafeEqual(Buffer.from(given), Buffer.from(secret))) {
+    res.status(404).end();
+    return;
+  }
+  const body = req.body as { type?: string; resource?: { service?: { name?: string } }; details?: { status?: string } };
+  const what = String(body.type ?? "event").replace("Deployment.", "deploy ");
+  await notify(
+    `🚨 Railway: ${what}${body.resource?.service?.name ? ` (${body.resource.service.name})` : ""}. ` +
+      "Ik (Claude) kan de logs bekijken en het oplossen: zeg het me in de chat.",
+  );
+  res.json({ ok: true });
 });
 
 // Public privacy policy: Pinterest and Meta ask for one when you create a developer app.

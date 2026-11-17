@@ -1,13 +1,14 @@
 import { collectBriefingData, formatBriefing } from "./agents/ceo.js";
 import { agents } from "./agents/index.js";
 import { db } from "./db.js";
-import { decide } from "./lib/approvals.js";
+import { decide, decideAll } from "./lib/approvals.js";
 import { enqueue } from "./lib/tasks.js";
 
 const HELP = [
   "/status — agents en de cijfers van vandaag",
   "/approvals — beslissingen die op jou wachten",
   "/approve <id> · /reject <id> — goedkeuren of afwijzen",
+  "/approve alles — alle wachtende listings in één keer publiceren",
   "/brief — stuur de ochtendbriefing nu",
   "/run <agent> <taak> — start een taak, bv. /run etsy-pod create_listings",
   "/pause <agent> · /resume <agent> — agent pauzeren of hervatten",
@@ -33,6 +34,8 @@ export async function handleCommand(command: string, args: string[]): Promise<st
     case "approve":
     case "reject":
       if (!args[0]) return `Gebruik: /${command} <id>`;
+      // Only listings in bulk: money decisions like Printful orders stay one by one.
+      if (command === "approve" && ["alles", "all"].includes(args[0].toLowerCase())) return decideAll("etsy_publish");
       return decide(args[0], command === "approve");
     case "run": {
       const [agentId, type] = args;

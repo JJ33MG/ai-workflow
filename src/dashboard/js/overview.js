@@ -102,8 +102,25 @@ export function renderOverview(d) {
     ),
   );
   fill("chart", taskRunsChart(d.chart));
+  const publish = d.approvals.filter((a) => a.kind === "etsy_publish");
   fill(
     "approvals",
+    publish.length > 1 &&
+      h(
+        "div",
+        { class: "approval" },
+        h("strong", {}, `${publish.length} keer "listings publiceren" wachten`),
+        h("div", { class: "details" }, "Keur ze in één keer goed. Listings die al live staan worden overgeslagen."),
+        h(
+          "div",
+          { class: "actions" },
+          h(
+            "button",
+            { class: "btn btn-primary btn-sm", onclick: (e) => act(e.currentTarget, "/api/approvals-all/etsy_publish", null, `Alle ${publish.length} publicatie-aanvragen goedkeuren?`) },
+            "Alles publiceren",
+          ),
+        ),
+      ),
     d.approvals.length === 0
       ? empty("Er wacht niets op een beslissing.", true)
       : d.approvals.map((a) => {
