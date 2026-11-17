@@ -4,7 +4,7 @@ import sharp from "sharp";
 import { z } from "zod";
 import { config } from "../config.js";
 import { db } from "../db.js";
-import { BudgetExceededError } from "../lib/budget.js";
+import { BudgetExceededError, apiSpendTodayCents } from "../lib/budget.js";
 import { askJson, askText } from "../lib/claude.js";
 import { buildCover, buildInterior, inkedEdges, renderPage } from "../lib/coloring.js";
 import { sanitizeSvg } from "../lib/design.js";
@@ -131,7 +131,18 @@ async function mapLimited<T, R>(items: T[], limit: number, fn: (item: T, i: numb
   return out;
 }
 
+/** What a book may cost in Claude calls at most (EUR cents); it only starts when that much budget is left today. */
+const BOOK_BUDGET_CENTS = 150;
+
 async function createBook(payload: Record<string, unknown>, { log, taskId }: TaskContext) {
+  // Starting a book the daily budget can't finish only wastes money: every page drawn so far is lost.
+  const left = config.budget.dailyApiCapCents - (await apiSpendTodayCents());
+  if (left < BOOK_BUDGET_CENTS) {
+    throw new Error(
+      `Not enough Claude budget left today for a whole book (€${(left / 100).toFixed(2)} left, a book needs up to €${(BOOK_BUDGET_CENTS / 100).toFixed(2)}). ` +
+        "Start it tomorrow, or raise DAILY_API_BUDGET_EUR.",
+    );
+  }
   const pictures = Math.min(50, Math.max(12, Number(payload.count ?? config.kdp.picturesPerBook)));
   const instructions = typeof payload.instructions === "string" ? payload.instructions.slice(0, 500) : "";
   const existing = await db.coloringBook.findMany({ select: { theme: true, title: true }, orderBy: { createdAt: "desc" }, take: 50 });
