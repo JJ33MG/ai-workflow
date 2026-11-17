@@ -5,6 +5,7 @@ import { getSetting, setSetting } from "../db.js";
 import {
   es,
   getActiveListings,
+  getListingsByState,
   getProductionPartners,
   getReadinessStates,
   getReturnPolicies,
@@ -94,6 +95,13 @@ function apply(s: EtsySetup) {
   es.productionPartnerId = s.productionPartnerId ?? (Number(process.env.ETSY_PRODUCTION_PARTNER_ID) || 0);
 }
 
+/** Remembers a return policy found later (e.g. by fix_return_policy), so new listings get it too. */
+export async function saveReturnPolicy(returnPolicyId: number): Promise<void> {
+  const saved = await getSetting<EtsySetup>(KEY);
+  if (saved) await setSetting(KEY, { ...saved, returnPolicyId });
+  es.returnPolicyId = returnPolicyId;
+}
+
 export async function loadEtsySetup(): Promise<boolean> {
   const saved = await getSetting<EtsySetup>(KEY);
   if (saved) apply(saved);
@@ -112,7 +120,9 @@ export async function findEtsySetup(): Promise<EtsySetup> {
   // Shops whose policy was chosen per listing may list no return policy here; then use the one
   // the existing listings carry.
   const returnPolicyId =
-    (await getReturnPolicies())[0]?.return_policy_id ?? mostUsedId(listings, "return_policy_id");
+    (await getReturnPolicies())[0]?.return_policy_id ??
+    mostUsedId(listings, "return_policy_id") ??
+    mostUsedId(await getListingsByState("draft"), "return_policy_id");
   // Listings made through Printful often carry none; Etsy then applies the shop's own policy text.
   // Optional, so it never blocks the shop (a policy added later is picked up by running etsy_setup again).
   const taxonomyId = findTaxonomyId(await getTaxonomy());

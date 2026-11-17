@@ -202,6 +202,24 @@ export async function uploadListingImage(listingId: string, png: Buffer, rank = 
   await etsy("POST", `/shops/${await shopId()}/listings/${listingId}/images`, form);
 }
 
+/** Listings in one state ("active", "draft", "inactive"), all pages. */
+export async function getListingsByState(state: "active" | "draft" | "inactive"): Promise<EtsyListing[]> {
+  const all: EtsyListing[] = [];
+  for (let offset = 0; ; offset += 100) {
+    const page = await etsy<{ count: number; results: EtsyListing[] }>(
+      "GET",
+      `/shops/${await shopId()}/listings?state=${state}&limit=100&offset=${offset}`,
+    );
+    all.push(...page.results);
+    if (page.results.length < 100 || all.length >= page.count) return all;
+  }
+}
+
+/** Sets the return policy on one listing. Free on Etsy. */
+export async function setListingReturnPolicy(listingId: string, returnPolicyId: number): Promise<void> {
+  await etsy("PATCH", `/shops/${await shopId()}/listings/${listingId}`, { return_policy_id: returnPolicyId });
+}
+
 /** New title and tags for a listing (the marketing agent's SEO refresh). Free on Etsy. */
 export async function updateListingSeo(listingId: string, title: string, tags: string[]): Promise<void> {
   await etsy("PATCH", `/shops/${await shopId()}/listings/${listingId}`, { title, tags });

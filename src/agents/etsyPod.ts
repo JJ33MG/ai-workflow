@@ -10,7 +10,7 @@ import { recordCost } from "../lib/budget.js";
 import { askJson, askText } from "../lib/claude.js";
 import { DesignLayoutError, designUrl, designsDir, getPrintSize, prepareDesign, sanitizeSvg, saveDesign, sideSize } from "../lib/design.js";
 import { toEurCents } from "../lib/money.js";
-import { findEtsySetup } from "../lib/etsySetup.js";
+import { findEtsySetup, mostUsedId, saveReturnPolicy } from "../lib/etsySetup.js";
 import { findPrintfulSetup } from "../lib/printfulSetup.js";
 import { enqueue } from "../lib/tasks.js";
 import type { AgentDefinition, TaskContext } from "./types.js";
@@ -353,6 +353,33 @@ async function syncListings(_payload: Record<string, unknown>, { log, taskId }: 
   return result;
 }
 
+/**
+ * Puts the shop's return policy on every listing that has none (Etsy requires one on live listings).
+ * The policy is the shop's own, or else the one Jarne set on any listing by hand. Safe to re-run.
+ */
+async function fixReturnPolicy(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
+  if (!etsy.isEtsyConfigured() || !(await etsy.isEtsyConnected())) return { skipped: "etsy not connected" };
+  const listings = [...(await etsy.getListingsByState("active")), ...(await etsy.getListingsByState("draft"))];
+  const policyId = (await etsy.getReturnPolicies())[0]?.return_policy_id ?? mostUsedId(listings, "return_policy_id");
+  if (!policyId) {
+    throw new Error(
+      "Geen retourbeleid gevonden in de winkel of op een listing. Zet het retourbeleid één keer met de hand op één listing " +
+        "(of maak er één in Shop Manager → Instellingen → Beleid); daarna zet deze taak het op alle andere.",
+    );
+  }
+  await saveReturnPolicy(policyId);
+  if (config.dryRun) return { dryRun: true, policyId };
+  let fixed = 0;
+  for (const l of listings) {
+    if (l.return_policy_id) continue;
+    await etsy.setListingReturnPolicy(String(l.listing_id), policyId);
+    fixed++;
+    if (taskId && fixed % 10 === 0) await db.task.update({ where: { id: taskId }, data: { status: "running" } });
+  }
+  await log.info(`Retourbeleid #${policyId} gezet op ${fixed} listing(s); nieuwe listings krijgen het voortaan ook`, undefined, taskId);
+  return { policyId, fixed };
+}
+
 async function etsySetup(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
   if (!etsy.isEtsyConfigured() || !(await etsy.isEtsyConnected())) return { skipped: "etsy not connected" };
   const s = await findEtsySetup();
@@ -485,7 +512,7 @@ export const etsyPodAgent: AgentDefinition = {
   name: "Etsy-agent",
   phase: 1,
   businessId: "etsy-pod",
-  chatTasks: ["create_listings", "upload_listings", "sync_sales", "sync_listings", "printful_setup", "etsy_setup", "add_photos"],
+  chatTasks: ["create_listings", "upload_listings", "sync_sales", "sync_listings", "printful_setup", "etsy_setup", "add_photos", "fix_return_policy"],
   description: "Zoekt cadeau-niches, ontwerpt mokken, zet ze op Etsy en maakt van Etsy-verkopen Printful-bestellingen.",
   dependsOn: ["database", "claude", "etsy", "printful"],
   taskInfo: {
@@ -497,6 +524,7 @@ export const etsyPodAgent: AgentDefinition = {
     printful_setup: "Bij Printful de API-winkel, de 11 oz mok en de exacte printmaat opzoeken en opslaan",
     etsy_setup: "Bij Etsy de munt, het verzendprofiel, het retourbeleid, de categorie Mokken en de productiepartner opzoeken",
     add_photos: "Listings op Etsy met te weinig mokfoto's aanvullen met Printful-foto's",
+    fix_return_policy: "Het retourbeleid van de winkel op alle listings zetten die er nog geen hebben (live en concept)",
     fulfil_receipt: "De Printful-bestelling maken voor een Etsy-verkoop (automatisch bevestigd onder de uitgavelimiet)",
   },
   handlers: {
@@ -509,5 +537,6 @@ export const etsyPodAgent: AgentDefinition = {
     etsy_setup: etsySetup,
     fulfil_receipt: fulfilReceipt,
     add_photos: addPhotos,
+    fix_return_policy: fixReturnPolicy,
   },
 };
