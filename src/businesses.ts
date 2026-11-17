@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { config } from "./config.js";
+import { productType } from "./lib/catalog.js";
 import { db } from "./db.js";
 
 // Every business the company runs or plans to run (from the build brief).
@@ -72,7 +73,7 @@ export const BUSINESSES: BusinessDefinition[] = [
         priceCents: l.priceCents,
         currency: l.currency,
         image: l.designSvg ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(l.designSvg)}` : (l.imageUrl ?? undefined),
-        detail: l.source === "etsy" ? "Uit je Etsy-winkel" : l.niche,
+        detail: l.source === "etsy" ? "Uit je Etsy-winkel" : `${productType(l.productType)?.label ?? l.productType} · ${l.niche}`,
         createdAt: l.createdAt,
         salesCount: l.etsyListingId ? (soldByListing.get(l.etsyListingId) ?? 0) : 0,
       }));

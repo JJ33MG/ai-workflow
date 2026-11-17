@@ -2,6 +2,7 @@ import { config } from "../config.js";
 import { db } from "../db.js";
 import { isEtsyConfigured, isEtsyConnected, isEtsyListingReady } from "../integrations/etsy.js";
 import { isMetaConfigured, metaConnection } from "../integrations/meta.js";
+import { getCatalog } from "./catalogSetup.js";
 import { isPinterestConfigured, isPinterestConnected, pinterestUser } from "../integrations/pinterest.js";
 import { hasPrintfulToken, isPrintfulConfigured, pf } from "../integrations/printful.js";
 import { schedulerState } from "../scheduler.js";
@@ -167,6 +168,19 @@ export async function runHealthChecks(now = new Date()): Promise<HealthCheck[]> 
     });
   } else {
     checks.push({ id: "pinterest", label: "Pinterest", status: "ok", detail: `Gekoppeld als ${(await pinterestUser()) ?? "?"}` });
+  }
+
+  const catalog = getCatalog();
+  if (catalog.length) {
+    const on = catalog.filter((c) => c.enabled);
+    const off = catalog.filter((c) => !c.enabled);
+    checks.push({
+      id: "catalog",
+      label: "Productaanbod",
+      status: on.length === 0 ? "error" : off.length ? "warn" : "ok",
+      detail: `Actief: ${on.map((c) => c.label).join(", ") || "geen"}${off.length ? ` · Uit: ${off.map((c) => c.label).join(", ")}` : ""}`,
+      fix: off.length ? off.map((c) => `${c.label}: ${c.reason}`).join(" · ") : undefined,
+    });
   }
 
   const metaConn = isMetaConfigured() ? await metaConnection() : null;

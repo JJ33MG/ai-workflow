@@ -8,11 +8,13 @@ import * as printful from "../integrations/printful.js";
 import { registerApprovalExecutor, requestApproval } from "../lib/approvals.js";
 import { recordCost } from "../lib/budget.js";
 import { askJson, askText } from "../lib/claude.js";
-import { DesignLayoutError, designUrl, designsDir, getPrintSize, prepareDesign, sanitizeSvg, saveDesign, sideSize } from "../lib/design.js";
+import { buildInventory, productType, skuFor, variantFromSku } from "../lib/catalog.js";
+import { catalogEntry, enabledTypes, findCatalog, type CatalogEntry, type CatalogVariant } from "../lib/catalogSetup.js";
+import { DesignLayoutError, designUrl, designsDir, getPrintSize, prepareDesign, renderPrintFile, sanitizeSvg, saveDesign, sideSize } from "../lib/design.js";
 import { toEurCents } from "../lib/money.js";
 import { findEtsySetup, mostUsedId, saveReturnPolicy } from "../lib/etsySetup.js";
 import { findPrintfulSetup } from "../lib/printfulSetup.js";
-import { enqueue } from "../lib/tasks.js";
+import { enqueue, enqueueOnce } from "../lib/tasks.js";
 import type { AgentDefinition, TaskContext } from "./types.js";
 
 const ID = "etsy-pod";
@@ -25,20 +27,71 @@ const IdeasSchema = z.object({
       niche: z.string(),
       slogan: z.string(),
       designBrief: z.string(),
-      title: z.string(),
-      description: z.string(),
-      tags: z.array(z.string()),
+      /** One listing per product the design goes on. */
+      listings: z.array(
+        z.object({
+          product: z.string(),
+          title: z.string(),
+          description: z.string(),
+          tags: z.array(z.string()),
+        }),
+      ),
     }),
   ),
 });
 type Idea = z.infer<typeof IdeasSchema>["ideas"][number];
+type ListingText = Idea["listings"][number];
 
 /** Etsy limits: title ≤ 140 chars, ≤ 13 tags of ≤ 20 chars each. */
-export function normaliseIdea(idea: Idea): Idea {
-  const tags = [...new Set(idea.tags.map((t) => t.toLowerCase().replace(/[^a-z0-9 ]/g, "").trim()))]
+export function normaliseListing<T extends { title: string; tags: string[] }>(l: T): T {
+  const tags = [...new Set(l.tags.map((t) => t.toLowerCase().replace(/[^a-z0-9 ]/g, "").trim()))]
     .filter((t) => t.length > 0 && t.length <= 20)
     .slice(0, 13);
-  return { ...idea, title: idea.title.slice(0, 140).trim(), tags };
+  return { ...l, title: l.title.slice(0, 140).trim(), tags };
+}
+
+/** A variant a listing sells, with the print file made for it. Stored on Listing.variants. */
+export interface ListingVariant extends CatalogVariant {
+  sku: string;
+  file: string;
+}
+
+/** Product types the agent can make now; without a catalog (not looked up yet) only the white mug. */
+function availableTypes(): CatalogEntry[] {
+  const enabled = enabledTypes();
+  if (enabled.length) return enabled;
+  const size = getPrintSize();
+  return [
+    {
+      typeId: "mug",
+      label: "Witte mok",
+      enabled: true,
+      productId: printful.pf.productId,
+      layout: "mug-wrap",
+      taxonomyId: etsy.es.taxonomyId,
+      shippingProfileId: etsy.es.shippingProfileId,
+      shippingProfileTitle: null,
+      variants: printful.pf.variantId
+        ? [{ variantId: printful.pf.variantId, size: "11 oz", color: null, ink: "dark", priceCents: etsy.es.priceCents, costUsd: 0, placement: printful.pf.placement, width: size.width, height: size.height }]
+        : [],
+    },
+  ];
+}
+
+/** Renders the print files a listing needs (one per placement, print size and ink) and returns its variants. */
+async function renderVariants(svg: string, entry: CatalogEntry, listingId: string): Promise<ListingVariant[]> {
+  const files = new Map<string, string>();
+  const out: ListingVariant[] = [];
+  for (const v of entry.variants) {
+    const key = `${v.placement}-${v.width}x${v.height}-${v.ink}`;
+    let file = files.get(key);
+    if (!file) {
+      file = await saveDesign(await renderPrintFile(svg, entry.layout, v.width, v.height, v.ink), `${listingId}-${key}`);
+      files.set(key, file);
+    }
+    out.push({ ...v, sku: skuFor(v.variantId), file });
+  }
+  return out;
 }
 
 async function knowledgeDigest(): Promise<string> {
@@ -65,6 +118,16 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
   const count = Number(payload.count ?? config.pod.listingsPerRun);
   const instructions = typeof payload.instructions === "string" ? payload.instructions.slice(0, 500) : "";
   const digest = await knowledgeDigest();
+  const types = availableTypes().filter((t) => t.variants.length);
+  if (!types.length) throw new Error("No product type is ready: run printful_setup and catalog_setup first.");
+  const perDesign = Math.max(1, Math.min(config.pod.productsPerDesign, types.length));
+  const productList = types
+    .map((t) => {
+      const def = productType(t.typeId);
+      const prices = t.variants.map((v) => v.priceCents);
+      return `- ${t.typeId}: ${def?.noun ?? t.label}. ${def?.facts ?? ""} Price ${Math.min(...prices) / 100}–${Math.max(...prices) / 100} ${etsy.es.currency}.`;
+    })
+    .join("\n");
 
   const { ideas } = await askJson({
     agentId: ID,
@@ -72,41 +135,49 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
     schema: IdeasSchema,
     effort: "medium",
     system:
-      "You run a print-on-demand Etsy shop selling typography designs on 11oz white mugs. " +
-      "You pick specific, under-served gift niches (professions, hobbies, life events) where buyers search for funny or heartfelt mugs. " +
+      "You run a print-on-demand Etsy shop, 'All you can wish': typography designs on mugs, apparel, totes and posters. " +
+      "You pick specific, under-served gift niches (professions, hobbies, life events) where buyers search for funny or heartfelt gifts. " +
       "Never use trademarks, brand names, celebrities, song lyrics, film quotes or copyrighted characters. " +
-      "Write titles and descriptions for real buyers, not keyword lists. Descriptions must state that the mug is printed on demand by a production partner.",
+      "Write titles and descriptions for real buyers, not keyword lists. Each description must state the product facts given, " +
+      "that the item is printed on demand by a production partner, and that sizes/colours are chosen from the menu.",
     prompt:
       `${digest}\n\n${instructions ? `Jarne's direction for this batch (follow it): ${instructions}\n\n` : ""}` +
-      `Propose ${count} new mug designs. For each give: niche, slogan (the exact text printed on the mug, max ~8 words), ` +
-      "designBrief (layout and typographic style), title (≤140 chars), description (3 short paragraphs including size 11oz, dishwasher and microwave safe), " +
-      "and 13 Etsy tags (each ≤20 chars).",
+      `Products you can put a design on:\n${productList}\n\n` +
+      `Propose ${count} new designs. For each give: niche, slogan (the exact printed text, max ~8 words), designBrief (layout and typographic style), ` +
+      `and listings: for ${perDesign} products from the list that suit this design and its buyer (a mug almost always fits; pick apparel, totes and posters ` +
+      "when the joke works worn or on a wall), one listing each with product (its id), title (≤140 chars, starts with the search phrase and names the product), " +
+      "description (3 short paragraphs with the product facts) and 13 Etsy tags (each ≤20 chars).",
   });
 
   const created: string[] = [];
-  for (const raw of ideas.slice(0, count)) {
-    const idea = normaliseIdea(raw);
+  for (const idea of ideas.slice(0, count)) {
     try {
-      const { svg, png } = await designWithRetry(idea);
-      const listing = await db.listing.create({
-        data: {
-          niche: idea.niche,
-          title: idea.title,
-          description: idea.description,
-          tags: idea.tags,
-          priceCents: etsy.es.priceCents,
-          currency: etsy.es.currency,
-          designSvg: svg,
-          designFile: "",
-          printfulVariant: printful.pf.variantId || null,
-        },
-      });
-      const file = await saveDesign(png, listing.id);
-      await db.listing.update({ where: { id: listing.id }, data: { designFile: file } });
-      created.push(listing.id);
-      await log.info(`Draft design created: ${idea.title}`, { listingId: listing.id, niche: idea.niche }, taskId);
+      const { svg } = await designWithRetry(idea);
+      for (const raw of idea.listings.slice(0, perDesign)) {
+        const entry = types.find((t) => t.typeId === raw.product);
+        if (!entry) continue; // a product that isn't available
+        const text: ListingText = normaliseListing(raw);
+        const listing = await db.listing.create({
+          data: {
+            niche: idea.niche,
+            title: text.title,
+            description: text.description,
+            tags: text.tags,
+            productType: entry.typeId,
+            priceCents: Math.min(...entry.variants.map((v) => v.priceCents)),
+            currency: etsy.es.currency,
+            designSvg: svg,
+            designFile: "",
+            printfulVariant: entry.variants[0].variantId,
+          },
+        });
+        const variants = await renderVariants(svg, entry, listing.id);
+        await db.listing.update({ where: { id: listing.id }, data: { variants: variants as unknown as object, designFile: variants[0].file } });
+        created.push(listing.id);
+        await log.info(`Draft design created: ${text.title}`, { listingId: listing.id, niche: idea.niche, product: entry.typeId }, taskId);
+      }
     } catch (err) {
-      await log.warn(`Skipped idea "${idea.title}": ${(err as Error).message}`, undefined, taskId);
+      await log.warn(`Skipped idea "${idea.slogan}": ${(err as Error).message}`, undefined, taskId);
     }
   }
 
@@ -157,9 +228,24 @@ async function designWithRetry(idea: Idea): Promise<{ svg: string; png: Buffer }
 
 const MIN_MUG_PHOTOS = 2;
 
-/** Uploads Printful mug photos to an Etsy listing from `startRank` on. Returns how many were added. */
+const MAX_MOCKUPS = 8;
+
+/** Which mockups to make: one variant per colour (up to the type's limit), grouped by print file. */
+export function mockupGroups(variants: ListingVariant[], colors: number): { file: string; placement: string; width: number; height: number; variantIds: number[] }[] {
+  const perColor: ListingVariant[] = [];
+  for (const v of variants) if (!perColor.some((x) => x.color === v.color)) perColor.push(v);
+  const groups = new Map<string, { file: string; placement: string; width: number; height: number; variantIds: number[] }>();
+  for (const v of perColor.slice(0, Math.max(1, colors))) {
+    const g = groups.get(v.file) ?? { file: v.file, placement: v.placement, width: v.width, height: v.height, variantIds: [] };
+    g.variantIds.push(v.variantId);
+    groups.set(v.file, g);
+  }
+  return [...groups.values()];
+}
+
+/** Uploads Printful product photos to an Etsy listing from `startRank` on. Returns how many were added. */
 async function addMockups(
-  listing: { title: string; designFile: string },
+  listing: { title: string; designFile: string; productType: string; variants: unknown },
   etsyId: string,
   startRank: number,
   log: TaskContext["log"],
@@ -167,16 +253,34 @@ async function addMockups(
 ): Promise<number> {
   if (!printful.isPrintfulConfigured() || config.publicUrl.includes("localhost")) return 0; // Printful needs a public URL
   try {
-    const photos = (await printful.generateMockup(designUrl(listing.designFile), getPrintSize())).slice(0, 8);
+    const variants = (listing.variants as ListingVariant[] | null) ?? [];
+    const entry = catalogEntry(listing.productType);
+    let photos: string[];
+    if (variants.length && entry) {
+      const groups = mockupGroups(variants, productType(listing.productType)?.mockupColors ?? 1);
+      const each = Math.max(2, Math.ceil(MAX_MOCKUPS / groups.length));
+      photos = [];
+      for (const g of groups) {
+        const urls = await printful.generateMockup(designUrl(g.file), { width: g.width, height: g.height }, {
+          productId: entry.productId,
+          variantIds: g.variantIds,
+          placement: g.placement,
+        });
+        photos.push(...urls.slice(0, each));
+      }
+      photos = photos.slice(0, MAX_MOCKUPS);
+    } else {
+      photos = (await printful.generateMockup(designUrl(listing.designFile), getPrintSize())).slice(0, MAX_MOCKUPS);
+    }
     let rank = startRank;
     for (const url of photos) {
       const img = Buffer.from(await (await fetch(url)).arrayBuffer());
       await etsy.uploadListingImage(etsyId, img, rank++);
     }
     if (photos.length < MIN_MUG_PHOTOS) {
-      await log.warn(`Slechts ${photos.length} mokfoto van Printful voor ${listing.title}`, { etsyId }, taskId);
+      await log.warn(`Slechts ${photos.length} productfoto van Printful voor ${listing.title}`, { etsyId }, taskId);
     } else {
-      await log.info(`${photos.length} mokfoto's geüpload voor ${listing.title}`, { etsyId }, taskId);
+      await log.info(`${photos.length} productfoto's geüpload voor ${listing.title}`, { etsyId }, taskId);
     }
     return photos.length;
   } catch (err) {
@@ -232,24 +336,42 @@ async function uploadListings(payload: Record<string, unknown>, { log, taskId }:
   const uploaded: string[] = [];
   for (const id of ids) {
     const listing = await db.listing.findUniqueOrThrow({ where: { id } });
-    if (listing.etsyListingId) continue; // already uploaded on an earlier attempt
-    const draft = await etsy.createDraftListing({
-      title: listing.title,
-      description: listing.description,
-      // The current shop price, also for drafts made before it changed.
-      priceCents: etsy.es.priceCents,
-      tags: listing.tags,
-    });
-    const etsyId = String(draft.listing_id);
-    await db.listing.update({
-      where: { id },
-      data: { etsyListingId: etsyId, status: "uploaded", priceCents: etsy.es.priceCents, currency: etsy.es.currency },
-    });
+    if (listing.status !== "draft") continue; // already on Etsy
+    const variants = (listing.variants as ListingVariant[] | null) ?? [];
+    const entry = catalogEntry(listing.productType);
+    if (variants.length && (!entry || !entry.enabled)) {
+      await log.warn(`Niet geüpload: ${listing.title} (${entry?.reason ?? `producttype ${listing.productType} staat uit`})`, undefined, taskId);
+      continue;
+    }
+    // A retry resumes a listing that reached Etsy but didn't get its sizes or photos yet.
+    let etsyId = listing.etsyListingId;
+    if (!etsyId) {
+      const draft = await etsy.createDraftListing({
+        title: listing.title,
+        description: listing.description,
+        // The current price, also for drafts made before it changed.
+        priceCents: variants.length ? Math.min(...variants.map((v) => v.priceCents)) : etsy.es.priceCents,
+        tags: listing.tags,
+        taxonomyId: entry?.taxonomyId ?? undefined,
+        shippingProfileId: entry?.shippingProfileId ?? undefined,
+      });
+      etsyId = String(draft.listing_id);
+      await db.listing.update({ where: { id }, data: { etsyListingId: etsyId } });
+    }
+    if (variants.length) await etsy.updateListingInventory(etsyId, buildInventory(variants, etsy.es.readinessStateId));
 
-    // Printful mug photos first; the flat design always goes last.
+    // Printful product photos first; the flat design always goes last.
     const rank = 1 + (await addMockups(listing, etsyId, 1, log, taskId));
     const design = await readFile(path.join(designsDir(), listing.designFile));
     await etsy.uploadListingImage(etsyId, design, rank);
+    await db.listing.update({
+      where: { id },
+      data: {
+        status: "uploaded",
+        priceCents: variants.length ? Math.min(...variants.map((v) => v.priceCents)) : etsy.es.priceCents,
+        currency: etsy.es.currency,
+      },
+    });
     uploaded.push(id);
     // Heartbeat: waiting on Printful's rate limit must not make the task look stuck.
     if (taskId) await db.task.update({ where: { id: taskId }, data: { status: "running" } });
@@ -379,6 +501,29 @@ async function fixReturnPolicy(_payload: Record<string, unknown>, { log, taskId 
   return { policyId, fixed };
 }
 
+/** Looks up the product range (Printful variants, Etsy categories and shipping profiles) and reports it. */
+async function catalogSetup(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
+  if (!printful.hasPrintfulToken() || !etsy.isEtsyConfigured() || !(await etsy.isEtsyConnected())) {
+    return { skipped: "Printful or Etsy not connected" };
+  }
+  const entries = await findCatalog();
+  const on = entries.filter((e) => e.enabled);
+  const lines = entries.map((e) => {
+    if (!e.enabled) return `✗ ${e.label}: ${e.reason}`;
+    const margins = e.variants.map((v) => estimatedProfitCents(v.priceCents, v.costUsd));
+    return `✓ ${e.label}: ${e.variants.length} varianten, winst ca. €${(Math.min(...margins) / 100).toFixed(2)}–${(Math.max(...margins) / 100).toFixed(2)} per stuk`;
+  });
+  await log.info(`Productaanbod: ${on.length} van ${entries.length} soorten actief\n${lines.join("\n")}`, { entries: entries.map((e) => ({ type: e.typeId, enabled: e.enabled, reason: e.reason })) }, taskId);
+  return { enabled: on.map((e) => e.typeId), off: entries.filter((e) => !e.enabled).map((e) => e.typeId) };
+}
+
+/** Rough profit per item in EUR cents: price minus Printful's cost and Etsy's fees (6.5% + ~4% payment + €0.30 + $0.20 listing). */
+export function estimatedProfitCents(priceCents: number, costUsd: number): number {
+  const cost = costUsd * 100 * config.budget.usdToEur;
+  const fees = priceCents * 0.105 + 30 + 20 * config.budget.usdToEur;
+  return Math.round(priceCents - cost - fees);
+}
+
 async function etsySetup(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
   if (!etsy.isEtsyConfigured() || !(await etsy.isEtsyConnected())) return { skipped: "etsy not connected" };
   const s = await findEtsySetup();
@@ -391,6 +536,7 @@ async function etsySetup(_payload: Record<string, unknown>, { log, taskId }: Tas
     s,
     taskId,
   );
+  await enqueueOnce(ID, "catalog_setup");
   return s;
 }
 
@@ -402,6 +548,7 @@ async function printfulSetup(_payload: Record<string, unknown>, { log, taskId }:
     s,
     taskId,
   );
+  await enqueueOnce(ID, "catalog_setup");
   return s;
 }
 
@@ -436,6 +583,32 @@ async function syncSales(_payload: Record<string, unknown>, { log, taskId }: Tas
   return { newSales };
 }
 
+/**
+ * Printful order lines for an Etsy receipt. The buyer's size and colour come from the SKU
+ * ("PF-<variant>"); listings without variants use their one variant. Listings that aren't ours
+ * (placed by hand, fulfilled by Printful's own Etsy integration) are skipped.
+ */
+export function orderItemsFor(
+  transactions: etsy.EtsyReceipt["transactions"],
+  listings: { etsyListingId: string | null; printfulVariant: number | null; designFile: string; variants: unknown; title: string }[],
+): { variantId: number; quantity: number; fileUrl: string; placement?: string }[] {
+  const items: { variantId: number; quantity: number; fileUrl: string; placement?: string }[] = [];
+  for (const t of transactions) {
+    const listing = listings.find((l) => l.etsyListingId === String(t.listing_id));
+    if (!listing?.printfulVariant) continue; // not one of ours
+    const variants = (listing.variants as ListingVariant[] | null) ?? [];
+    if (!variants.length) {
+      items.push({ variantId: listing.printfulVariant, quantity: t.quantity, fileUrl: designUrl(listing.designFile) });
+      continue;
+    }
+    const wanted = variantFromSku(t.sku);
+    const v = variants.find((x) => x.variantId === wanted) ?? (variants.length === 1 ? variants[0] : undefined);
+    if (!v) throw new Error(`Unknown size/colour (SKU "${t.sku ?? ""}") for "${listing.title}": fulfil this order by hand`);
+    items.push({ variantId: v.variantId, quantity: t.quantity, fileUrl: designUrl(v.file), placement: v.placement });
+  }
+  return items;
+}
+
 async function fulfilReceipt(payload: Record<string, unknown>, { log, taskId }: TaskContext) {
   const receiptId = String(payload.receiptId);
   const sale = await db.sale.findUniqueOrThrow({
@@ -443,12 +616,8 @@ async function fulfilReceipt(payload: Record<string, unknown>, { log, taskId }: 
   });
   const r = sale.data as unknown as etsy.EtsyReceipt;
 
-  const items: { variantId: number; quantity: number; fileUrl: string }[] = [];
-  for (const t of r.transactions) {
-    const listing = await db.listing.findUnique({ where: { etsyListingId: String(t.listing_id) } });
-    if (!listing?.printfulVariant) continue; // not one of ours
-    items.push({ variantId: listing.printfulVariant, quantity: t.quantity, fileUrl: designUrl(listing.designFile) });
-  }
+  const listings = await db.listing.findMany({ where: { etsyListingId: { in: r.transactions.map((t) => String(t.listing_id)) } } });
+  const items = orderItemsFor(r.transactions, listings);
   if (items.length === 0) return { skipped: "no POD items" };
   if (config.dryRun || !printful.isPrintfulConfigured()) {
     await log.warn(`Dry run: receipt ${receiptId} needs fulfilment by hand`, { items }, taskId);
@@ -511,11 +680,11 @@ export const etsyPodAgent: AgentDefinition = {
   name: "Etsy-agent",
   phase: 1,
   businessId: "etsy-pod",
-  chatTasks: ["create_listings", "upload_listings", "sync_sales", "sync_listings", "printful_setup", "etsy_setup", "add_photos", "fix_return_policy"],
+  chatTasks: ["create_listings", "upload_listings", "sync_sales", "sync_listings", "printful_setup", "etsy_setup", "add_photos", "fix_return_policy", "catalog_setup"],
   description: "Zoekt cadeau-niches, ontwerpt mokken, zet ze op Etsy en maakt van Etsy-verkopen Printful-bestellingen.",
   dependsOn: ["database", "claude", "etsy", "printful"],
   taskInfo: {
-    create_listings: "Niches kiezen, listingteksten schrijven en printklare ontwerpen maken (lokale concepten)",
+    create_listings: "Niches kiezen en per ontwerp listings maken voor meerdere producten (mok, T-shirt, hoodie, totebag, poster), met printbestanden per maat en kleur",
     upload_listings: "Concepten en mockups naar Etsy uploaden, daarna akkoord vragen om te publiceren",
     publish_listings: "Goedgekeurde concepten live zetten op Etsy (kost $0,20 listingkosten per stuk)",
     sync_sales: "Nieuwe betaalde Etsy-bestellingen ophalen als verkopen",
@@ -523,6 +692,7 @@ export const etsyPodAgent: AgentDefinition = {
     printful_setup: "Bij Printful de API-winkel, de 11 oz mok en de exacte printmaat opzoeken en opslaan",
     etsy_setup: "Bij Etsy de munt, het verzendprofiel, het retourbeleid, de categorie Mokken en de productiepartner opzoeken",
     add_photos: "Listings op Etsy met te weinig mokfoto's aanvullen met Printful-foto's",
+    catalog_setup: "Het productaanbod opzoeken: per product (mokken, T-shirts, hoodies, totebags, posters) de Printful-varianten en de Etsy-categorie en het verzendprofiel",
     fix_return_policy: "Het retourbeleid van de winkel op alle listings zetten die er nog geen hebben (live en concept)",
     fulfil_receipt: "De Printful-bestelling maken voor een Etsy-verkoop (automatisch bevestigd onder de uitgavelimiet)",
   },
@@ -537,5 +707,6 @@ export const etsyPodAgent: AgentDefinition = {
     fulfil_receipt: fulfilReceipt,
     add_photos: addPhotos,
     fix_return_policy: fixReturnPolicy,
+    catalog_setup: catalogSetup,
   },
 };

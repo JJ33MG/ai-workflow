@@ -122,13 +122,8 @@ function withViewBox(svg: string, [x, y, w, h]: number[], width: number, height:
   );
 }
 
-/**
- * Redraws the design so its content fills one side of the mug: crops the SVG's viewBox to
- * what is actually drawn, then renders that at the largest size that fits. Vector redraw,
- * so it stays sharp. Older designs drawn as two copies side by side use their left copy.
- */
-export async function fitToSide(svg: string): Promise<Buffer> {
-  const side = sideSize();
+/** The drawn part of an SVG, in its own viewBox units (left copy only for old two-copy designs). */
+async function contentBox(svg: string): Promise<[number, number, number, number]> {
   const [vx, vy, vw, vh] = viewBoxOf(svg);
   const scale = 2; // render the original at 2 px per unit to measure it precisely
   // Default density: one SVG pixel per output pixel, so the width/height set here is the real size.
@@ -153,15 +148,63 @@ export async function fitToSide(svg: string): Promise<Buffer> {
   }
   if (bottom < 0) throw new Error("Design is empty");
   const pad = 2 / scale; // a little air around strokes
-  const box = [vx + left / scale - pad, vy + top / scale - pad, (right - left + 1) / scale + 2 * pad, (bottom - top + 1) / scale + 2 * pad];
-  const fit = Math.min((side.width * FILL_WIDTH) / box[2], (side.height * FILL_HEIGHT) / box[3]);
-  const w = Math.round(box[2] * fit);
-  const h = Math.round(box[3] * fit);
+  return [vx + left / scale - pad, vy + top / scale - pad, (right - left + 1) / scale + 2 * pad, (bottom - top + 1) / scale + 2 * pad];
+}
+
+/**
+ * Draws the design's content as large as fits in maxW × maxH (vector redraw, so it stays sharp)
+ * and places it on a transparent canvas of width × height at the given top (or centred).
+ */
+async function placeContent(svg: string, width: number, height: number, maxW: number, maxH: number, top: number | "center"): Promise<Buffer> {
+  const box = await contentBox(svg);
+  const fit = Math.min(maxW / box[2], maxH / box[3]);
+  const w = Math.max(1, Math.round(box[2] * fit));
+  const h = Math.max(1, Math.round(box[3] * fit));
   const content = await sharp(Buffer.from(withViewBox(svg, box, w, h)), { density: 300 }).resize(w, h).png().toBuffer();
-  return sharp({ create: { width: side.width, height: side.height, channels: 4, background: TRANSPARENT } })
-    .composite([{ input: content, left: Math.round((side.width - w) / 2), top: Math.round((side.height - h) / 2) }])
+  return sharp({ create: { width, height, channels: 4, background: TRANSPARENT }, limitInputPixels: false })
+    .composite([{ input: content, left: Math.round((width - w) / 2), top: top === "center" ? Math.round((height - h) / 2) : Math.round(top) }])
     .png()
     .toBuffer();
+}
+
+/**
+ * Redraws the design so its content fills one side of the mug: crops the SVG's viewBox to
+ * what is actually drawn, then renders that at the largest size that fits. Vector redraw,
+ * so it stays sharp. Older designs drawn as two copies side by side use their left copy.
+ */
+export async function fitToSide(svg: string, side = sideSize()): Promise<Buffer> {
+  return placeContent(svg, side.width, side.height, side.width * FILL_WIDTH, side.height * FILL_HEIGHT, "center");
+}
+
+/**
+ * Light ink for dark products: every dark colour in the design (text, lines) becomes white;
+ * lighter accent colours stay. Designs are made with dark ink for white products.
+ */
+export function lightInk(svg: string): string {
+  const dark = (hex: string) => {
+    const h = hex.length === 4 ? hex.slice(1).split("").map((c) => c + c).join("") : hex.slice(1);
+    const n = parseInt(h, 16);
+    const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => c / 255);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.35;
+  };
+  return svg
+    .replace(/#(?:[0-9a-f]{6}|[0-9a-f]{3})\b/gi, (hex) => (dark(hex) ? "#ffffff" : hex))
+    .replace(/((?:fill|stroke|stop-color|color)\s*[:=]\s*["']?)black\b/gi, "$1#ffffff");
+}
+
+/** One print file for a product: the design laid out for its print area, in dark or light ink. */
+export async function renderPrintFile(
+  svg: string,
+  layout: "mug-wrap" | "chest" | "center",
+  width: number,
+  height: number,
+  ink: "dark" | "light",
+): Promise<Buffer> {
+  const art = ink === "light" ? lightInk(svg) : svg;
+  if (layout === "mug-wrap") return mirrorSides(await fitToSide(art, { width: Math.round(width / 2), height }));
+  // On a shirt the design sits on the chest: wide, not too tall, near the top of the print area.
+  if (layout === "chest") return placeContent(art, width, height, width * 0.8, height * 0.4, height * 0.06);
+  return placeContent(art, width, height, width * 0.8, height * 0.7, "center");
 }
 
 /** Renders one side, checks nothing is cut off, fills the mug face with it, and lays it out twice. */

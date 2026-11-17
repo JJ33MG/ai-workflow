@@ -172,6 +172,14 @@ export interface DraftListingInput {
   description: string;
   priceCents: number;
   tags: string[];
+  /** Category and shipping profile of the product type; default: the mug's. */
+  taxonomyId?: number;
+  shippingProfileId?: number;
+}
+
+/** Sizes, colours, prices and SKUs of a listing (body from lib/catalog.ts buildInventory). */
+export async function updateListingInventory(listingId: string, inventory: unknown): Promise<void> {
+  await etsy("PUT", `/listings/${listingId}/inventory`, inventory);
 }
 
 export async function createDraftListing(input: DraftListingInput): Promise<{ listing_id: number }> {
@@ -182,8 +190,8 @@ export async function createDraftListing(input: DraftListingInput): Promise<{ li
     price: input.priceCents / 100,
     who_made: "i_did",
     when_made: "made_to_order",
-    taxonomy_id: es.taxonomyId,
-    shipping_profile_id: es.shippingProfileId,
+    taxonomy_id: input.taxonomyId ?? es.taxonomyId,
+    shipping_profile_id: input.shippingProfileId ?? es.shippingProfileId,
     tags: input.tags,
     type: "physical",
     is_supply: false,
@@ -246,7 +254,8 @@ export interface EtsyReceipt {
   country_iso: string;
   create_timestamp: number;
   grandtotal: { amount: number; divisor: number; currency_code: string };
-  transactions: { listing_id: number; quantity: number; transaction_id: number }[];
+  /** sku: "PF-<Printful variant id>" for listings with sizes or colours (see lib/catalog.ts). */
+  transactions: { listing_id: number; quantity: number; transaction_id: number; sku?: string | null }[];
 }
 
 export async function getPaidReceiptsSince(sinceEpochSeconds: number): Promise<EtsyReceipt[]> {

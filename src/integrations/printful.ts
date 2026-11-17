@@ -50,7 +50,7 @@ async function printful<T>(method: string, path: string, body?: unknown): Promis
 
 export interface CatalogProduct {
   product: { id: number; title: string; type: string };
-  variants: { id: number; name: string; size: string; color: string; price: string }[];
+  variants: { id: number; name: string; size: string; color: string; color_code?: string | null; price: string }[];
 }
 
 export const getCatalogProduct = (productId: number) => printful<CatalogProduct>("GET", `/products/${productId}`);
@@ -81,8 +81,8 @@ export const getPrintfiles = (productId: number) =>
 type MockupTask = Record<string, unknown>;
 
 /** Starts one mockup task and polls until done (max ~2 min). Returns every photo, extra angles included. */
-async function runMockupTask(body: MockupTask): Promise<string[]> {
-  const { task_key } = await printful<{ task_key: string }>("POST", `/mockup-generator/create-task/${pf.productId}`, body);
+async function runMockupTask(productId: number, body: MockupTask): Promise<string[]> {
+  const { task_key } = await printful<{ task_key: string }>("POST", `/mockup-generator/create-task/${productId}`, body);
   for (let i = 0; i < 24; i++) {
     await new Promise((r) => setTimeout(r, 5000));
     const task = await printful<{
@@ -105,19 +105,23 @@ async function runMockupTask(body: MockupTask): Promise<string[]> {
  * right, ...); if that request is refused or yields fewer than two photos, the plain mockup is
  * added. A listing should never go up with a single mug photo.
  */
-export async function generateMockup(designUrl: string, size: { width: number; height: number }): Promise<string[]> {
+export async function generateMockup(
+  designUrl: string,
+  size: { width: number; height: number },
+  target: { productId: number; variantIds: number[]; placement: string } = { productId: pf.productId, variantIds: [pf.variantId], placement: pf.placement },
+): Promise<string[]> {
   const base: MockupTask = {
-    variant_ids: [pf.variantId],
+    variant_ids: target.variantIds,
     format: "jpg",
     files: [
       {
-        placement: pf.placement,
+        placement: target.placement,
         image_url: designUrl,
         position: { area_width: size.width, area_height: size.height, width: size.width, height: size.height, top: 0, left: 0 },
       },
     ],
   };
-  const info = await getPrintfiles(pf.productId).catch(() => null);
+  const info = await getPrintfiles(target.productId).catch(() => null);
   const views: MockupTask = {};
   if (info?.options?.length) views.options = info.options;
   if (info?.option_groups?.length) views.option_groups = info.option_groups;
@@ -125,14 +129,14 @@ export async function generateMockup(designUrl: string, size: { width: number; h
   let urls: string[] = [];
   let viewError: Error | null = null;
   if (Object.keys(views).length) {
-    urls = await runMockupTask({ ...base, ...views }).catch((err: Error) => {
+    urls = await runMockupTask(target.productId, { ...base, ...views }).catch((err: Error) => {
       viewError = err;
       return [];
     });
   }
   if (urls.length < 2) {
     try {
-      urls = [...urls, ...(await runMockupTask(base))];
+      urls = [...urls, ...(await runMockupTask(target.productId, base))];
     } catch (err) {
       if (!urls.length) throw viewError ?? err;
     }
@@ -160,7 +164,8 @@ export interface DraftOrder {
 export async function createDraftOrder(input: {
   externalId: string;
   recipient: OrderRecipient;
-  items: { variantId: number; quantity: number; fileUrl: string }[];
+  /** placement: the print file's placement ("default" for mugs, "front" for shirts); defaults to the mug's. */
+  items: { variantId: number; quantity: number; fileUrl: string; placement?: string }[];
 }): Promise<DraftOrder> {
   return printful<DraftOrder>("POST", "/orders", {
     external_id: input.externalId,
@@ -168,7 +173,7 @@ export async function createDraftOrder(input: {
     items: input.items.map((i) => ({
       variant_id: i.variantId,
       quantity: i.quantity,
-      files: [{ type: pf.placement, url: i.fileUrl }],
+      files: [{ type: i.placement ?? pf.placement, url: i.fileUrl }],
     })),
   });
 }

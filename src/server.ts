@@ -14,6 +14,7 @@ import * as etsy from "./integrations/etsy.js";
 import * as meta from "./integrations/meta.js";
 import * as pinterest from "./integrations/pinterest.js";
 import { decide } from "./lib/approvals.js";
+import { loadCatalog } from "./lib/catalogSetup.js";
 import { loadEtsySetup } from "./lib/etsySetup.js";
 import { agentLogger } from "./lib/logger.js";
 import { loadPrintfulSetup } from "./lib/printfulSetup.js";
@@ -285,6 +286,8 @@ async function main() {
   // Printful product and print size: loaded if found before, otherwise looked up in the background.
   if (!(await loadPrintfulSetup()) && hasPrintfulToken()) await enqueueOnce("etsy-pod", "printful_setup");
   if (!(await loadEtsySetup()) && (await etsy.isEtsyConnected())) await enqueueOnce("etsy-pod", "etsy_setup");
+  // Product range (mugs, shirts, totes …): loaded if found before, otherwise looked up once both shops are known.
+  if (!(await loadCatalog()) && hasPrintfulToken() && (await etsy.isEtsyConnected())) await enqueueOnce("etsy-pod", "catalog_setup");
   const stopScheduler = startScheduler();
   const stopPolling = startCommandPolling(handleCommand);
   const server = app.listen(config.port, () => {

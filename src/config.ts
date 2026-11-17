@@ -98,6 +98,8 @@ export const config = {
     priceCents: Math.round(num("POD_PRICE", 21.99) * 100), // 11 oz mug
     currency: str("POD_CURRENCY", "EUR"),
     listingsPerRun: num("POD_LISTINGS_PER_RUN", 5),
+    // Each design goes on up to this many products (mug, T-shirt, tote …), each its own listing.
+    productsPerDesign: num("POD_PRODUCTS_PER_DESIGN", 3),
     designWidth: num("POD_DESIGN_WIDTH", 2700),
     designHeight: num("POD_DESIGN_HEIGHT", 1050),
   },

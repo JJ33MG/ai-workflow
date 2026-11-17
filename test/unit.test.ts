@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { formatBriefing, type BriefingData } from "../src/agents/ceo.js";
 import { retryDelayMs } from "../src/agents/debug.js";
-import { normaliseIdea } from "../src/agents/etsyPod.js";
+import { normaliseListing } from "../src/agents/etsyPod.js";
 import { moneyToCents } from "../src/integrations/etsy.js";
 import { usageCostUsdCents } from "../src/lib/claude.js";
 import { DesignLayoutError, prepareDesign, sanitizeSvg } from "../src/lib/design.js";
@@ -34,12 +34,10 @@ describe("diagnose", () => {
   });
 });
 
-describe("normaliseIdea", () => {
+describe("normaliseListing", () => {
   it("enforces Etsy title and tag limits", () => {
-    const idea = normaliseIdea({
-      niche: "nurses",
-      slogan: "x",
-      designBrief: "x",
+    const idea = normaliseListing({
+      product: "mug",
       title: "t".repeat(200),
       description: "d",
       tags: ["Nurse Gift!", "nurse gift", "a".repeat(21), "", ...Array.from({ length: 20 }, (_, i) => `tag ${i}`)],

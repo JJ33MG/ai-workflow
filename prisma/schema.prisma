@@ -144,7 +144,11 @@ model Listing {
   /// Main photo from Etsy, for listings the agent didn't design itself.
   imageUrl         String?
   etsyListingId    String?  @unique
-  /// Etsy's own counters, refreshed by the hourly listing sync; the marketing agent measures with them.
+  /// Product type from src/lib/catalog.ts (mug, tshirt, hoodie …).
+  productType      String   @default("mug")
+  /// The variants this listing sells: [{ variantId, sku, size, color, priceCents, placement, file }].
+  variants         Json?
+  /// Unused: Etsy's API has no view counts (kept so old rows stay valid).
   views            Int      @default(0)
   favorites        Int      @default(0)
   printfulVariant  Int?
