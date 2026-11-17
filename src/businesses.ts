@@ -36,6 +36,14 @@ export interface BusinessDefinition {
   /** Deliberately on hold: shown, but not part of the current roadmap. */
   parked?: boolean;
   products?: () => Promise<Product[]>;
+  /** Exact count per status over all products (products() shows only the newest). */
+  productCounts?: () => Promise<Record<string, number>>;
+}
+
+function countBy(rows: { status: string }[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const r of rows) out[r.status] = (out[r.status] ?? 0) + 1;
+  return out;
 }
 
 export const BUSINESSES: BusinessDefinition[] = [
@@ -48,8 +56,9 @@ export const BUSINESSES: BusinessDefinition[] = [
     channels: ["Etsy", "Printful"],
     targetCents: [1_000_00, 2_000_00],
     plan: "Niches zoeken, ontwerpen en listings maken, publiceren via Etsy, laten drukken door Printful.",
+    productCounts: async () => countBy(await db.listing.findMany({ select: { status: true } })),
     products: async () => {
-      const listings = await db.listing.findMany({ orderBy: { createdAt: "desc" }, take: 60 });
+      const listings = await db.listing.findMany({ orderBy: { createdAt: "desc" }, take: 120 });
       const sales = await db.sale.findMany({ where: { source: "etsy" }, select: { data: true } });
       const soldByListing = new Map<string, number>();
       for (const s of sales) {
@@ -80,6 +89,7 @@ export const BUSINESSES: BusinessDefinition[] = [
     plan:
       "Thema's kiezen, kleurplaten tekenen, het printklare binnenwerk en de omslag maken, plus titel, beschrijving en zoekwoorden. " +
       "Jarne uploadt elk boek in KDP (geen koppeling mogelijk; KDP staat een paar nieuwe boeken per dag toe).",
+    productCounts: async () => countBy(await db.coloringBook.findMany({ select: { status: true } })),
     products: async () => {
       const books = await db.coloringBook.findMany({ orderBy: { createdAt: "desc" }, take: 40 });
       return Promise.all(

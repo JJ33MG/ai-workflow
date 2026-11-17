@@ -231,8 +231,9 @@ export async function buildDashboard(now = new Date()) {
         ? await db.sale.count({ where: { agentId: { in: ids }, occurredAt: { gte: since30d } } })
         : 0;
       const products = b.products && ids.length ? await b.products() : [];
-      const productsByStatus: Record<string, number> = {};
-      for (const p of products) productsByStatus[p.status] = (productsByStatus[p.status] ?? 0) + 1;
+      let productsByStatus: Record<string, number> = {};
+      if (b.productCounts && ids.length) productsByStatus = await b.productCounts();
+      else for (const p of products) productsByStatus[p.status] = (productsByStatus[p.status] ?? 0) + 1;
       const worst = team.some((a) => a.severity === "error") ? "error" : team.some((a) => a.severity === "warn") ? "warn" : "ok";
       const revenueMonth = inMonth(salesMonth);
       const costsMonthB = inMonth(costsMonth);
@@ -253,7 +254,7 @@ export async function buildDashboard(now = new Date()) {
         profitMonth: revenueMonth - costsMonthB,
         salesMonth: salesMonth.filter((s) => ids.includes(s.agentId)).length,
         targetCents: b.targetCents,
-        products: { total: products.length, byStatus: productsByStatus },
+        products: { total: Object.values(productsByStatus).reduce((n, v) => n + v, 0), byStatus: productsByStatus },
         openProblems: problems.filter((p) => ids.includes(p.agentId)).length,
       };
     }),

@@ -21,4 +21,6 @@ export interface AgentDefinition {
   taskInfo: Record<string, string>;
   /** Tasks the agent may start itself when asked in chat. Anything that spends money is left out. */
   chatTasks: string[];
+  /** Tries per task type when it differs from the default (e.g. 1 for work that costs money each try). */
+  maxAttempts?: Record<string, number>;
 }

@@ -257,6 +257,8 @@ export const kdpColoringAgent: AgentDefinition = {
   description: "Bedenkt en tekent kinderkleurboeken, controleert elke pagina en maakt de printbestanden voor Amazon KDP.",
   dependsOn: ["database", "claude"],
   chatTasks: ["create_book"],
+  // Every try plans and draws a whole new book; a failed book is reported, not silently paid for again.
+  maxAttempts: { create_book: 1 },
   handlers: { create_book: createBook },
   taskInfo: {
     create_book: "Een kinderkleurboek bedenken, elke pagina tekenen en controleren, het binnenwerk en de omslag maken voor KDP",

@@ -66,7 +66,7 @@ export function toolsFor(agentId: string): ChatTool[] {
         if (typeof input.instructions === "string" && input.instructions.trim()) {
           payload.instructions = input.instructions.trim().slice(0, 500);
         }
-        const queued = await enqueue(target, task, payload);
+        const queued = await enqueue(target, task, payload, { maxAttempts: agents.get(target)?.maxAttempts?.[task] });
         await log.info(`Chat: queued ${target}:${task}`, payload);
         return `Queued ${target}:${task} (task ${queued.id}). It starts within 15 seconds.`;
       },
