@@ -175,6 +175,17 @@ export interface DraftListingInput {
   /** Category and shipping profile of the product type; default: the mug's. */
   taxonomyId?: number;
   shippingProfileId?: number;
+  /** A digital download: no shipping, processing profile or production partner. */
+  digital?: boolean;
+}
+
+/** Attaches a file the buyer downloads after paying (digital listings; 5 files max, 20 MB each). */
+export async function uploadListingFile(listingId: string, data: Buffer, name: string, rank: number): Promise<void> {
+  const form = new FormData();
+  form.append("file", new Blob([new Uint8Array(data)], { type: "image/jpeg" }), name);
+  form.append("name", name);
+  form.append("rank", String(rank));
+  await etsy("POST", `/shops/${await shopId()}/listings/${listingId}/files`, form);
 }
 
 /** Sizes, colours, prices and SKUs of a listing (body from lib/catalog.ts buildInventory). */
@@ -196,6 +207,13 @@ export async function createDraftListing(input: DraftListingInput): Promise<{ li
     type: "physical",
     is_supply: false,
   };
+  if (input.digital) {
+    body.type = "download";
+    body.when_made = "2020_2026";
+    delete body.shipping_profile_id;
+    if (es.returnPolicyId) body.return_policy_id = es.returnPolicyId;
+    return etsy("POST", `/shops/${await shopId()}/listings`, body);
+  }
   // Etsy requires a processing profile ("readiness state") on physical listings.
   body.readiness_state_id = es.readinessStateId;
   if (es.returnPolicyId) body.return_policy_id = es.returnPolicyId;

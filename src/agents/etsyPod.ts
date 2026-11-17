@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import sharp from "sharp";
 import { z } from "zod";
 import { config } from "../config.js";
 import { db, getSetting, setSetting } from "../db.js";
@@ -8,9 +9,9 @@ import * as printful from "../integrations/printful.js";
 import { registerApprovalExecutor, requestApproval } from "../lib/approvals.js";
 import { recordCost } from "../lib/budget.js";
 import { askJson, askText } from "../lib/claude.js";
-import { buildInventory, productType, skuFor, variantFromSku } from "../lib/catalog.js";
+import { PRINTABLE, buildInventory, productType, skuFor, variantFromSku } from "../lib/catalog.js";
 import { catalogEntry, enabledTypes, findCatalog, type CatalogEntry, type CatalogVariant } from "../lib/catalogSetup.js";
-import { DesignLayoutError, designUrl, designsDir, getPrintSize, prepareDesign, renderPrintFile, sanitizeSvg, saveDesign, sideSize } from "../lib/design.js";
+import { DesignLayoutError, designUrl, designsDir, getPrintSize, prepareDesign, renderPrintFile, renderPrintable, sanitizeSvg, saveDesign, sideSize } from "../lib/design.js";
 import { toEurCents } from "../lib/money.js";
 import { findEtsySetup, mostUsedId, saveReturnPolicy } from "../lib/etsySetup.js";
 import { findPrintfulSetup } from "../lib/printfulSetup.js";
@@ -53,6 +54,14 @@ export function normaliseListing<T extends { title: string; tags: string[] }>(l:
 /** A variant a listing sells, with the print file made for it. Stored on Listing.variants. */
 export interface ListingVariant extends CatalogVariant {
   sku: string;
+  file: string;
+}
+
+/** A file of a printable wall-art listing, stored on Listing.variants. */
+export interface DigitalFile {
+  name: string;
+  width: number;
+  height: number;
   file: string;
 }
 
@@ -118,16 +127,21 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
   const count = Number(payload.count ?? config.pod.listingsPerRun);
   const instructions = typeof payload.instructions === "string" ? payload.instructions.slice(0, 500) : "";
   const digest = await knowledgeDigest();
-  const types = availableTypes().filter((t) => t.variants.length);
+  const types = availableTypes().filter((t) => t.variants.length || t.digital);
   if (!types.length) throw new Error("No product type is ready: run printful_setup and catalog_setup first.");
-  const perDesign = Math.max(1, Math.min(config.pod.productsPerDesign, types.length));
-  const productList = types
+  const physical = types.filter((t) => !t.digital);
+  const printable = types.find((t) => t.digital);
+  const perDesign = Math.max(1, Math.min(config.pod.productsPerDesign, physical.length));
+  const productList = physical
     .map((t) => {
       const def = productType(t.typeId);
       const prices = t.variants.map((v) => v.priceCents);
       return `- ${t.typeId}: ${def?.noun ?? t.label}. ${def?.facts ?? ""} Price ${Math.min(...prices) / 100}–${Math.max(...prices) / 100} ${etsy.es.currency}.`;
     })
     .join("\n");
+  const printableLine = printable
+    ? `\n- ${PRINTABLE.id}: ${PRINTABLE.noun}. ${PRINTABLE.facts} Price ${PRINTABLE.priceCents / 100} ${etsy.es.currency}.`
+    : "";
 
   const { ideas } = await askJson({
     agentId: ID,
@@ -142,21 +156,53 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
       "that the item is printed on demand by a production partner, and that sizes/colours are chosen from the menu.",
     prompt:
       `${digest}\n\n${instructions ? `Jarne's direction for this batch (follow it): ${instructions}\n\n` : ""}` +
-      `Products you can put a design on:\n${productList}\n\n` +
+      `Products you can put a design on:\n${productList}${printableLine}\n\n` +
       `Propose ${count} new designs. For each give: niche, slogan (the exact printed text, max ~8 words), designBrief (layout and typographic style), ` +
       `and listings: for ${perDesign} products from the list that suit this design and its buyer (a mug almost always fits; pick apparel, totes and posters ` +
       "when the joke works worn or on a wall), one listing each with product (its id), title (≤140 chars, starts with the search phrase and names the product), " +
-      "description (3 short paragraphs with the product facts) and 13 Etsy tags (each ≤20 chars).",
+      "description (3 short paragraphs with the product facts) and 13 Etsy tags (each ≤20 chars)." +
+      (printable
+        ? ` Also add one '${PRINTABLE.id}' listing for every design, on top of those products: a printable wall-art download ` +
+          "(title starts with the search phrase and says 'Printable Wall Art' or 'Digital Download'; tags for printable wall art and the niche)."
+        : ""),
   });
 
   const created: string[] = [];
   for (const idea of ideas.slice(0, count)) {
     try {
       const { svg } = await designWithRetry(idea);
-      for (const raw of idea.listings.slice(0, perDesign)) {
+      const chosen = [
+        ...idea.listings.filter((l) => l.product !== PRINTABLE.id).slice(0, perDesign),
+        ...idea.listings.filter((l) => l.product === PRINTABLE.id).slice(0, 1),
+      ];
+      for (const raw of chosen) {
         const entry = types.find((t) => t.typeId === raw.product);
         if (!entry) continue; // a product that isn't available
         const text: ListingText = normaliseListing(raw);
+        if (entry.digital) {
+          const listing = await db.listing.create({
+            data: {
+              niche: idea.niche,
+              title: text.title,
+              description: text.description,
+              tags: text.tags,
+              productType: PRINTABLE.id,
+              priceCents: PRINTABLE.priceCents,
+              currency: etsy.es.currency,
+              designSvg: svg,
+              designFile: "",
+            },
+          });
+          const files: DigitalFile[] = [];
+          for (const f of PRINTABLE.formats) {
+            const file = await saveDesign(await renderPrintable(svg, f.width, f.height), `${listing.id}-${f.name}`, "jpg");
+            files.push({ name: f.name, width: f.width, height: f.height, file });
+          }
+          await db.listing.update({ where: { id: listing.id }, data: { variants: files as unknown as object, designFile: files[0].file } });
+          created.push(listing.id);
+          await log.info(`Draft design created: ${text.title}`, { listingId: listing.id, niche: idea.niche, product: PRINTABLE.id }, taskId);
+          continue;
+        }
         const listing = await db.listing.create({
           data: {
             niche: idea.niche,
@@ -256,7 +302,9 @@ async function addMockups(
     const variants = (listing.variants as ListingVariant[] | null) ?? [];
     const entry = catalogEntry(listing.productType);
     let photos: string[];
-    if (variants.length && entry) {
+    if (listing.productType === PRINTABLE.id) {
+      photos = (await printableMockups(listing as unknown as { id: string; designSvg: string })).slice(0, 6);
+    } else if (variants.length && entry) {
       const groups = mockupGroups(variants, productType(listing.productType)?.mockupColors ?? 1);
       const each = Math.max(2, Math.ceil(MAX_MOCKUPS / groups.length));
       photos = [];
@@ -312,6 +360,63 @@ async function addPhotos(_payload: Record<string, unknown>, { log, taskId }: Tas
   return { checked: listings.length, fixed };
 }
 
+/**
+ * Photos for printable wall art: the design as a framed-style poster, from Printful's poster
+ * mockups (when posters are set up), then a preview of the file on white.
+ */
+async function printableMockups(listing: { id: string; designSvg: string }): Promise<string[]> {
+  const poster = catalogEntry("poster");
+  const v = poster?.enabled ? poster.variants.find((x) => /18 x 24/.test(x.size)) ?? poster.variants[0] : undefined;
+  if (!poster || !v || !printful.isPrintfulConfigured() || config.publicUrl.includes("localhost")) return [];
+  const file = await saveDesign(await renderPrintFile(listing.designSvg, "center", v.width, v.height, "dark"), `${listing.id}-poster-mockup`);
+  return printful.generateMockup(designUrl(file), { width: v.width, height: v.height }, { productId: poster.productId, variantIds: [v.variantId], placement: v.placement });
+}
+
+/** Uploads a printable wall-art listing: a digital draft, its photos and the 5 download files. */
+async function uploadPrintable(
+  listing: { id: string; title: string; description: string; tags: string[]; designSvg: string; etsyListingId: string | null; variants: unknown },
+  log: TaskContext["log"],
+  taskId?: string,
+): Promise<boolean> {
+  const entry = catalogEntry(PRINTABLE.id);
+  if (!entry?.enabled || !entry.taxonomyId) {
+    await log.warn(`Niet geüpload: ${listing.title} (${entry?.reason ?? "printbare posters staan uit; start catalog_setup"})`, undefined, taskId);
+    return false;
+  }
+  let etsyId = listing.etsyListingId;
+  if (!etsyId) {
+    const draft = await etsy.createDraftListing({
+      title: listing.title,
+      description: listing.description,
+      priceCents: PRINTABLE.priceCents,
+      tags: listing.tags,
+      taxonomyId: entry.taxonomyId,
+      digital: true,
+    });
+    etsyId = String(draft.listing_id);
+    await db.listing.update({ where: { id: listing.id }, data: { etsyListingId: etsyId } });
+  }
+  let rank = 1;
+  try {
+    for (const url of (await printableMockups(listing)).slice(0, 6)) {
+      await etsy.uploadListingImage(etsyId, Buffer.from(await (await fetch(url)).arrayBuffer()), rank++);
+    }
+  } catch (err) {
+    await log.warn(`Poster mockup failed for ${listing.title}: ${(err as Error).message}`, { etsyId }, taskId);
+  }
+  const files = (listing.variants as DigitalFile[] | null) ?? [];
+  if (!files.length) throw new Error(`No download files for ${listing.title}`);
+  const preview = await sharp(await readFile(path.join(designsDir(), files[0].file))).resize(2000).png().toBuffer();
+  await etsy.uploadListingImage(etsyId, preview, rank);
+  const slug = listing.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40).replace(/-+$/, "");
+  for (const [i, f] of files.entries()) {
+    await etsy.uploadListingFile(etsyId, await readFile(path.join(designsDir(), f.file)), `${slug}-${f.name}.jpg`, i + 1);
+  }
+  await db.listing.update({ where: { id: listing.id }, data: { status: "uploaded", priceCents: PRINTABLE.priceCents, currency: etsy.es.currency } });
+  await log.info(`Printbare poster geüpload: ${listing.title} (${rank - 1} foto's, ${files.length} bestanden)`, { etsyId }, taskId);
+  return true;
+}
+
 async function uploadListings(payload: Record<string, unknown>, { log, taskId }: TaskContext) {
   // Without ids (e.g. started from chat): every local draft that never reached Etsy, such as
   // the ones made while DRY_RUN was on.
@@ -337,6 +442,10 @@ async function uploadListings(payload: Record<string, unknown>, { log, taskId }:
   for (const id of ids) {
     const listing = await db.listing.findUniqueOrThrow({ where: { id } });
     if (listing.status !== "draft") continue; // already on Etsy
+    if (listing.productType === PRINTABLE.id) {
+      if (await uploadPrintable(listing, log, taskId)) uploaded.push(id);
+      continue;
+    }
     const variants = (listing.variants as ListingVariant[] | null) ?? [];
     const entry = catalogEntry(listing.productType);
     if (variants.length && (!entry || !entry.enabled)) {
@@ -510,6 +619,7 @@ async function catalogSetup(_payload: Record<string, unknown>, { log, taskId }: 
   const on = entries.filter((e) => e.enabled);
   const lines = entries.map((e) => {
     if (!e.enabled) return `✗ ${e.label}: ${e.reason}`;
+    if (e.digital) return `✓ ${e.label}: digitaal, winst ca. €${(estimatedProfitCents(PRINTABLE.priceCents, 0) / 100).toFixed(2)} per verkoop, geen productie of verzending`;
     const margins = e.variants.map((v) => estimatedProfitCents(v.priceCents, v.costUsd));
     return `✓ ${e.label}: ${e.variants.length} varianten, winst ca. €${(Math.min(...margins) / 100).toFixed(2)}–${(Math.max(...margins) / 100).toFixed(2)} per stuk, verzendprofiel "${e.shippingProfileTitle}"`;
   });

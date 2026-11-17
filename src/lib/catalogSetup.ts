@@ -5,7 +5,7 @@
 import { getSetting, setSetting } from "../db.js";
 import { es, getShippingProfiles, getTaxonomy, type TaxonomyNode } from "../integrations/etsy.js";
 import { getCatalogProduct, getPrintfiles, type PrintfileInfo } from "../integrations/printful.js";
-import { PRODUCT_TYPES, offeredVariants, type Ink, type Layout, type ProductType } from "./catalog.js";
+import { PRINTABLE, PRODUCT_TYPES, offeredVariants, type Ink, type Layout, type ProductType } from "./catalog.js";
 import { findTaxonomyId } from "./etsySetup.js";
 
 const KEY = "catalog.setup";
@@ -34,6 +34,8 @@ export interface CatalogEntry {
   shippingProfileId: number | null;
   shippingProfileTitle: string | null;
   variants: CatalogVariant[];
+  /** A digital download (no Printful product, no variants). */
+  digital?: boolean;
 }
 
 let catalog: CatalogEntry[] = [];
@@ -122,6 +124,21 @@ export async function findCatalog(): Promise<CatalogEntry[]> {
       entries.push(off(`Opzoeken mislukt: ${(err as Error).message}`));
     }
   }
+  // Printable wall art: only needs an Etsy category.
+  const printableTaxonomy = PRINTABLE.etsyTaxonomy.map((n) => findTaxonomyId(tree, n)).find((id) => id) ?? null;
+  entries.push({
+    typeId: PRINTABLE.id,
+    label: PRINTABLE.label,
+    enabled: Boolean(printableTaxonomy),
+    reason: printableTaxonomy ? undefined : `Geen Etsy-categorie gevonden (${PRINTABLE.etsyTaxonomy.join(" / ")})`,
+    productId: 0,
+    layout: "center",
+    taxonomyId: printableTaxonomy,
+    shippingProfileId: null,
+    shippingProfileTitle: null,
+    variants: [],
+    digital: true,
+  });
   await setSetting(KEY, entries);
   catalog = entries;
   return entries;

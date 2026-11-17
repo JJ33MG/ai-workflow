@@ -207,6 +207,12 @@ export async function renderPrintFile(
   return placeContent(art, width, height, width * 0.8, height * 0.7, "center");
 }
 
+/** A printable wall-art file: the design centred on white, as a high-quality JPG. */
+export async function renderPrintable(svg: string, width: number, height: number): Promise<Buffer> {
+  const art = await placeContent(svg, width, height, width * 0.8, height * 0.6, "center");
+  return sharp(art, { limitInputPixels: false }).flatten({ background: "#ffffff" }).jpeg({ quality: 90, mozjpeg: true }).toBuffer();
+}
+
 /** Renders one side, checks nothing is cut off, fills the mug face with it, and lays it out twice. */
 export async function prepareDesign(svg: string): Promise<Buffer> {
   const side = sideSize();
@@ -218,9 +224,9 @@ export async function prepareDesign(svg: string): Promise<Buffer> {
   return mirrorSides(await fitToSide(svg));
 }
 
-export async function saveDesign(png: Buffer, id: string): Promise<string> {
+export async function saveDesign(png: Buffer, id: string, ext: "png" | "jpg" = "png"): Promise<string> {
   await mkdir(designsDir(), { recursive: true });
-  const file = `${id}.png`;
+  const file = `${id}.${ext}`;
   await writeFile(path.join(designsDir(), file), png);
   return file;
 }

@@ -249,3 +249,27 @@ export function buildInventory(variants: { variantId: number; size: string; colo
     sku_on_property: pricedBy,
   };
 }
+
+/**
+ * Printable wall art: the design as an instant download. No production, shipping or stock, so
+ * nearly the whole price is profit. Etsy delivers the files; 5 files max, 20 MB each.
+ */
+export const PRINTABLE = {
+  id: "printable",
+  label: "Printbare poster (download)",
+  noun: "Printable Wall Art",
+  priceCents: 499,
+  etsyTaxonomy: ["Digital Prints", "Prints"],
+  facts:
+    "Instant digital download, no physical item is shipped. 5 high-resolution JPG files (300 dpi) for the common frame ratios: " +
+    "2x3 (4x6 up to 24x36 in), 3x4 (up to 18x24 in), 4x5 (8x10, 16x20 in), ISO A (A5 to A1) and 11x14 in. " +
+    "Print at home, at a local print shop or online. Frame not included.",
+  /** One file per frame ratio, sized for 300 dpi prints. */
+  formats: [
+    { name: "2x3-ratio-24x36in", width: 4800, height: 7200 },
+    { name: "3x4-ratio-18x24in", width: 5400, height: 7200 },
+    { name: "4x5-ratio-16x20in", width: 4800, height: 6000 },
+    { name: "ISO-A-ratio-A1-A5", width: 4961, height: 7016 },
+    { name: "11x14in", width: 3300, height: 4200 },
+  ],
+} as const;

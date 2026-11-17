@@ -157,3 +157,18 @@ describe("Catalog setup", () => {
     expect(taxonomyFor(tee, tree)).toBeNull();
   });
 });
+
+describe("Printable wall art", () => {
+  it("makes a high-resolution JPG per frame ratio, well under Etsy's 20 MB", async () => {
+    const { renderPrintable } = await import("../src/lib/design.js");
+    const { PRINTABLE } = await import("../src/lib/catalog.js");
+    const sharp = (await import("sharp")).default;
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1350 1050"><text x="675" y="525" text-anchor="middle" font-size="120" fill="#111">HELLO</text></svg>';
+    const f = PRINTABLE.formats.find((x) => x.name === "11x14in")!;
+    const jpg = await renderPrintable(svg, f.width, f.height);
+    const meta = await sharp(jpg).metadata();
+    expect([meta.format, meta.width, meta.height]).toEqual(["jpeg", 3300, 4200]);
+    expect(jpg.length).toBeLessThan(20_000_000);
+    expect(PRINTABLE.formats.length).toBeLessThanOrEqual(5); // Etsy's limit per listing
+  });
+});
