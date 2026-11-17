@@ -15,4 +15,6 @@ COPY tsconfig.json ./
 COPY src ./src
 
 ENV NODE_ENV=production
-CMD ["npm", "start"]
+# exec makes node itself the main process, so Railway's stop signal (SIGTERM) reaches the
+# server and it shuts down cleanly instead of being reported as a crash on every deploy.
+CMD ["sh", "-c", "npx prisma migrate deploy && exec node --import tsx src/server.ts"]

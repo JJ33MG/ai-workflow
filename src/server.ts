@@ -317,10 +317,16 @@ async function main() {
     console.log(`AI Agency Brain listening on :${config.port} (dryRun=${config.dryRun})`);
   });
 
+  // Clean exit on a deploy or restart: stop taking work, close connections, exit 0. Open
+  // keep-alive connections would hold server.close() open, so they are closed too, and a
+  // fallback exits after 8 s (Railway kills the container after 10 s, which reads as a crash).
   const shutdown = () => {
+    console.log("Shutting down");
     stopScheduler();
     stopPolling();
-    server.close(() => void db.$disconnect().then(() => process.exit(0)));
+    setTimeout(() => process.exit(0), 8000).unref();
+    server.close(() => void db.$disconnect().finally(() => process.exit(0)));
+    server.closeAllConnections();
   };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
