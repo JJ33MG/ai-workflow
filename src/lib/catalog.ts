@@ -161,7 +161,8 @@ export const PRODUCT_TYPES: ProductType[] = [
       { printful: "24″×36″", label: "24 x 36 in", priceCents: 4499 },
     ],
     etsyTaxonomy: ["Posters", "Prints"],
-    shippingProfile: /poster|print|wall/i,
+    // Only a real poster profile: "All over prints" in Printful's bags profile is clothing, not posters.
+    shippingProfile: /poster/i,
     facts: "Museum-quality enhanced matte paper poster, frame not included, sizes 12x16, 18x24 or 24x36 inches.",
     mockupColors: 1,
   },

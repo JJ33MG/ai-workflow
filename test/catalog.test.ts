@@ -143,6 +143,10 @@ describe("Catalog setup", () => {
   it("matches shipping profiles by product, not by the word Printful", () => {
     expect(profileMatches(productType("poster")!, "Printful: Mugs (20oz) (#PF-FRG50)")).toBe(false);
     expect(profileMatches(productType("poster")!, "Printful: Posters (#PF-1)")).toBe(true);
+    expect(profileMatches(productType("poster")!, "Printful: Hats, Bags, Pillowcases, All over prints, Socks (#PF-FRG42)")).toBe(false);
+    expect(profileMatches(productType("tote")!, "Printful: Hats, Bags, Pillowcases, All over prints, Socks (#PF-FRG42)")).toBe(true);
+    expect(profileMatches(productType("hoodie")!, "Printful: Hoodies (#PF-FRG2)")).toBe(true);
+    expect(profileMatches(tee, "Printful: Tshirts (#PF-FRG1)")).toBe(true);
     expect(profileMatches(productType("mug")!, "Printful: Mugs (20oz) (#PF-FRG50)")).toBe(true);
     expect(profileMatches(tee, "Printful: T-Shirts")).toBe(true);
   });
