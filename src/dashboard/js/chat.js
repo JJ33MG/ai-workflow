@@ -5,7 +5,7 @@ const threads = new Map(); // agent id → messages
 const pending = new Set(); // agent ids waiting for a reply
 
 const SUGGESTIONS = {
-  ceo: ["Hoe gaat het vandaag met het bedrijf?", "Waar moet ik deze week op focussen?", "Welk bedrijf zit het dichtst bij zijn doel?"],
+  ceo: ["Be honest: how is the company really doing?", "What should I focus on this week?", "What am I wasting money on?"],
   debug: ["Is er nu iets kapot?", "Leg de open problemen uit en hoe ik ze oplos", "Doe nu een controle"],
   "etsy-pod": ["Wat heb je tot nu toe gemaakt?", "Maak 3 nieuwe mokontwerpen", "Welke niches probeer je hierna en waarom?"],
   "kdp-coloring": ["Welk kleurboek zou je als eerste maken?", "Maak een kleurboek over dinosaurussen", "Hoe weet je of een pagina goed genoeg is?"],
@@ -104,7 +104,64 @@ function actionLabel(a) {
   return a.name;
 }
 
-async function send(text) {
+// ---------- voice: talk to an agent, hear the answer (browser speech, no extra cost) ----------
+
+const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let listening = null; // the active recognition
+
+/** Reads a reply aloud with an English voice, cutting off anything still being said. */
+function speak(text) {
+  if (!("speechSynthesis" in window)) return;
+  speechSynthesis.cancel();
+  const say = new SpeechSynthesisUtterance(text.replace(/[*_#`]/g, ""));
+  const voices = speechSynthesis.getVoices();
+  say.voice =
+    voices.find((v) => /en-GB/i.test(v.lang) && /Daniel|Google UK English Male|Arthur|male/i.test(v.name)) ??
+    voices.find((v) => /en-GB/i.test(v.lang)) ??
+    voices.find((v) => /^en/i.test(v.lang)) ??
+    null;
+  say.lang = say.voice?.lang ?? "en-GB";
+  say.rate = 1.03;
+  speechSynthesis.speak(say);
+}
+
+function setMic(on) {
+  const mic = $("chat-mic");
+  if (!mic) return;
+  mic.setAttribute("aria-pressed", String(on));
+  mic.textContent = on ? "● Listening… (click to send)" : "🎙 Talk";
+}
+
+/** Click to talk, click again (or pause) to send. The transcript shows in the box while you speak. */
+function toggleMic() {
+  if (listening) {
+    listening.stop();
+    return;
+  }
+  if ("speechSynthesis" in window) speechSynthesis.cancel();
+  const rec = new Recognition();
+  rec.lang = "en-US";
+  rec.interimResults = true;
+  rec.continuous = false;
+  let transcript = "";
+  rec.onresult = (e) => {
+    transcript = [...e.results].map((r) => r[0].transcript).join(" ");
+    $("chat-input").value = transcript;
+  };
+  rec.onerror = (e) => {
+    if (e.error === "not-allowed") $("chat-input").placeholder = "Microphone blocked: allow it in your browser for this site.";
+  };
+  rec.onend = () => {
+    listening = null;
+    setMic(false);
+    if (transcript.trim()) send(transcript, { voice: true });
+  };
+  listening = rec;
+  setMic(true);
+  rec.start();
+}
+
+async function send(text, opts = {}) {
   const agentId = current;
   const message = text.trim();
   if (!message || pending.has(agentId)) return;
@@ -115,9 +172,10 @@ async function send(text) {
   $("chat-input").value = "";
   renderThread();
   try {
-    const res = await api(`/api/agents/${agentId}/chat`, { method: "POST", body: JSON.stringify({ message }) });
+    const res = await api(`/api/agents/${agentId}/chat`, { method: "POST", body: JSON.stringify({ message, voice: Boolean(opts.voice) }) });
     thread.pop();
     thread.push(res.question, res.reply);
+    if (opts.voice) speak(res.reply.content);
     if (res.reply.actions && Array.isArray(res.reply.actions)) state.onReload();
   } catch (err) {
     thread.push({
@@ -134,6 +192,12 @@ async function send(text) {
 }
 
 export function initChat() {
+  if (Recognition) {
+    $("chat-mic").hidden = false;
+    $("chat-mic").addEventListener("click", toggleMic);
+    // Voices load asynchronously in some browsers; ask early so the first answer has one.
+    if ("speechSynthesis" in window) speechSynthesis.getVoices();
+  }
   $("chat-form").addEventListener("submit", (e) => {
     e.preventDefault();
     send($("chat-input").value);

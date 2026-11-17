@@ -1785,3 +1785,17 @@ svg.map .dim {
 .product-actions {
   padding: 0 12px 12px;
 }
+
+/* Voice: talk button */
+#chat-mic[aria-pressed="true"] {
+  background: var(--critical-bg);
+  border-color: var(--critical);
+}
+@media (max-width: 560px) {
+  .chat-form {
+    flex-wrap: wrap;
+  }
+  .chat-form textarea {
+    flex-basis: 100%;
+  }
+}

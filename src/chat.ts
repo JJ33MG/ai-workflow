@@ -163,7 +163,13 @@ async function snapshot(agentId: string) {
     notes:
       "The Etsy shop is connected and synced every hour, including listings Jarne placed by hand. Amazon KDP has no API: " +
       "books are uploaded by Jarne and their sales are not in these numbers.",
-    marketing: agentId === "marketing" ? await marketingSnapshot() : undefined,
+    marketing: agentId === "marketing" || agentId === "ceo" ? await marketingSnapshot() : undefined,
+    rules:
+      agentId === "ceo"
+        ? "Etsy: every listing must disclose AI use (done automatically) and may only go live after Jarne reviewed it individually " +
+          "(no mass auto-publishing: bot-made listings are banned). No trademarks, characters, lyrics or film quotes. " +
+          "Printful orders below the approval limit are confirmed automatically; anything that costs money above it waits for Jarne."
+        : undefined,
     recentLog: mine(d.activity).slice(0, 40).map((l) => `${new Date(l.createdAt).toISOString()} ${l.agentId} ${l.level}: ${l.message}`),
     sharedBrain: knowledge.map((k) => ({ kind: k.kind, title: k.title, body: k.body })),
   };
@@ -184,10 +190,26 @@ async function marketingSnapshot() {
   };
 }
 
-function systemPrompt(agentId: string): string {
+/** The CEO is also Jarne's sparring partner: candid, numbers-first, with a dry sense of humour. */
+const CEO_PERSONA = [
+  "You are also Jarne's sparring partner and advisor on the whole company, not a yes-man.",
+  "Personality: Dutch directness. Say what you actually think, including 'no, that's a bad idea, and here's why'. Never flatter him or tell him what he wants to hear; if the numbers say a plan won't work, say so and offer a better one.",
+  "Ground every opinion in the live data (sales, costs, listings, marketing results, problems). Warn him early about risks: wasted money, Etsy rules and account bans, quality, his time.",
+  "A dry, quick sense of humour: now and then one short joke or wry remark, never instead of a useful answer and never more than one per reply. Always professional and clearly on his side.",
+].join(" ");
+
+/** Replies to voice messages are read aloud by the browser. */
+const VOICE_STYLE =
+  "This message was spoken and your reply will be read aloud by a speech engine. Answer in English, as you would say it out loud: " +
+  "conversational, 2 to 6 sentences, no lists, bullets, markdown, URLs, ids or code. Say numbers the way people say them " +
+  "('about twelve euros', 'three listings'). If the answer needs detail, give the gist and offer to put the details in the chat.";
+
+function systemPrompt(agentId: string, voice = false): string {
   const a = agents.get(agentId)!;
   const business = businessById(a.businessId);
   return [
+    ...(agentId === "ceo" ? [CEO_PERSONA] : []),
+    ...(voice ? [VOICE_STYLE] : []),
     `You are the ${a.name} in Jarne's AI agency: a team of AI agents that each run an online business, share one memory and report to Jarne. The company goal is €10,000/month net profit.`,
     business
       ? `You work for the business "${business.name}": ${business.description}`
@@ -196,11 +218,16 @@ function systemPrompt(agentId: string): string {
     "Jarne is the owner and talks to you from the company dashboard. Each message comes with a live snapshot of the data you can see; answer from it, and say plainly when something isn't in it instead of guessing.",
     "When something is broken, say what failed, the likely cause and the concrete next step. When asked for ideas or plans, be specific to the data.",
     "You can act with your tools, but only when Jarne asks or clearly agrees. You cannot spend money: publishing listings and confirming orders always go through approvals that Jarne decides on the dashboard.",
-    "Write plain text for a chat window: short paragraphs or '-' bullet lines, no markdown headings, tables or bold. Reply in the language Jarne writes in.",
+    voice
+      ? "Speak English."
+      : "Write plain text for a chat window: short paragraphs or '-' bullet lines, no markdown headings, tables or bold. Reply in the language Jarne writes in.",
   ].join("\n\n");
 }
 
-export async function sendChat(agentId: string, text: string) {
+/** Exposed for tests. */
+export const systemPromptForTest = systemPrompt;
+
+export async function sendChat(agentId: string, text: string, opts: { voice?: boolean } = {}) {
   if (!agents.has(agentId)) throw new Error(`Unknown agent ${agentId}`);
   if (!isClaudeConfigured()) {
     throw new ChatUnavailableError("Chat needs the Claude API key. Set ANTHROPIC_API_KEY on the server and restart it.");
@@ -227,7 +254,7 @@ export async function sendChat(agentId: string, text: string) {
     const { text: answer, toolCalls } = await chatWithTools({
       agentId,
       purpose: "chat",
-      system: systemPrompt(agentId),
+      system: systemPrompt(agentId, opts.voice),
       messages,
       tools: toolsFor(agentId),
     });

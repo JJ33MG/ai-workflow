@@ -82,6 +82,7 @@ app.get("/api/agents/:id/chat", requireAdmin, async (req, res) => {
 app.post("/api/agents/:id/chat", requireAdmin, async (req, res) => {
   const { id } = req.params as { id: string };
   const text = String((req.body as { message?: string }).message ?? "").trim();
+  const voice = (req.body as { voice?: boolean }).voice === true;
   if (!agents.has(id)) {
     res.status(404).json({ error: "No such agent" });
     return;
@@ -91,7 +92,7 @@ app.post("/api/agents/:id/chat", requireAdmin, async (req, res) => {
     return;
   }
   try {
-    res.json(await sendChat(id, text));
+    res.json(await sendChat(id, text, { voice }));
   } catch (err) {
     if (err instanceof ChatUnavailableError) {
       res.status(503).json({ error: err.message });

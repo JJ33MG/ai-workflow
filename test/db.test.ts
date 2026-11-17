@@ -281,4 +281,14 @@ describe.skipIf(!url)("with database", async () => {
     await expect(addCampaign({ businessId: "etsy-pod", name: "x", direction: "y", from: "2026-12-10", until: "2026-12-01" })).rejects.toThrow();
     await setSetting("marketing.campaigns", []);
   });
+  it("gives the CEO an honest advisor persona and a spoken English style for voice messages", async () => {
+    const chat = await import("../src/chat.js");
+    const prompt = (chat as unknown as { systemPromptForTest?: (a: string, v?: boolean) => string }).systemPromptForTest;
+    expect(prompt).toBeTypeOf("function");
+    const ceo = prompt!("ceo", true);
+    expect(ceo).toContain("Dutch directness");
+    expect(ceo).toContain("read aloud");
+    expect(ceo).toContain("Speak English.");
+    expect(prompt!("etsy-pod")).not.toContain("Dutch directness");
+  });
 });
