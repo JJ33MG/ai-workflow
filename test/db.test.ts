@@ -221,8 +221,8 @@ describe.skipIf(!url)("with database", async () => {
 
     await db.listing.deleteMany({ where: { etsyListingId: { in: ["m1", "m2"] } } });
     const base = { niche: "x", description: "", tags: [], priceCents: 2199, currency: "EUR", designSvg: "", designFile: "", status: "active" };
-    await db.listing.create({ data: { ...base, title: "Changed", etsyListingId: "m1", views: 38 } });
-    await db.listing.create({ data: { ...base, title: "Control", etsyListingId: "m2", views: 48 } });
+    await db.listing.create({ data: { ...base, title: "Changed", etsyListingId: "m1", favorites: 38 } });
+    await db.listing.create({ data: { ...base, title: "Control", etsyListingId: "m2", favorites: 48 } });
     const seo = await db.marketingPlay.create({
       data: {
         businessId: "etsy-pod",

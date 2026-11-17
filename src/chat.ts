@@ -179,7 +179,8 @@ async function marketingSnapshot() {
     strategies,
     plays: plays.map((p) => ({ business: p.businessId, tactic: p.tactic, title: p.title, status: p.status, verdict: p.verdict, liftPct: p.liftPct, note: p.note })),
     tactics: TACTICS.map((t) => ({ id: t.id, businesses: t.businesses, auto: t.auto, description: t.description })),
-    etsyListings: (await liveListingStats()).map((l) => ({ title: l.title, views: l.views, favorites: l.favorites, ageDays: l.ageDays })),
+    etsyListings: (await liveListingStats()).map((l) => ({ title: l.title, favorites: l.favorites, orders: l.orders, ageDays: l.ageDays })),
+    visits: "Etsy's API has no visit counts; Jarne sees visits and Etsy Ads clicks only in Etsy itself.",
   };
 }
 

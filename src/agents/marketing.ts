@@ -19,6 +19,7 @@ import {
   marketedBusinesses,
   provenElsewhere,
   saveStrategy,
+  signalByEtsyListing,
   tacticsFor,
   verdictFor,
   type ViewSnapshot,
@@ -101,7 +102,9 @@ async function marketingReview(payload: Record<string, unknown>, ctx: TaskContex
         "You are the marketing lead of a small online company run by AI agents for its owner, Jarne. Each business gets its own strategy, " +
         "fitted to where it sells and how far along it is. You grow visitors and sales with small, measurable experiments (plays), " +
         "learn from the results, and reuse what worked in another business when it fits. Be concrete and honest: a new Etsy shop with few " +
-        "listings mostly needs more good listings and better search terms; don't promise quick wins. Never propose anything against a " +
+        "listings mostly needs more good listings and better search terms; don't promise quick wins. Etsy's API gives no visit counts: " +
+        "judge Etsy listings by favourites and orders, and ask Jarne (manual play) for visits and Etsy Ads clicks when you need them. " +
+        "Never propose anything against a " +
         "platform's rules (fake reviews, keyword stuffing, trademarks, spam). Only use tactics from the list for this business. Anything " +
         "that costs money must be a 'manual' play with the cost stated, so Jarne decides. Write strategy, titles, reasons and instructions " +
         "in Dutch for Jarne; listing texts stay in the shop's language.",
@@ -213,7 +216,7 @@ async function runPlay(payload: Record<string, unknown>, { log, taskId }: TaskCo
         "Title: at most 140 characters, the main search phrase a buyer types first, then gift occasion and recipient, natural and readable, " +
         "no keyword lists, no repeated words, no ALL CAPS, no trademarks. Tags: 13, each at most 20 characters, multi-word phrases buyers search, " +
         "no repeats of each other, no trademarks. Keep it truthful to the product. Write in the language of the current title.",
-      prompt: `Listings with the fewest views (current title, tags, niche):\n${JSON.stringify(
+      prompt: `Listings with the weakest signal (current title, tags, niche):\n${JSON.stringify(
         targets.map((t) => ({ etsyListingId: t.etsyListingId, title: t.title, tags: t.tags, niche: t.niche })),
       )}`,
     });
@@ -230,9 +233,9 @@ async function runPlay(payload: Record<string, unknown>, { log, taskId }: TaskCo
       changed.push({ listingId: t.etsyListingId, oldTitle: t.title, oldTags: t.tags });
     }
     if (!changed.length) return skip("Claude gaf geen bruikbare nieuwe titels");
-    const snap = (s: { etsyListingId: string; views: number; ageDays: number }): ViewSnapshot => ({
+    const snap = (s: { etsyListingId: string; signal: number; ageDays: number }): ViewSnapshot => ({
       listingId: s.etsyListingId,
-      views: s.views,
+      views: s.signal,
       ageDays: s.ageDays,
     });
     const changedIds = new Set(changed.map((c) => c.listingId));
@@ -269,13 +272,12 @@ async function measurePlays(_payload: Record<string, unknown>, { log, taskId }: 
       previous: { listingId: string; oldTitle: string; oldTags: string[] }[];
     };
     const ids = [...base.target, ...base.control].map((s) => s.listingId);
-    const rows = await db.listing.findMany({ where: { etsyListingId: { in: ids }, status: "active" }, select: { etsyListingId: true, views: true } });
-    const viewsNow = Object.fromEntries(rows.map((r) => [r.etsyListingId!, r.views]));
+    const viewsNow = await signalByEtsyListing(ids);
     const daysSince = (Date.now() - play.startedAt!.getTime()) / DAY;
     const lift = computeLift({ before: base.target, viewsNow }, { before: base.control, viewsNow }, daysSince);
     const verdict = verdictFor(lift.liftPct, lift.targetViewsAfter);
 
-    let note = `${lift.targetViewsAfter} bezoeken op de aangepaste listings, ${lift.controlViewsAfter} op de rest`;
+    let note = `${lift.targetViewsAfter} favorieten/bestellingen (gewogen) op de aangepaste listings, ${lift.controlViewsAfter} op de rest`;
     if (verdict === "worse" && !config.dryRun) {
       for (const p of base.previous) {
         await etsy.updateListingSeo(p.listingId, p.oldTitle, p.oldTags).catch(() => undefined);
@@ -294,7 +296,7 @@ async function measurePlays(_payload: Record<string, unknown>, { log, taskId }: 
           agentId: ID,
           kind: "lesson",
           title: `Marketing werkt: ${play.title}`,
-          body: `${businessById(play.businessId)?.name}: ${play.why} Resultaat: +${lift.liftPct}% bezoeken t.o.v. de rest.`,
+          body: `${businessById(play.businessId)?.name}: ${play.why} Resultaat: +${lift.liftPct}% favorieten en bestellingen t.o.v. de rest.`,
           tags: ["marketing", play.businessId, play.tactic],
           score: Math.min(5, (lift.liftPct ?? 0) / 20),
         },

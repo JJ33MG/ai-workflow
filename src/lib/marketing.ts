@@ -22,15 +22,15 @@ export const TACTICS: Tactic[] = [
     id: "etsy_seo_refresh",
     businesses: ["etsy-pod"],
     description:
-      "Rewrite the title and 13 tags of the live Etsy listings with the fewest views per day (input: listingCount, 3-10). " +
-      "Free, done automatically, measured after 14 days against the untouched listings and undone if views dropped.",
+      "Rewrite the title and 13 tags of the live Etsy listings with the weakest signal (fewest favourites and orders per day; input: listingCount, 3-10). " +
+      "Free, done automatically, measured after 14 days against the untouched listings and undone if the signal dropped.",
     auto: true,
   },
   {
     id: "etsy_niche_focus",
     businesses: ["etsy-pod"],
     description:
-      "Tell the Etsy agent which gift niches to design more mugs for (input: niches, 1-5, e.g. based on views and favourites). " +
+      "Tell the Etsy agent which gift niches to design more mugs for (input: niches, 1-5, e.g. based on favourites and orders). " +
       "Free, done automatically through the shared brain; judged at the next review.",
     auto: true,
   },
@@ -67,39 +67,73 @@ export const saveStrategy = (businessId: string, s: Strategy) => setSetting(stra
 
 // ---------- numbers ----------
 
+/**
+ * Etsy's API has no visit counts (Jarne sees visits and ad clicks only in Etsy itself). What it does
+ * give per listing: favourites, and our own orders. An order counts as much as several favourites.
+ */
+export const ORDER_WEIGHT = 5;
+
 export interface ListingStat {
   id: string;
   etsyListingId: string;
   title: string;
   niche: string;
   tags: string[];
-  views: number;
   favorites: number;
+  orders: number;
+  /** favourites + ORDER_WEIGHT × orders */
+  signal: number;
   ageDays: number;
-  viewsPerDay: number;
+  signalPerDay: number;
   source: string;
 }
 
-/** Live Etsy listings with their view rate, lowest first. */
+/** Units sold per Etsy listing id, from the recorded Etsy receipts. */
+export async function ordersByEtsyListing(): Promise<Map<string, number>> {
+  const sales = await db.sale.findMany({ where: { source: "etsy" }, select: { data: true } });
+  const sold = new Map<string, number>();
+  for (const s of sales) {
+    const tx = (s.data as { transactions?: { listing_id: number; quantity: number }[] } | null)?.transactions ?? [];
+    for (const t of tx) sold.set(String(t.listing_id), (sold.get(String(t.listing_id)) ?? 0) + t.quantity);
+  }
+  return sold;
+}
+
+/** The signal of each Etsy listing right now, for measuring plays. */
+export async function signalByEtsyListing(etsyListingIds: string[]): Promise<Record<string, number>> {
+  const [rows, orders] = await Promise.all([
+    db.listing.findMany({ where: { etsyListingId: { in: etsyListingIds }, status: "active" }, select: { etsyListingId: true, favorites: true } }),
+    ordersByEtsyListing(),
+  ]);
+  return Object.fromEntries(rows.map((r) => [r.etsyListingId!, r.favorites + ORDER_WEIGHT * (orders.get(r.etsyListingId!) ?? 0)]));
+}
+
+/** Live Etsy listings with their signal rate, weakest first. */
 export async function liveListingStats(now = new Date()): Promise<ListingStat[]> {
-  const rows = await db.listing.findMany({ where: { status: "active", etsyListingId: { not: null } } });
+  const [rows, orders] = await Promise.all([
+    db.listing.findMany({ where: { status: "active", etsyListingId: { not: null } } }),
+    ordersByEtsyListing(),
+  ]);
   return rows
     .map((l) => {
       const ageDays = Math.max(1, (now.getTime() - l.createdAt.getTime()) / DAY);
+      const sold = orders.get(l.etsyListingId!) ?? 0;
+      const signal = l.favorites + ORDER_WEIGHT * sold;
       return {
         id: l.id,
         etsyListingId: l.etsyListingId!,
         title: l.title,
         niche: l.niche,
         tags: l.tags,
-        views: l.views,
         favorites: l.favorites,
+        orders: sold,
+        signal,
         ageDays: Math.round(ageDays),
-        viewsPerDay: l.views / ageDays,
+        signalPerDay: signal / ageDays,
         source: l.source,
       };
     })
-    .sort((a, b) => a.viewsPerDay - b.viewsPerDay);
+    .sort((a, b) => a.signalPerDay - b.signalPerDay);
 }
 
 /** The numbers Claude sees for one business when it plans. */
@@ -120,17 +154,17 @@ export async function businessMetrics(businessId: string, teamAgentIds: string[]
   if (businessId === "etsy-pod") {
     const stats = await liveListingStats(now);
     const drafts = await db.listing.count({ where: { status: { in: ["draft", "uploaded"] } } });
-    const byNiche = new Map<string, { listings: number; views: number; favorites: number }>();
+    const byNiche = new Map<string, { listings: number; favorites: number; orders: number }>();
     for (const s of stats) {
-      const n = byNiche.get(s.niche) ?? { listings: 0, views: 0, favorites: 0 };
+      const n = byNiche.get(s.niche) ?? { listings: 0, favorites: 0, orders: 0 };
       n.listings++;
-      n.views += s.views;
+      n.orders += s.orders;
       n.favorites += s.favorites;
       byNiche.set(s.niche, n);
     }
     // Per platform: how many listings were shared, and whether they get more Etsy visits than the rest.
     const posts = await db.socialPost.findMany({ where: { businessId }, select: { platform: true, refId: true } });
-    const rate = (xs: ListingStat[]) => (xs.length ? Math.round((xs.reduce((n, s) => n + s.viewsPerDay, 0) / xs.length) * 100) / 100 : null);
+    const rate = (xs: ListingStat[]) => (xs.length ? Math.round((xs.reduce((n, s) => n + s.signalPerDay, 0) / xs.length) * 100) / 100 : null);
     const social = Object.fromEntries(
       [...new Set(posts.map((p) => p.platform))].map((platform) => {
         const shared = new Set(posts.filter((p) => p.platform === platform).map((p) => p.refId));
@@ -138,24 +172,25 @@ export async function businessMetrics(businessId: string, teamAgentIds: string[]
           platform,
           {
             sharedListings: shared.size,
-            avgViewsPerDayShared: rate(stats.filter((s) => shared.has(s.id))),
-            avgViewsPerDayNotShared: rate(stats.filter((s) => !shared.has(s.id))),
+            avgSignalPerDayShared: rate(stats.filter((s) => shared.has(s.id))),
+            avgSignalPerDayNotShared: rate(stats.filter((s) => !shared.has(s.id))),
           },
         ];
       }),
     );
-    const brief = (s: ListingStat) => ({ title: s.title, niche: s.niche, views: s.views, favorites: s.favorites, ageDays: s.ageDays });
+    const brief = (s: ListingStat) => ({ title: s.title, niche: s.niche, favorites: s.favorites, orders: s.orders, ageDays: s.ageDays });
     return {
       ...base,
       liveListings: stats.length,
       draftsNotLive: drafts,
-      totalViews: stats.reduce((n, s) => n + s.views, 0),
+      visits: "not available: Etsy's API has no visit counts; Jarne sees visits and Etsy Ads clicks only in Etsy itself",
+      totalOrders: stats.reduce((n, s) => n + s.orders, 0),
       totalFavorites: stats.reduce((n, s) => n + s.favorites, 0),
       bestListings: [...stats].reverse().slice(0, 5).map(brief),
       weakestListings: stats.slice(0, 5).map(brief),
       social,
       socialNote: "Pinterest, Facebook and Instagram post daily by themselves once connected; no play needed for them.",
-      niches: [...byNiche.entries()].map(([niche, n]) => ({ niche, ...n })).sort((a, b) => b.views - a.views).slice(0, 15),
+      niches: [...byNiche.entries()].map(([niche, n]) => ({ niche, ...n })).sort((a, b) => b.favorites + ORDER_WEIGHT * b.orders - (a.favorites + ORDER_WEIGHT * a.orders)).slice(0, 15),
     };
   }
 
@@ -169,7 +204,8 @@ export async function businessMetrics(businessId: string, teamAgentIds: string[]
 
 // ---------- measuring ----------
 
-// A type (not an interface) so it can be stored as JSON by Prisma.
+// A type (not an interface) so it can be stored as JSON by Prisma. `views` holds the listing's
+// signal (favourites + ORDER_WEIGHT × orders); the name stays for plays saved before the change.
 export type ViewSnapshot = {
   listingId: string;
   views: number;
@@ -177,7 +213,7 @@ export type ViewSnapshot = {
 };
 
 /**
- * Lift of the changed listings over the untouched ones (the control). Rates are views per day
+ * Lift of the changed listings over the untouched ones (the control). Rates are signal per day
  * before the change (over the listing's life) and after it (since the change). Comparing with
  * the control takes out what happened to the whole shop (season, an Etsy algorithm change).
  */
@@ -206,9 +242,10 @@ export function computeLift(
   return { liftPct: Math.round(lift * 1000) / 10, targetViewsAfter: t.viewsAfter, controlViewsAfter: c.viewsAfter };
 }
 
-/** Too few views say nothing; otherwise ±20% counts as a real change. */
-export function verdictFor(liftPct: number | null, viewsAfter: number): "worked" | "no_effect" | "worse" | "unclear" {
-  if (liftPct === null || viewsAfter < 20) return "unclear";
+/** Too few favourites and orders say nothing; otherwise ±20% counts as a real change. */
+export const MIN_SIGNAL = 5;
+export function verdictFor(liftPct: number | null, signalAfter: number): "worked" | "no_effect" | "worse" | "unclear" {
+  if (liftPct === null || signalAfter < MIN_SIGNAL) return "unclear";
   if (liftPct >= 20) return "worked";
   if (liftPct <= -20) return "worse";
   return "no_effect";

@@ -28,8 +28,8 @@ describe("Marketing measurement", () => {
     expect(computeLift({ before: [before("a", 0, 10)], viewsNow: { a: 5 } }, { before: [], viewsNow: {} }, 14).liftPct).toBeNull();
   });
 
-  it("only calls it when there are enough views", () => {
-    expect(verdictFor(50, 10)).toBe("unclear");
+  it("only calls it when there are enough favourites and orders", () => {
+    expect(verdictFor(50, 4)).toBe("unclear");
     expect(verdictFor(50, 40)).toBe("worked");
     expect(verdictFor(-30, 40)).toBe("worse");
     expect(verdictFor(5, 40)).toBe("no_effect");

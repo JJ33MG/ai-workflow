@@ -269,7 +269,6 @@ export interface EtsyListing {
   price: { amount: number; divisor: number; currency_code: string };
   shipping_profile_id?: number | null;
   return_policy_id?: number | null;
-  views?: number;
   num_favorers?: number;
 }
 
