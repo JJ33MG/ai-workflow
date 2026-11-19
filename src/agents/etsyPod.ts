@@ -27,6 +27,7 @@ import {
   designText,
   fitName,
   intendedText,
+  normalizeTemplate,
   personalizationOf,
   personalizationCard,
   templateProblems,
@@ -371,7 +372,7 @@ async function designWithRetry(idea: DesignInput, log?: TaskContext["log"], task
   const my = Math.round(side.height * 0.08);
   let feedback = "";
   for (let attempt = 1; ; attempt++) {
-    const svg = sanitizeSvg(
+    let svg = sanitizeSvg(
       await askText({
         agentId: ID,
         purpose: "pod_design_svg",
@@ -398,6 +399,7 @@ async function designWithRetry(idea: DesignInput, log?: TaskContext["log"], task
         prompt: `Slogan (print exactly this text${idea.personalized ? ", with NAME replaced by your sample name" : ""}): "${idea.slogan}"\nNiche: ${idea.niche}\nBrief: ${idea.designBrief}${feedback}`,
       }),
     );
+    if (idea.personalized) svg = normalizeTemplate(svg);
     if (idea.personalized) {
       const problems = templateProblems(svg);
       if (!problems.length) {

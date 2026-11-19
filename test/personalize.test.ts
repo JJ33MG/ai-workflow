@@ -72,3 +72,14 @@ describe("personalization photo", () => {
     if (process.env.CARD_PREVIEW) (await import("node:fs")).writeFileSync(process.env.CARD_PREVIEW, png);
   }, 60_000);
 });
+
+describe("template tidy-up", () => {
+  it("centres the name line and shows capitals when asked", async () => {
+    const { normalizeTemplate, templateProblems, exampleName } = await import("../src/lib/personalize.js");
+    const raw = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 800"><text id="personal-name" x="120" y="400" font-size="150" data-case="upper">Mike</text></svg>`;
+    const out = normalizeTemplate(raw);
+    expect(templateProblems(out)).toEqual([]);
+    expect(out).toContain('x="500"');
+    expect(exampleName(out)).toBe("MIKE");
+  });
+});

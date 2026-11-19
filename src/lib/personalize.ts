@@ -206,3 +206,23 @@ export function intendedText(slogan: string, svg: string): string {
   const shown = m && /data-case\s*=\s*["']upper["']/i.test(m[1]) ? sample.toUpperCase() : sample;
   return slogan.replace(/\bNAME\b/g, shown);
 }
+
+/**
+ * Tidies a freshly drawn template so it behaves the same in the photos as on an order: the name
+ * line is centred (text-anchor middle at the design's centre) and a name meant for capitals is
+ * shown in capitals already.
+ */
+export function normalizeTemplate(svg: string): string {
+  const m = svg.match(NAME_ELEMENT);
+  if (!m) return svg;
+  let open = m[1];
+  if (!/text-anchor\s*[:=]\s*["']?middle/i.test(open)) {
+    const [vx, , vw] = viewBoxOf(svg);
+    const centre = String(Math.round(vx + vw / 2));
+    open = open.replace(/text-anchor\s*=\s*["'][^"']*["']/i, "").replace(/text-anchor\s*:\s*[^;"']+;?/i, "");
+    open = /\sx\s*=\s*["'][^"']*["']/i.test(open) ? open.replace(/\sx\s*=\s*["'][^"']*["']/i, ` x="${centre}"`) : open.replace(/^<text\b/i, `<text x="${centre}"`);
+    open = open.replace(/^<text\b/i, '<text text-anchor="middle"');
+  }
+  const fixed = svg.replace(NAME_ELEMENT, `${open}${m[2]}${m[3]}`);
+  return /<tspan/i.test(m[2]) ? fixed : applyName(fixed, exampleName(fixed));
+}
