@@ -16,6 +16,7 @@ import { startOfDay, toEurCents } from "../lib/money.js";
 import { findEtsySetup, mostUsedId, saveReturnPolicy } from "../lib/etsySetup.js";
 import { campaignBrief, todayIso } from "../lib/marketing.js";
 import { findPrintfulSetup } from "../lib/printfulSetup.js";
+import { MAX_PHOTOS, ffmpegAvailable, makeListingVideo } from "../lib/video.js";
 import { enqueue, enqueueOnce } from "../lib/tasks.js";
 import type { AgentDefinition, TaskContext } from "./types.js";
 
@@ -461,6 +462,8 @@ async function addPhotos(_payload: Record<string, unknown>, { log, taskId }: Tas
     if (taskId) await db.task.update({ where: { id: taskId }, data: { status: "running" } });
   }
   await log.info(`Foto's aangevuld bij ${fixed} listing(s)`, undefined, taskId);
+  // Videos are made from the photos, so they come after them.
+  await enqueueOnce(ID, "add_videos");
   return { checked: listings.length, fixed };
 }
 
@@ -591,6 +594,7 @@ async function uploadListings(payload: Record<string, unknown>, { log, taskId }:
   }
 
   if (uploaded.length === 0) return { uploaded: 0 };
+  await enqueueOnce(ID, "add_videos");
   const { now, ask } = await splitForAutoPublish(uploaded);
   if (now.length) await enqueue(ID, "publish_listings", { listingIds: now });
   if (ask.length) {
@@ -762,6 +766,57 @@ async function fixReturnPolicy(_payload: Record<string, unknown>, { log, taskId 
  * return policy on listings without one, and uploads drafts that never reached Etsy. Each step is
  * its own task, so a failure shows up in Problems with its own reason.
  */
+const VIDEOS_PER_RUN = 25;
+const VIDEO_FAILS_KEY = "etsy.video.failures";
+
+/**
+ * Gives every live and draft listing without a video a short one made from its own photos (Etsy
+ * shows it in search). Covers listings placed by hand too. Works in batches: when more are left it
+ * queues itself again. A listing that failed twice is skipped. Free on Etsy, safe to re-run.
+ */
+async function addVideos(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
+  if (config.dryRun || !etsy.isEtsyConfigured() || !(await etsy.isEtsyConnected())) return { skipped: "dry run or Etsy not connected" };
+  if (!(await ffmpegAvailable())) throw new Error("ffmpeg ontbreekt op de server; het staat in de Dockerfile, dus deploy opnieuw");
+  const failures = (await getSetting<Record<string, number>>(VIDEO_FAILS_KEY)) ?? {};
+  const listings = [...(await etsy.getListingsByState("active")), ...(await etsy.getListingsByState("draft"))];
+  const titles: string[] = [];
+  let checked = 0;
+  let left = 0;
+  for (const l of listings) {
+    const id = String(l.listing_id);
+    if ((failures[id] ?? 0) >= 2) continue;
+    if (titles.length >= VIDEOS_PER_RUN) {
+      left++;
+      continue;
+    }
+    checked++;
+    try {
+      if ((await etsy.getListingVideoCount(id)) > 0) continue;
+      const urls = (await etsy.getListingImageUrls(id)).slice(0, MAX_PHOTOS);
+      if (!urls.length) continue;
+      const photos = await Promise.all(
+        urls.map(async (u) => {
+          const res = await fetch(u);
+          if (!res.ok) throw new Error(`photo download failed: ${res.status}`);
+          return Buffer.from(await res.arrayBuffer());
+        }),
+      );
+      const video = await makeListingVideo(photos);
+      await etsy.uploadListingVideo(id, video, `listing-${id}.mp4`);
+      titles.push(decodeEntities(l.title));
+    } catch (err) {
+      failures[id] = (failures[id] ?? 0) + 1;
+      await log.warn(`Video mislukt voor ${decodeEntities(l.title)}: ${(err as Error).message}`, { listingId: id }, taskId);
+    }
+  }
+  await setSetting(VIDEO_FAILS_KEY, failures);
+  if (titles.length) {
+    await log.info(`Video toegevoegd aan ${titles.length} listing(s)${left ? `, nog ${left} te gaan` : ""}:\n${titles.join("\n")}`, undefined, taskId);
+  }
+  if (left) await enqueue(ID, "add_videos", {});
+  return { added: titles.length, checked, left };
+}
+
 async function maintenance(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
   if (config.dryRun || !etsy.isEtsyConfigured() || !(await etsy.isEtsyConnected())) return { skipped: "dry run or Etsy not connected" };
   const stuck = await db.listing.count({
@@ -771,7 +826,7 @@ async function maintenance(_payload: Record<string, unknown>, { log, taskId }: T
   await enqueueOnce(ID, "fix_return_policy");
   await enqueueOnce(ID, "add_ai_disclosure");
   if (stuck) await enqueueOnce(ID, "upload_listings");
-  await log.info(`Dagelijks onderhoud gestart: foto's aanvullen, retourbeleid${stuck ? `, ${stuck} vastgelopen concept(en) uploaden` : ""}`, undefined, taskId);
+  await log.info(`Dagelijks onderhoud gestart: foto's en video's aanvullen, retourbeleid${stuck ? `, ${stuck} vastgelopen concept(en) uploaden` : ""}`, undefined, taskId);
   return { stuckDrafts: stuck };
 }
 
@@ -976,7 +1031,7 @@ export const etsyPodAgent: AgentDefinition = {
   name: "Etsy-agent",
   phase: 1,
   businessId: "etsy-pod",
-  chatTasks: ["create_listings", "upload_listings", "sync_sales", "sync_listings", "printful_setup", "etsy_setup", "add_photos", "fix_return_policy", "catalog_setup", "maintenance", "add_ai_disclosure"],
+  chatTasks: ["create_listings", "upload_listings", "sync_sales", "sync_listings", "printful_setup", "etsy_setup", "add_photos", "fix_return_policy", "catalog_setup", "maintenance", "add_ai_disclosure", "add_videos"],
   description: "Zoekt cadeau-niches, ontwerpt mokken, zet ze op Etsy en maakt van Etsy-verkopen Printful-bestellingen.",
   dependsOn: ["database", "claude", "etsy", "printful"],
   taskInfo: {
@@ -988,8 +1043,9 @@ export const etsyPodAgent: AgentDefinition = {
     printful_setup: "Bij Printful de API-winkel, de 11 oz mok en de exacte printmaat opzoeken en opslaan",
     etsy_setup: "Bij Etsy de munt, het verzendprofiel, het retourbeleid, de categorie Mokken en de productiepartner opzoeken",
     add_photos: "Listings op Etsy met te weinig mokfoto's aanvullen met Printful-foto's",
+    add_videos: "Elke listing zonder video een korte video geven, gemaakt van de eigen productfoto's (Etsy toont die in de zoekresultaten)",
     add_ai_disclosure: "De AI-vermelding die Etsy verplicht toevoegen aan elke listing die ze nog mist",
-    maintenance: "Dagelijks onderhoud: ontbrekende productfoto's aanvullen, retourbeleid op elke listing, vastgelopen concepten alsnog uploaden",
+    maintenance: "Dagelijks onderhoud: ontbrekende productfoto's en video's aanvullen, retourbeleid op elke listing, vastgelopen concepten alsnog uploaden",
     catalog_setup: "Het productaanbod opzoeken: per product (mokken, T-shirts, hoodies, totebags, posters) de Printful-varianten en de Etsy-categorie en het verzendprofiel",
     fix_return_policy: "Het retourbeleid van de winkel op alle listings zetten die er nog geen hebben (live en concept)",
     fulfil_receipt: "De Printful-bestelling maken voor een Etsy-verkoop (automatisch bevestigd onder de uitgavelimiet)",
@@ -1008,5 +1064,6 @@ export const etsyPodAgent: AgentDefinition = {
     catalog_setup: catalogSetup,
     maintenance,
     add_ai_disclosure: addAiDisclosure,
+    add_videos: addVideos,
   },
 };

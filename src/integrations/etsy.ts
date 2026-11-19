@@ -358,6 +358,26 @@ export async function getMainImageUrl(listingId: number): Promise<string | null>
   return res.results.sort((a, b) => a.rank - b.rank)[0]?.url_570xN ?? null;
 }
 
+/** All of a listing's photos at full size, in display order. */
+export async function getListingImageUrls(listingId: string): Promise<string[]> {
+  const res = await etsy<{ results: { url_fullxfull: string; rank: number }[] }>("GET", `/listings/${listingId}/images`);
+  return res.results.sort((a, b) => a.rank - b.rank).map((r) => r.url_fullxfull);
+}
+
+/** How many videos a listing has (Etsy shows one). */
+export async function getListingVideoCount(listingId: string): Promise<number> {
+  const res = await etsy<{ count: number }>("GET", `/listings/${listingId}/videos`);
+  return res.count;
+}
+
+/** Adds a video to a listing (5-15 s, up to 100 MB). Etsy processes it after the upload. */
+export async function uploadListingVideo(listingId: string, mp4: Buffer, name: string): Promise<void> {
+  const form = new FormData();
+  form.append("video", new Blob([new Uint8Array(mp4)], { type: "video/mp4" }), name);
+  form.append("name", name);
+  await etsy("POST", `/shops/${await shopId()}/listings/${listingId}/videos`, form);
+}
+
 /** The listing's main photo at full size (for Pinterest, which prefers large images). */
 export async function getLargeImageUrl(listingId: string): Promise<string | null> {
   const res = await etsy<{ results: { url_fullxfull: string; rank: number }[] }>("GET", `/listings/${listingId}/images`);

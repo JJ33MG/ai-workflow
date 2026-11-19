@@ -1,9 +1,10 @@
 FROM node:22-bookworm-slim
 
 # Fonts are required: designs are SVG text rendered to PNG, and without
-# system fonts every design comes out blank. OpenSSL is needed by Prisma.
+# system fonts every design comes out blank. OpenSSL is needed by Prisma,
+# ffmpeg makes the listing videos.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends fonts-dejavu fonts-liberation fonts-noto-core openssl \
+  && apt-get install -y --no-install-recommends fonts-dejavu fonts-liberation fonts-noto-core openssl ffmpeg \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
