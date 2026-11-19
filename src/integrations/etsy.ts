@@ -180,9 +180,9 @@ export interface DraftListingInput {
 }
 
 /** Attaches a file the buyer downloads after paying (digital listings; 5 files max, 20 MB each). */
-export async function uploadListingFile(listingId: string, data: Buffer, name: string, rank: number): Promise<void> {
+export async function uploadListingFile(listingId: string, data: Buffer, name: string, rank: number, type = "image/jpeg"): Promise<void> {
   const form = new FormData();
-  form.append("file", new Blob([new Uint8Array(data)], { type: "image/jpeg" }), name);
+  form.append("file", new Blob([new Uint8Array(data)], { type }), name);
   form.append("name", name);
   form.append("rank", String(rank));
   await etsy("POST", `/shops/${await shopId()}/listings/${listingId}/files`, form);

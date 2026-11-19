@@ -93,7 +93,7 @@ export function drawModels(): string[] {
   return config.kdp.drawModel === config.claude.model ? tries : [...tries, config.claude.model];
 }
 
-async function drawPage(subject: string, theme: string, ageRange: string): Promise<{ svg: string; png: Buffer } | null> {
+export async function drawPage(subject: string, theme: string, ageRange: string): Promise<{ svg: string; png: Buffer } | null> {
   let feedback = "";
   for (const model of drawModels()) {
     const svg = sanitizeSvg(

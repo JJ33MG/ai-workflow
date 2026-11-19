@@ -2,8 +2,17 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { config } from "./config.js";
-import { productType } from "./lib/catalog.js";
+import { PRINTABLE, productType } from "./lib/catalog.js";
+import { designUrl } from "./lib/design.js";
+import { DIGITAL_KINDS, type DigitalKind } from "./lib/digital.js";
 import { db } from "./db.js";
+
+/** Dutch name of a product type for the dashboard, including printables and downloads. */
+function productLabel(type: string): string {
+  if (type === PRINTABLE.id) return PRINTABLE.label;
+  const kind = type.startsWith("digital-") ? DIGITAL_KINDS[type.slice(8) as DigitalKind] : undefined;
+  return kind?.label ?? productType(type)?.label ?? type;
+}
 
 // Every business the company runs or plans to run (from the build brief).
 // Agents point at a business with `businessId`; revenue and costs of a business
@@ -72,8 +81,12 @@ export const BUSINESSES: BusinessDefinition[] = [
         status: l.status,
         priceCents: l.priceCents,
         currency: l.currency,
-        image: l.designSvg ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(l.designSvg)}` : (l.imageUrl ?? undefined),
-        detail: l.source === "etsy" ? "Uit je Etsy-winkel" : `${productType(l.productType)?.label ?? l.productType} · ${l.niche}`,
+        image: l.designSvg
+          ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(l.designSvg)}`
+          : l.productType.startsWith("digital-") && l.designFile
+            ? designUrl(l.designFile)
+            : (l.imageUrl ?? undefined),
+        detail: l.source === "etsy" ? "Uit je Etsy-winkel" : `${productLabel(l.productType)} · ${l.niche}`,
         createdAt: l.createdAt,
         salesCount: l.etsyListingId ? (soldByListing.get(l.etsyListingId) ?? 0) : 0,
       }));

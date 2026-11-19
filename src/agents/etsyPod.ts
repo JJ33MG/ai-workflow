@@ -512,7 +512,14 @@ async function addMockups(
 async function addPhotos(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
   if (config.dryRun || !etsy.isEtsyConfigured()) return { skipped: "dry run or Etsy not connected" };
   const listings = await db.listing.findMany({
-    where: { source: "agent", etsyListingId: { not: null }, status: { in: ["uploaded", "active"] }, designFile: { not: "" } },
+    // Downloads bring their own photos; Printful mockups are for physical products.
+    where: {
+      source: "agent",
+      etsyListingId: { not: null },
+      status: { in: ["uploaded", "active"] },
+      designFile: { not: "" },
+      NOT: { productType: { startsWith: "digital-" } },
+    },
     orderBy: { createdAt: "desc" },
     take: 40,
   });
