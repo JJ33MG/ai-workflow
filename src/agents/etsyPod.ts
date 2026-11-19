@@ -1074,6 +1074,57 @@ async function repriceListings(_payload: Record<string, unknown>, { log, taskId 
   return { changed, failed: failed.length };
 }
 
+/**
+ * Redraws the print files of existing listings with the current layout (e.g. after a print got
+ * bigger) and replaces their Etsy photos and video, so the photos always match what Printful prints.
+ * Prices stay as they are. Payload: listingIds, or productTypes (all live and draft listings of
+ * those types). Etsy allows 10 photos, so the old ones go first, keeping one until the new ones are up.
+ */
+async function refreshListings(payload: Record<string, unknown>, { log, taskId }: TaskContext) {
+  if (config.dryRun || !etsy.isEtsyConfigured() || !(await etsy.isEtsyConnected())) return { skipped: "dry run or Etsy not connected" };
+  const ids = Array.isArray(payload.listingIds) ? (payload.listingIds as string[]) : undefined;
+  const types = Array.isArray(payload.productTypes) ? (payload.productTypes as string[]) : undefined;
+  if (!ids && !types) throw new Error("Geef listingIds of productTypes mee");
+  const listings = await db.listing.findMany({
+    where: {
+      source: "agent",
+      status: { in: ["uploaded", "active"] },
+      etsyListingId: { not: null },
+      ...(ids ? { id: { in: ids } } : { productType: { in: types } }),
+    },
+  });
+  const done: string[] = [];
+  for (const listing of listings) {
+    const entry = catalogEntry(listing.productType);
+    const old = (listing.variants as ListingVariant[] | null) ?? [];
+    if (!entry || !old.length || !listing.designSvg) continue;
+    const etsyId = listing.etsyListingId!;
+    try {
+      const price = new Map(old.map((v) => [v.variantId, v.priceCents]));
+      const variants = (await renderVariants(listing.designSvg, entry, listing.id))
+        .filter((v) => price.has(v.variantId))
+        .map((v) => ({ ...v, priceCents: price.get(v.variantId)! }));
+      const updated = await db.listing.update({ where: { id: listing.id }, data: { variants: variants as unknown as object, designFile: variants[0].file } });
+
+      const oldImages = await etsy.getListingImageIds(etsyId);
+      for (const id of oldImages.slice(1)) await etsy.deleteListingImage(etsyId, id);
+      let rank = 1 + (await addMockups(updated, etsyId, 1, log, taskId));
+      if (rank === 1) throw new Error("Printful gaf geen nieuwe productfoto's; de oude hoofdfoto blijft staan");
+      if (listing.personalized) await etsy.uploadListingImage(etsyId, await personalizationCard(listing.designSvg), rank++);
+      await etsy.uploadListingImage(etsyId, await readFile(path.join(designsDir(), variants[0].file)), rank);
+      if (oldImages[0]) await etsy.deleteListingImage(etsyId, oldImages[0]);
+      for (const v of await etsy.getListingVideoIds(etsyId)) await etsy.deleteListingVideo(etsyId, v);
+      done.push(listing.title);
+    } catch (err) {
+      await log.warn(`Vernieuwen mislukt voor ${listing.title}: ${(err as Error).message}`, undefined, taskId);
+    }
+    if (taskId) await db.task.update({ where: { id: taskId }, data: { status: "running" } });
+  }
+  if (done.length) await enqueueOnce(ID, "add_videos");
+  await log.info(`Printbestanden en foto's vernieuwd voor ${done.length} listing(s)${done.length ? `:\n${done.join("\n")}` : ""}`, undefined, taskId);
+  return { refreshed: done.length };
+}
+
 async function maintenance(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
   if (config.dryRun || !etsy.isEtsyConfigured() || !(await etsy.isEtsyConnected())) return { skipped: "dry run or Etsy not connected" };
   const stuck = await db.listing.count({
@@ -1411,7 +1462,7 @@ export const etsyPodAgent: AgentDefinition = {
   name: "Etsy-agent",
   phase: 1,
   businessId: "etsy-pod",
-  chatTasks: ["create_listings", "upload_listings", "sync_sales", "sync_listings", "printful_setup", "etsy_setup", "add_photos", "fix_return_policy", "catalog_setup", "maintenance", "add_ai_disclosure", "add_videos", "pricing_report", "reprice_listings", "sync_shipments"],
+  chatTasks: ["create_listings", "upload_listings", "sync_sales", "sync_listings", "printful_setup", "etsy_setup", "add_photos", "fix_return_policy", "catalog_setup", "maintenance", "add_ai_disclosure", "add_videos", "pricing_report", "reprice_listings", "sync_shipments", "refresh_listings"],
   description: "Zoekt cadeau-niches, ontwerpt mokken, zet ze op Etsy en maakt van Etsy-verkopen Printful-bestellingen.",
   dependsOn: ["database", "claude", "etsy", "printful"],
   taskInfo: {
@@ -1423,6 +1474,7 @@ export const etsyPodAgent: AgentDefinition = {
     printful_setup: "Bij Printful de API-winkel, de 11 oz mok en de exacte printmaat opzoeken en opslaan",
     etsy_setup: "Bij Etsy de munt, het verzendprofiel, het retourbeleid, de categorie Mokken en de productiepartner opzoeken",
     add_photos: "Listings op Etsy met te weinig mokfoto's aanvullen met Printful-foto's",
+    refresh_listings: "Printbestanden opnieuw tekenen met de huidige opmaak en de foto's en video op Etsy vervangen (listingIds of productTypes)",
     sync_shipments: "Verzonden Printful-bestellingen met hun track & trace op Etsy als verzonden markeren",
     reprice_listings: "De prijzen uit de catalogus op alle listings van de bot zetten (live en concept); gepersonaliseerde houden hun meerprijs",
     pricing_report: "Echte winst per product en markt doorrekenen (Printful-kosten met verzending en btw, Etsy-verzendprijzen en -kosten), ook bij 20% en 30% korting",
@@ -1451,5 +1503,6 @@ export const etsyPodAgent: AgentDefinition = {
     pricing_report: pricingReport,
     reprice_listings: repriceListings,
     sync_shipments: syncShipments,
+    refresh_listings: refreshListings,
   },
 };

@@ -212,8 +212,9 @@ export async function renderPrintFile(
 ): Promise<Buffer> {
   const art = ink === "light" ? lightInk(svg) : svg;
   if (layout === "mug-wrap") return mirrorSides(await fitToSide(art, { width: Math.round(width / 2), height }));
-  // On a shirt the design sits on the chest: wide, not too tall, near the top of the print area.
-  if (layout === "chest") return placeContent(art, width, height, width * 0.8, height * 0.4, height * 0.06);
+  // On a shirt the design sits on the chest, near the top of the print area: up to 85% of the width and
+  // 58% of the height, so a slogan of four or five lines still prints 10-12 inches wide, not a small patch.
+  if (layout === "chest") return placeContent(art, width, height, width * 0.85, height * 0.58, height * 0.06);
   return placeContent(art, width, height, width * 0.8, height * 0.7, "center");
 }
 

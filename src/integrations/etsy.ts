@@ -257,6 +257,27 @@ export async function updateListingSeo(listingId: string, title: string, tags: s
   await etsy("PATCH", `/shops/${await shopId()}/listings/${listingId}`, { title, tags });
 }
 
+/** A listing's photo ids, in display order. */
+export async function getListingImageIds(listingId: string): Promise<number[]> {
+  const res = await etsy<{ results: { listing_image_id: number; rank: number }[] }>("GET", `/listings/${listingId}/images`);
+  return res.results.sort((a, b) => a.rank - b.rank).map((r) => r.listing_image_id);
+}
+
+export async function deleteListingImage(listingId: string, imageId: number): Promise<void> {
+  const res = await etsyRequest("DELETE", `/shops/${await shopId()}/listings/${listingId}/images/${imageId}`);
+  if (!res.ok && res.status !== 404) throw new Error(`Etsy DELETE image ${imageId} failed: ${res.status} ${await res.text()}`);
+}
+
+export async function getListingVideoIds(listingId: string): Promise<number[]> {
+  const res = await etsy<{ results: { video_id: number }[] }>("GET", `/listings/${listingId}/videos`);
+  return res.results.map((r) => r.video_id);
+}
+
+export async function deleteListingVideo(listingId: string, videoId: number): Promise<void> {
+  const res = await etsyRequest("DELETE", `/shops/${await shopId()}/listings/${listingId}/videos/${videoId}`);
+  if (!res.ok && res.status !== 404) throw new Error(`Etsy DELETE video ${videoId} failed: ${res.status} ${await res.text()}`);
+}
+
 /** How many photos a listing has on Etsy. */
 export async function getListingImageCount(listingId: string): Promise<number> {
   const res = await etsy<{ count: number }>("GET", `/listings/${listingId}/images`);
