@@ -77,7 +77,7 @@ const DOC_RULES =
 
 const ReviewSchema = z.object({ ok: z.boolean(), problems: z.array(z.string()) });
 
-async function reviewDocPage(png: Buffer, page: Plan["pages"][number], kind: DigitalKind) {
+async function reviewDocPage(png: Buffer, page: Plan["pages"][number], kind: DigitalKind, allTitles: string[]) {
   const small = await sharp(png).resize(900, 1200, { fit: "inside" }).png().toBuffer();
   return askJson({
     agentId: ID,
@@ -90,6 +90,7 @@ async function reviewDocPage(png: Buffer, page: Plan["pages"][number], kind: Dig
     system: "You check printable pages before they are sold on Etsy. Be strict: a buyer who prints a sloppy page leaves a bad review.",
     prompt:
       `This should be the ${kind === "planner" ? "planner" : "kids' activity"} page "${page.title}": ${page.brief}\n` +
+      `The product's pages are exactly: ${allTitles.join("; ")}. Reject the page if it mentions or lists an activity or page that is not in this list.\n` +
       "Reject it (ok=false) and list each problem if: any word is misspelled or words run together; text overlaps text, lines or boxes, or runs " +
       "outside its box; anything is cut off at the edge; the page is hard to use (too little room to write, unclear instructions, confusing layout); " +
       "it looks amateurish or unbalanced; it shows a real year's dates or numbered calendar days; or it uses brands or trademarked characters.",
@@ -109,6 +110,8 @@ async function drawDocPage(page: Plan["pages"][number], plan: Plan, kind: Digita
         system: DOC_RULES,
         prompt:
           `Product: ${plan.title} (${plan.theme}, for ${plan.audience}). Accent colour: ${plan.accent}.\n` +
+          `The product contains exactly these pages, in this order: ${plan.pages.map((p, i) => `${i + 1}. ${p.title}`).join("; ")}. ` +
+          "If this page refers to other pages (a contents list, a checklist, 'see page X'), name only these, never activities that are not in the list.\n" +
           `Page: "${page.title}". What it contains: ${page.brief}${feedback}`,
       }),
     );
@@ -118,7 +121,7 @@ async function drawDocPage(page: Plan["pages"][number], plan: Plan, kind: Digita
       .png()
       .toBuffer();
     const edges = await inkedEdges(png);
-    const verdict = edges.length ? { ok: false, problems: [`content runs off the ${edges.join(" and ")} edge`] } : await reviewDocPage(png, page, kind);
+    const verdict = edges.length ? { ok: false, problems: [`content runs off the ${edges.join(" and ")} edge`] } : await reviewDocPage(png, page, kind, plan.pages.map((p) => p.title));
     if (verdict.ok) return png;
     feedback = `\n\nA reviewer rejected your previous version: ${verdict.problems.join("; ")}. Draw it again, simpler, avoiding every one of these problems.`;
   }
