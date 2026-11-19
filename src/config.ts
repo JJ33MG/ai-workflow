@@ -58,6 +58,23 @@ export const config = {
     autoPublishPerDay: num("ETSY_AUTO_PUBLISH_PER_DAY", 0),
   },
 
+  ebay: {
+    clientId: str("EBAY_CLIENT_ID"),
+    clientSecret: str("EBAY_CLIENT_SECRET"),
+    // The "RuName" eBay shows next to the redirect URL in the developer portal (User Tokens).
+    ruName: str("EBAY_RUNAME"),
+    marketplaceId: str("EBAY_MARKETPLACE", "EBAY_US"),
+    currency: str("EBAY_CURRENCY", "USD"),
+    // 32-80 letters/digits for eBay's account-deletion check; derived from ADMIN_TOKEN when not set.
+    verificationToken: str("EBAY_VERIFICATION_TOKEN"),
+    // New eBay sellers start with a limit (often about 10 items): list at most this many products.
+    maxListings: num("EBAY_MAX_LISTINGS", 10),
+    // Printful needs 2-5 working days to make an item; promising less earns late-shipment marks.
+    handlingDays: num("EBAY_HANDLING_DAYS", 5),
+    shippingCarrier: str("EBAY_SHIPPING_CARRIER", "USPS"),
+    shippingService: str("EBAY_SHIPPING_SERVICE", "USPSGroundAdvantage"),
+  },
+
   pinterest: {
     appId: str("PINTEREST_APP_ID"),
     appSecret: str("PINTEREST_APP_SECRET"),

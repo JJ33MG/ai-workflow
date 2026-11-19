@@ -11,6 +11,7 @@ import { ChatUnavailableError, chatHistory, sendChat } from "./chat.js";
 import { buildBusinessDetail, buildDashboard } from "./dashboard.js";
 import { db, getSetting } from "./db.js";
 import * as etsy from "./integrations/etsy.js";
+import * as ebay from "./integrations/ebay.js";
 import * as meta from "./integrations/meta.js";
 import * as pinterest from "./integrations/pinterest.js";
 import { decide, decideAll } from "./lib/approvals.js";
@@ -298,7 +299,7 @@ app.get(["/privacy", "/privacy/:brand"], (_req, res) => {
 <h1>Privacy policy</h1>
 <p>This app is the private marketing and shop tool of All You Can Wish (AllyouwishDesigns, <a href="https://www.etsy.com/shop/AllyouwishDesigns">our Etsy shop</a>). It is used only by the shop owner.</p>
 <h2>What it does</h2>
-<p>With the owner's permission it publishes posts about our own products to the owner's own Pinterest, Facebook and Instagram accounts, and reads the owner's own Etsy shop data (listings, views, orders) to run the shop.</p>
+<p>With the owner's permission it publishes posts about our own products to the owner's own Pinterest, Facebook and Instagram accounts, lists our own products in the owner's own Etsy and eBay shops, and reads those shops' data (listings, orders) to run them.</p>
 <h2>Data</h2>
 <p>We store only the access tokens the owner grants and the IDs of the posts we create. We do not collect, sell or share personal data of other users. Order details from Etsy are used only to fulfil those orders.</p>
 <h2>Removing access</h2>
@@ -321,6 +322,46 @@ app.get("/auth/pinterest/callback", async (req, res) => {
   } catch (err) {
     res.status(400).send(`Pinterest connection failed: ${(err as Error).message}`);
   }
+});
+
+// eBay OAuth: open /auth/ebay/start?token=ADMIN_TOKEN in a browser once.
+app.get("/auth/ebay/start", requireAdmin, async (_req, res) => {
+  res.redirect(await ebay.buildAuthUrl());
+});
+
+app.get("/auth/ebay/callback", async (req, res) => {
+  try {
+    await ebay.handleCallback(String(req.query.code ?? ""), String(req.query.state ?? ""));
+    await agentLogger("ebay").info("eBay gekoppeld");
+    await enqueue("ebay", "ebay_setup");
+    res.send("eBay connected. You can close this tab.");
+  } catch (err) {
+    res.status(400).send(`eBay connection failed: ${(err as Error).message}`);
+  }
+});
+
+// What to enter in eBay's developer portal (Alerts & Notifications → Marketplace account deletion).
+app.get("/auth/ebay/info", requireAdmin, (_req, res) => {
+  res.json({
+    deletionEndpoint: ebay.deletionEndpoint(),
+    verificationToken: ebay.verificationToken(),
+    acceptUrl: `${config.publicUrl}/auth/ebay/callback`,
+    privacyPolicyUrl: `${config.publicUrl}/privacy/AllyouwishDesigns`,
+  });
+});
+
+// eBay's marketplace account deletion notifications (required for every production app). We keep no
+// eBay user data beyond orders, so a notification only needs acknowledging.
+app.get("/hooks/ebay/deletion", (req, res) => {
+  const code = String(req.query.challenge_code ?? "");
+  if (!code) {
+    res.status(400).json({ error: "challenge_code missing" });
+    return;
+  }
+  res.type("application/json").json({ challengeResponse: ebay.challengeResponse(code) });
+});
+app.post("/hooks/ebay/deletion", (_req, res) => {
+  res.status(200).end();
 });
 
 // Instagram + Facebook (one Meta app): open /auth/meta/start?token=ADMIN_TOKEN in a browser once.

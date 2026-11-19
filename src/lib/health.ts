@@ -3,6 +3,7 @@ import { db } from "../db.js";
 import { isEtsyConfigured, isEtsyConnected, isEtsyListingReady } from "../integrations/etsy.js";
 import { isMetaConfigured, metaConnection } from "../integrations/meta.js";
 import { getCatalog } from "./catalogSetup.js";
+import { isEbayConfigured, isEbayConnected } from "../integrations/ebay.js";
 import { isPinterestConfigured, isPinterestConnected, pinterestUser } from "../integrations/pinterest.js";
 import { hasPrintfulToken, isPrintfulConfigured, pf } from "../integrations/printful.js";
 import { schedulerState } from "../scheduler.js";
@@ -168,6 +169,20 @@ export async function runHealthChecks(now = new Date()): Promise<HealthCheck[]> 
     });
   } else {
     checks.push({ id: "pinterest", label: "Pinterest", status: "ok", detail: `Gekoppeld als ${(await pinterestUser()) ?? "?"}` });
+  }
+
+  if (!isEbayConfigured()) {
+    checks.push({
+      id: "ebay",
+      label: "eBay",
+      status: "off",
+      detail: "Niet gekoppeld: producten staan alleen op Etsy",
+      fix: "Maak een eBay-verkoopaccount en een developer-app (developer.ebay.com), zet EBAY_CLIENT_ID, EBAY_CLIENT_SECRET en EBAY_RUNAME in Railway en open /auth/ebay/start?token=ADMIN_TOKEN.",
+    });
+  } else if (!(await isEbayConnected())) {
+    checks.push({ id: "ebay", label: "eBay", status: "error", detail: "Sleutels ingesteld, maar het verkoopaccount is niet gekoppeld", fix: "Open /auth/ebay/start?token=ADMIN_TOKEN en geef toegang." });
+  } else {
+    checks.push({ id: "ebay", label: "eBay", status: "ok", detail: "Gekoppeld (ebay.com)" });
   }
 
   const catalog = getCatalog();

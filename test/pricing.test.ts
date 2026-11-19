@@ -26,3 +26,16 @@ describe("profit per sale", () => {
     expect(saleProfit({ shippingChargedCents: 599, printfulTotalCents: 1250, priceCents: price, discountPct: 0.3 }).profitCents).toBeGreaterThanOrEqual(800);
   });
 });
+
+describe("eBay prices", () => {
+  it("cover Printful's cost with shipping and eBay's fees, keeping €5 at 20% off", async () => {
+    const { ebayPriceFor, ebaySaleProfitEur } = await import("../src/lib/pricing.js");
+    // A mug to the US: Printful about €12.50 with shipping and tax; $1 = €0.92.
+    const price = ebayPriceFor(1250, 0.92, 500, 0.2);
+    expect(price % 100).toBe(99);
+    expect(ebaySaleProfitEur(price, 1250, 0.92, 0.2)).toBeGreaterThanOrEqual(500);
+    expect(ebaySaleProfitEur(price - 100, 1250, 0.92, 0.2)).toBeLessThan(500);
+    expect(price).toBeGreaterThan(2500);
+    expect(price).toBeLessThan(3500);
+  });
+});

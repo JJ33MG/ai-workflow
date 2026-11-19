@@ -77,3 +77,31 @@ export function priceFor(targetProfitCents: number, i: Omit<SaleInput, "priceCen
   }
   return 29999;
 }
+
+/**
+ * eBay (ebay.com) for a seller based outside the US: final value fee on the total, the international
+ * fee for a foreign seller, a fixed fee per order, and VAT on all of it (no VAT number yet).
+ * Shipping is free for the buyer, so the price must cover Printful's shipping too.
+ */
+export const EBAY_FEES = {
+  finalValuePct: 0.136,
+  internationalPct: 0.0165,
+  perOrderCents: 40, // USD
+  feeVatPct: Number(process.env.ETSY_FEE_VAT_PCT ?? 0.21),
+};
+
+/** Profit in EUR cents of an eBay sale priced in USD cents, given Printful's total in EUR cents. */
+export function ebaySaleProfitEur(priceUsdCents: number, printfulEurCents: number, usdToEur: number, discountPct = 0): number {
+  const total = Math.round(priceUsdCents * (1 - discountPct));
+  const fees = (total * (EBAY_FEES.finalValuePct + EBAY_FEES.internationalPct) + EBAY_FEES.perOrderCents) * (1 + EBAY_FEES.feeVatPct);
+  return Math.round((total - fees) * usdToEur - printfulEurCents);
+}
+
+/** The lowest USD price ending in .99 that keeps the shop's rule on eBay. */
+export function ebayPriceFor(printfulEurCents: number, usdToEur: number, minProfitEurCents: number, discountPct: number): number {
+  for (let dollars = 1; dollars <= 400; dollars++) {
+    const price = dollars * 100 - 1;
+    if (ebaySaleProfitEur(price, printfulEurCents, usdToEur, discountPct) >= minProfitEurCents) return price;
+  }
+  return 39999;
+}
