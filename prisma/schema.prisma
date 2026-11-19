@@ -152,6 +152,8 @@ model Listing {
   views            Int      @default(0)
   favorites        Int      @default(0)
   printfulVariant  Int?
+  /// The buyer types a name that is printed in the design (the <text id="personal-name"> element).
+  personalized     Boolean  @default(false)
   error            String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt

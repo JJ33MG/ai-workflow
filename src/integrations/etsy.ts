@@ -278,7 +278,14 @@ export interface EtsyReceipt {
   create_timestamp: number;
   grandtotal: { amount: number; divisor: number; currency_code: string };
   /** sku: "PF-<Printful variant id>" for listings with sizes or colours (see lib/catalog.ts). */
-  transactions: { listing_id: number; quantity: number; transaction_id: number; sku?: string | null }[];
+  transactions: {
+    listing_id: number;
+    quantity: number;
+    transaction_id: number;
+    sku?: string | null;
+    /** Size, colour and the buyer's personalization (property_id 54). */
+    variations?: { property_id: number; formatted_name: string; formatted_value: string }[] | null;
+  }[];
 }
 
 export async function getPaidReceiptsSince(sinceEpochSeconds: number): Promise<EtsyReceipt[]> {
@@ -323,6 +330,29 @@ export const getShop = async () =>
 
 export const getShippingProfiles = async () =>
   (await etsy<{ results: { shipping_profile_id: number; title: string }[] }>("GET", `/shops/${await shopId()}/shipping-profiles`)).results;
+
+export interface ShippingDestination {
+  destination_country_iso: string | null;
+  destination_region: string | null;
+  primary_cost: { amount: number; divisor: number; currency_code: string };
+  secondary_cost: { amount: number; divisor: number; currency_code: string };
+}
+
+/** One shipping profile with what it charges per destination. */
+export const getShippingProfile = async (profileId: number) =>
+  etsy<{ shipping_profile_id: number; title: string; shipping_profile_destinations: ShippingDestination[] }>(
+    "GET",
+    `/shops/${await shopId()}/shipping-profiles/${profileId}`,
+  );
+
+/** What a profile charges a buyer in this country: the country's own rate, else EU / non-EU, else "everywhere else". */
+export function shippingCostFor(destinations: ShippingDestination[], country: string, eu: boolean): number | null {
+  const pick =
+    destinations.find((d) => d.destination_country_iso === country) ??
+    destinations.find((d) => d.destination_region === (eu ? "eu" : "non_eu")) ??
+    destinations.find((d) => !d.destination_country_iso && (!d.destination_region || d.destination_region === "none"));
+  return pick ? moneyToCents(pick.primary_cost) : null;
+}
 
 export const getReturnPolicies = async () =>
   (await etsy<{ results: { return_policy_id: number; accepts_returns: boolean; accepts_exchanges: boolean }[] }>(
@@ -376,6 +406,18 @@ export async function uploadListingVideo(listingId: string, mp4: Buffer, name: s
   form.append("video", new Blob([new Uint8Array(mp4)], { type: "video/mp4" }), name);
   form.append("name", name);
   await etsy("POST", `/shops/${await shopId()}/listings/${listingId}/videos`, form);
+}
+
+/**
+ * Sets the questions a buyer answers at checkout (Etsy's 2026 personalization API). Replaces what
+ * the listing had, so it is safe to repeat.
+ */
+export async function setListingPersonalization(listingId: string, questions: Record<string, unknown>[]): Promise<void> {
+  await etsy(
+    "POST",
+    `/shops/${await shopId()}/listings/${listingId}/personalization?supports_multiple_personalization_questions=true`,
+    { personalization_questions: questions },
+  );
 }
 
 /** The listing's main photo at full size (for Pinterest, which prefers large images). */

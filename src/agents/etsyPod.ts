@@ -15,8 +15,22 @@ import { DesignLayoutError, designUrl, designsDir, getPrintSize, prepareDesign, 
 import { startOfDay, toEurCents } from "../lib/money.js";
 import { findEtsySetup, mostUsedId, saveReturnPolicy } from "../lib/etsySetup.js";
 import { campaignBrief, todayIso } from "../lib/marketing.js";
+import { maxDiscountPct, saleProfit } from "../lib/pricing.js";
 import { findPrintfulSetup } from "../lib/printfulSetup.js";
 import { MAX_PHOTOS, ffmpegAvailable, makeListingVideo } from "../lib/video.js";
+import {
+  MAX_NAME_CHARS,
+  PERSONALIZATION_EXTRA_CENTS,
+  PERSONALIZATION_QUESTION,
+  exampleName,
+  checkName,
+  designText,
+  fitName,
+  intendedText,
+  personalizationOf,
+  personalizationCard,
+  templateProblems,
+} from "../lib/personalize.js";
 import { enqueue, enqueueOnce } from "../lib/tasks.js";
 import type { AgentDefinition, TaskContext } from "./types.js";
 
@@ -45,7 +59,7 @@ const IdeasSchema = z.object({
 type Idea = z.infer<typeof IdeasSchema>["ideas"][number];
 type ListingText = Idea["listings"][number];
 /** What one design is drawn from. */
-type DesignInput = { slogan: string; niche: string; designBrief: string };
+type DesignInput = { slogan: string; niche: string; designBrief: string; personalized?: boolean };
 
 /** Same text (ignoring case, spaces and punctuation) = same design, so it is drawn once. */
 export const sloganKey = (slogan: string) => slogan.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -163,16 +177,18 @@ async function knowledgeDigest(): Promise<string> {
 async function createListings(payload: Record<string, unknown>, { log, taskId }: TaskContext) {
   const count = Number(payload.count ?? config.pod.listingsPerRun);
   const instructions = typeof payload.instructions === "string" ? payload.instructions.slice(0, 500) : "";
+  // Personalized: the buyer's name is printed in the design (no printables: a download can't wait for a name).
+  const personalized = payload.personalized === true;
   const digest = await knowledgeDigest();
   const types = availableTypes().filter((t) => t.variants.length || t.digital);
   if (!types.length) throw new Error("No product type is ready: run printful_setup and catalog_setup first.");
   const physical = types.filter((t) => !t.digital);
-  const printable = types.find((t) => t.digital);
+  const printable = personalized ? undefined : types.find((t) => t.digital);
   const perDesign = Math.max(1, Math.min(config.pod.productsPerDesign, physical.length));
   const productList = physical
     .map((t) => {
       const def = productType(t.typeId);
-      const prices = t.variants.map((v) => v.priceCents);
+      const prices = t.variants.map((v) => v.priceCents + (personalized ? PERSONALIZATION_EXTRA_CENTS : 0));
       return `- ${t.typeId}: ${def?.noun ?? t.label}. ${def?.facts ?? ""} Price ${Math.min(...prices) / 100}–${Math.max(...prices) / 100} ${etsy.es.currency}.`;
     })
     .join("\n");
@@ -194,6 +210,7 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
     prompt:
       `Today: ${todayIso()}.\n${await campaignBrief(ID)}\n\n${digest}\n\n${instructions ? `Jarne's direction for this batch (follow it): ${instructions}\n\n` : ""}` +
       `Products you can put a design on:\n${productList}${printableLine}\n\n` +
+      (personalized ? PERSONALIZED_BRIEF : "") +
       `Propose ${count} new gift niches. For each give: niche, and listings for ${perDesign} products from the list that suit its buyer ` +
       "(a mug almost always fits; pick apparel, totes and posters when the idea works worn or on a wall). " +
       "Every product gets its OWN text, written for how that product is used: a mug for coffee, mornings and the desk; a T-shirt or hoodie " +
@@ -224,7 +241,7 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
         const key = sloganKey(raw.slogan);
         let svg = drawn.get(key);
         if (!svg) {
-          svg = (await designWithRetry({ slogan: raw.slogan, niche: idea.niche, designBrief: raw.designBrief }, log, taskId)).svg;
+          svg = (await designWithRetry({ slogan: raw.slogan, niche: idea.niche, designBrief: raw.designBrief, personalized }, log, taskId)).svg;
           drawn.set(key, svg);
         }
         if (entry.digital) {
@@ -251,6 +268,7 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
           await log.info(`Draft design created: ${text.title}`, { listingId: listing.id, niche: idea.niche, product: PRINTABLE.id }, taskId);
           continue;
         }
+        const extra = personalized ? PERSONALIZATION_EXTRA_CENTS : 0;
         const listing = await db.listing.create({
           data: {
             niche: idea.niche,
@@ -258,14 +276,15 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
             description: withAiDisclosure(text.description),
             tags: text.tags,
             productType: entry.typeId,
-            priceCents: Math.min(...entry.variants.map((v) => v.priceCents)),
+            priceCents: Math.min(...entry.variants.map((v) => v.priceCents)) + extra,
             currency: etsy.es.currency,
             designSvg: svg,
             designFile: "",
             printfulVariant: entry.variants[0].variantId,
+            personalized,
           },
         });
-        const variants = await renderVariants(svg, entry, listing.id);
+        const variants = (await renderVariants(svg, entry, listing.id)).map((v) => ({ ...v, priceCents: v.priceCents + extra }));
         await db.listing.update({ where: { id: listing.id }, data: { variants: variants as unknown as object, designFile: variants[0].file } });
         created.push(listing.id);
         await log.info(`Draft design created: ${text.title}`, { listingId: listing.id, niche: idea.niche, product: entry.typeId }, taskId);
@@ -276,8 +295,22 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
   }
 
   if (created.length > 0) await enqueue(ID, "upload_listings", { listingIds: created });
-  return { created: created.length };
+  // The daily batch is followed by a small personalized one.
+  if (payload.personalized === undefined && config.pod.personalizedPerRun > 0) {
+    await enqueue(ID, "create_listings", { personalized: true, count: config.pod.personalizedPerRun });
+  }
+  return { created: created.length, personalized };
 }
+
+/** What the idea writer is told when the batch is personalized. */
+const PERSONALIZED_BRIEF =
+  "THIS BATCH IS PERSONALIZED: the buyer types a name at checkout and it is printed in the design. Pick niches where a name makes " +
+  "the gift (grandparents, parents, aunts and uncles, a child, a teacher or nurse by name, a pet, a couple, a team role). " +
+  "Every slogan contains the word NAME exactly once, where the buyer's name goes, and NAME stands on its own line, e.g. " +
+  "\"This mug belongs to / NAME / hands off\" or \"Best Grandpa Ever / NAME\". Never put NAME in the middle of a sentence. " +
+  "Titles start with 'Personalized' or 'Custom Name' plus the search phrase and the product. Each description starts with how it works: " +
+  `type the name in the personalization box, up to ${MAX_NAME_CHARS} characters, and it is printed exactly as typed. ` +
+  "Use tags such as 'personalized gift', 'custom name mug', 'gift with name'.\n\n";
 
 const DESIGN_ATTEMPTS = 3;
 
@@ -353,10 +386,36 @@ async function designWithRetry(idea: DesignInput, log?: TaskContext["log"], task
           `Keep every element inside x ${mx}–${side.width - mx} and y ${my}–${side.height - my}. ` +
           "You cannot measure text, so size it conservatively: a line of N characters needs a font-size of at most " +
           `${Math.round(((side.width - 2 * mx) / 0.62) / 10)}0/N for sans-serif capitals; split long slogans over more lines. ` +
-          DESIGN_RULES,
-        prompt: `Slogan (print exactly this text): "${idea.slogan}"\nNiche: ${idea.niche}\nBrief: ${idea.designBrief}${feedback}`,
+          DESIGN_RULES +
+          (idea.personalized
+            ? ` PERSONALIZED: the word NAME in the slogan is the buyer's name. Draw it as exactly one <text id="personal-name"> element on its own line, ` +
+              `with x at the horizontal centre, text-anchor="middle", a numeric font-size attribute and no <tspan> inside. Put a fitting sample ` +
+              `first name in it (e.g. Emma, or Grandpa Joe for a grandfather). The name is the hero: the largest or second-largest text. ` +
+              `Buyers type up to ${MAX_NAME_CHARS} characters, so give its line room: font-size at most ` +
+              `${Math.round((side.width - 2 * mx) / 0.62 / 10)} for 10 capitals (smaller names are fine, long ones are shrunk automatically). ` +
+              `Add data-case="upper" to print the name in capitals when that suits the style. Nothing else may depend on the name's length.`
+            : ""),
+        prompt: `Slogan (print exactly this text${idea.personalized ? ", with NAME replaced by your sample name" : ""}): "${idea.slogan}"\nNiche: ${idea.niche}\nBrief: ${idea.designBrief}${feedback}`,
       }),
     );
+    if (idea.personalized) {
+      const problems = templateProblems(svg);
+      if (!problems.length) {
+        // A long name must still fit without becoming tiny.
+        try {
+          const long = await fitName(svg, "Maximiliaan Jr");
+          const size = (s: string) => Number(s.match(/id\s*=\s*["']personal-name["'][^>]*font-size\s*=\s*["']?([\d.]+)/i)?.[1] ?? 0);
+          if (size(long) && size(long) < size(svg) * 0.45) problems.push("the name's line is too narrow: a long name becomes tiny. Give the name more width");
+        } catch (err) {
+          problems.push((err as Error).message);
+        }
+      }
+      if (problems.length) {
+        if (attempt >= DESIGN_ATTEMPTS) throw new Error(`Personalized design unusable: ${problems.join("; ")}`);
+        feedback = `\n\nYour previous version can't be personalized: ${problems.join("; ")}. Fix exactly these points.`;
+        continue;
+      }
+    }
     let png: Buffer;
     try {
       png = await prepareDesign(svg);
@@ -367,7 +426,8 @@ async function designWithRetry(idea: DesignInput, log?: TaskContext["log"], task
         "Make the text smaller or split it over more lines, and keep clear of the margins.";
       continue;
     }
-    const verdict = await reviewDesign(await sharp(Buffer.from(svg), { density: 150 }).png().toBuffer(), idea.slogan);
+    const intended = idea.personalized ? intendedText(idea.slogan, svg) : idea.slogan;
+    const verdict = await reviewDesign(await sharp(Buffer.from(svg), { density: 150 }).png().toBuffer(), intended);
     if (verdict.ok) return { svg, png };
     await log?.info(`Ontwerp afgekeurd (${idea.slogan}): ${verdict.problems.join("; ")}`, { attempt }, taskId);
     if (attempt >= DESIGN_ATTEMPTS) throw new Error(`Design failed the quality check: ${verdict.problems.join("; ")}`);
@@ -575,9 +635,18 @@ async function uploadListings(payload: Record<string, unknown>, { log, taskId }:
       await db.listing.update({ where: { id }, data: { etsyListingId: etsyId } });
     }
     if (variants.length) await etsy.updateListingInventory(etsyId, buildInventory(variants, etsy.es.readinessStateId));
+    if (listing.personalized) await etsy.setListingPersonalization(etsyId, [PERSONALIZATION_QUESTION]);
 
-    // Printful product photos first; the flat design always goes last.
-    const rank = 1 + (await addMockups(listing, etsyId, 1, log, taskId));
+    // Printful product photos first, then (personalized) the "add any name" photo; the flat design always goes last.
+    let rank = 1 + (await addMockups(listing, etsyId, 1, log, taskId));
+    if (listing.personalized) {
+      try {
+        await etsy.uploadListingImage(etsyId, await personalizationCard(listing.designSvg), rank);
+        rank++;
+      } catch (err) {
+        await log.warn(`Naamfoto mislukt voor ${listing.title}: ${(err as Error).message}`, { etsyId }, taskId);
+      }
+    }
     const design = await readFile(path.join(designsDir(), listing.designFile));
     await etsy.uploadListingImage(etsyId, design, rank);
     await db.listing.update({
@@ -817,6 +886,105 @@ async function addVideos(_payload: Record<string, unknown>, { log, taskId }: Tas
   return { added: titles.length, checked, left };
 }
 
+/** Test addresses: what an order to each market costs (Printful's tax and shipping depend on the address). */
+const PRICING_MARKETS = [
+  { country: "US", eu: false, label: "VS", recipient: { name: "Test", address1: "100 Main St", city: "Los Angeles", state_code: "CA", country_code: "US", zip: "90012" } },
+  { country: "GB", eu: false, label: "VK", recipient: { name: "Test", address1: "10 High Street", city: "London", country_code: "GB", zip: "SW1A 1AA" } },
+  { country: "DE", eu: true, label: "Duitsland", recipient: { name: "Test", address1: "Unter den Linden 1", city: "Berlin", country_code: "DE", zip: "10117" } },
+  { country: "BE", eu: true, label: "België", recipient: { name: "Test", address1: "Wetstraat 1", city: "Brussel", country_code: "BE", zip: "1000" } },
+];
+export const PRICING_KEY = "pricing.report";
+const SALE_LEVELS = [0, 0.2, 0.3];
+/** A sale must still leave at least this much per item. */
+const MIN_SALE_PROFIT_CENTS = 300;
+
+export interface PricingRow {
+  type: string;
+  label: string;
+  size: string;
+  market: string;
+  priceCents: number;
+  shippingChargedCents: number;
+  printfulCents: number;
+  printfulShippingCents: number;
+  printfulVatCents: number;
+  profit: Record<string, number>;
+  profitOffsiteCents: number;
+  maxDiscountPct: number;
+}
+
+/**
+ * The real profit of every product in every main market: asks Printful what an order would cost
+ * (product, shipping, VAT) and reads what the Etsy shipping profile charges the buyer, then works
+ * out Etsy's fees, the profit at 0/20/30% off, and the deepest sale that still leaves €3.
+ */
+async function pricingReport(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
+  if (!printful.hasPrintfulToken() || !etsy.isEtsyConfigured() || !(await etsy.isEtsyConnected())) return { skipped: "Printful or Etsy not connected" };
+  const rows: PricingRow[] = [];
+  const problems: string[] = [];
+  for (const entry of enabledTypes().filter((e) => !e.digital)) {
+    const sample = await db.listing.findFirst({ where: { productType: entry.typeId, variants: { not: undefined }, designFile: { not: "" }, source: "agent" }, orderBy: { createdAt: "desc" } });
+    const fileFor = (v: CatalogVariant) => ((sample?.variants as ListingVariant[] | null) ?? []).find((x) => x.placement === v.placement && x.width === v.width)?.file ?? sample?.designFile;
+    const byPrice = [...entry.variants].sort((a, b) => a.priceCents - b.priceCents);
+    const picks = [...new Map([byPrice[0], byPrice[byPrice.length - 1]].map((v) => [v.size, v])).values()];
+    const destinations = entry.shippingProfileId ? (await etsy.getShippingProfile(entry.shippingProfileId)).shipping_profile_destinations : [];
+    for (const v of picks) {
+      const file = fileFor(v);
+      if (!file) {
+        problems.push(`${entry.label}: geen printbestand om mee te rekenen`);
+        continue;
+      }
+      for (const m of PRICING_MARKETS) {
+        try {
+          const c = await printful.estimateCosts({ recipient: m.recipient, items: [{ variantId: v.variantId, quantity: 1, fileUrl: designUrl(file), placement: v.placement }] });
+          const toCents = (x: string) => toEurCents(Math.round(Number(x) * 100), c.currency);
+          const charged = etsy.shippingCostFor(destinations, m.country, m.eu);
+          if (charged === null) {
+            problems.push(`${entry.label}: je verzendprofiel "${entry.shippingProfileTitle}" verzendt niet naar ${m.label}`);
+            continue;
+          }
+          const base = { priceCents: v.priceCents, shippingChargedCents: charged, printfulTotalCents: toCents(c.total) };
+          rows.push({
+            type: entry.typeId,
+            label: entry.label,
+            size: v.size,
+            market: m.label,
+            priceCents: v.priceCents,
+            shippingChargedCents: charged,
+            printfulCents: toCents(c.total),
+            printfulShippingCents: toCents(c.shipping),
+            printfulVatCents: toCents(c.vat) + toCents(c.tax),
+            profit: Object.fromEntries(SALE_LEVELS.map((d) => [`${d * 100}`, saleProfit({ ...base, discountPct: d }).profitCents])),
+            profitOffsiteCents: saleProfit({ ...base, offsiteAds: true }).profitCents,
+            maxDiscountPct: maxDiscountPct(base, MIN_SALE_PROFIT_CENTS),
+          });
+        } catch (err) {
+          problems.push(`${entry.label} ${v.size} → ${m.label}: ${(err as Error).message}`);
+        }
+        if (taskId) await db.task.update({ where: { id: taskId }, data: { status: "running" } });
+      }
+    }
+  }
+  const printable = saleProfit({ priceCents: PRINTABLE.priceCents, shippingChargedCents: 0, printfulTotalCents: 0 });
+  await setSetting(PRICING_KEY, { at: new Date().toISOString(), rows, problems, printableProfitCents: printable.profitCents });
+
+  const eur = (c: number) => `€${(c / 100).toFixed(2)}`;
+  const lines = [...new Set(rows.map((r) => r.label))].map((label) => {
+    const rs = rows.filter((r) => r.label === label);
+    const worst = rs.reduce((a, b) => (a.profit["0"] < b.profit["0"] ? a : b));
+    const deepest = Math.min(...rs.map((r) => r.maxDiscountPct));
+    return `${label}: winst ${eur(Math.min(...rs.map((r) => r.profit["0"])))}–${eur(Math.max(...rs.map((r) => r.profit["0"])))} (laagst: ${worst.size} naar ${worst.market}), bij 20% korting ${eur(Math.min(...rs.map((r) => r.profit["20"])))}, max. korting voor €3 winst: ${deepest}%`;
+  });
+  await log.info(
+    `Prijscheck: ${rows.length} combinaties doorgerekend met echte Printful-kosten en je Etsy-verzendprijzen\n${lines.join("\n")}` +
+      `\nPrintbare poster: ${eur(printable.profitCents)} per verkoop` +
+      (problems.length ? `\nLet op:\n${problems.join("\n")}` : ""),
+    undefined,
+    taskId,
+  );
+  return { rows: rows.length, problems: problems.length };
+}
+
 async function maintenance(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
   if (config.dryRun || !etsy.isEtsyConfigured() || !(await etsy.isEtsyConnected())) return { skipped: "dry run or Etsy not connected" };
   const stuck = await db.listing.count({
@@ -939,11 +1107,20 @@ async function syncSales(_payload: Record<string, unknown>, { log, taskId }: Tas
  * ("PF-<variant>"); listings without variants use their one variant. Listings that aren't ours
  * (placed by hand, fulfilled by Printful's own Etsy integration) are skipped.
  */
+export type OrderItem = {
+  variantId: number;
+  quantity: number;
+  fileUrl: string;
+  placement?: string;
+  /** Personalized listings: the buyer's text and what is needed to draw their own print file. */
+  personal?: { transactionId: number; text: string | null; listingId: string; variant: ListingVariant | null };
+};
+
 export function orderItemsFor(
   transactions: etsy.EtsyReceipt["transactions"],
-  listings: { etsyListingId: string | null; printfulVariant: number | null; designFile: string; variants: unknown; title: string }[],
-): { variantId: number; quantity: number; fileUrl: string; placement?: string }[] {
-  const items: { variantId: number; quantity: number; fileUrl: string; placement?: string }[] = [];
+  listings: { id?: string; etsyListingId: string | null; printfulVariant: number | null; designFile: string; variants: unknown; title: string; personalized?: boolean }[],
+): OrderItem[] {
+  const items: OrderItem[] = [];
   for (const t of transactions) {
     const listing = listings.find((l) => l.etsyListingId === String(t.listing_id));
     if (!listing?.printfulVariant) continue; // not one of ours
@@ -955,9 +1132,53 @@ export function orderItemsFor(
     const wanted = variantFromSku(t.sku);
     const v = variants.find((x) => x.variantId === wanted) ?? (variants.length === 1 ? variants[0] : undefined);
     if (!v) throw new Error(`Unknown size/colour (SKU "${t.sku ?? ""}") for "${listing.title}": fulfil this order by hand`);
-    items.push({ variantId: v.variantId, quantity: t.quantity, fileUrl: designUrl(v.file), placement: v.placement });
+    const item: OrderItem = { variantId: v.variantId, quantity: t.quantity, fileUrl: designUrl(v.file), placement: v.placement };
+    if (listing.personalized) {
+      const raw = personalizationOf(t);
+      item.personal = { transactionId: t.transaction_id, text: raw === null ? null : decodeEntities(raw), listingId: listing.id ?? "", variant: v };
+    }
+    items.push(item);
   }
   return items;
+}
+
+const NameModerationSchema = z.object({ ok: z.boolean(), reason: z.string() });
+
+/**
+ * Draws the buyer's own print file for a personalized item and checks it like a new design: the text
+ * must be printable and decent, and the rendered result must read correctly with nothing cut off.
+ * Returns the file URL, or the reason Jarne has to look at it first.
+ */
+async function personalPrintFile(item: OrderItem, receiptId: string, approvedText: string | undefined): Promise<{ url: string } | { problem: string; preview?: string }> {
+  const p = item.personal!;
+  const listing = await db.listing.findUniqueOrThrow({ where: { id: p.listingId } });
+  const check = approvedText !== undefined ? { ok: true as const, text: approvedText } : checkName(p.text);
+  if (!check.ok) return { problem: `${check.reason} (koper typte: "${check.text}")` };
+  const entry = catalogEntry(listing.productType);
+  if (!p.variant || !entry) return { problem: "het product van deze listing staat niet meer in de catalogus" };
+
+  if (approvedText === undefined) {
+    const verdict = await askJson({
+      agentId: ID,
+      purpose: "pod_name_check",
+      model: config.kdp.reviewModel,
+      effort: "low",
+      maxTokens: 300,
+      schema: NameModerationSchema,
+      system: "You check text a customer wants printed on a gift. Allow names, nicknames and short friendly words. Refuse insults, slurs, sexual or hateful text, brand names and celebrity names.",
+      prompt: `Customer text: "${check.text}"`,
+    });
+    if (!verdict.ok) return { problem: `de tekst "${check.text}" werd tegengehouden: ${verdict.reason}` };
+  }
+
+  const svg = await fitName(listing.designSvg, check.text);
+  const v = p.variant;
+  const png = await renderPrintFile(svg, entry.layout, v.width, v.height, v.ink);
+  const file = await saveDesign(png, `order-${receiptId}-${p.transactionId}-${v.variantId}`);
+  const preview = await sharp(Buffer.from(svg), { density: 150 }).png().toBuffer();
+  const review = await reviewDesign(preview, designText(svg));
+  if (!review.ok) return { problem: `de kwaliteitscontrole keurde de print af: ${review.problems.join("; ")}`, preview: designUrl(file) };
+  return { url: designUrl(file) };
 }
 
 async function fulfilReceipt(payload: Record<string, unknown>, { log, taskId }: TaskContext) {
@@ -970,6 +1191,30 @@ async function fulfilReceipt(payload: Record<string, unknown>, { log, taskId }: 
   const listings = await db.listing.findMany({ where: { etsyListingId: { in: r.transactions.map((t) => String(t.listing_id)) } } });
   const items = orderItemsFor(r.transactions, listings);
   if (items.length === 0) return { skipped: "no POD items" };
+
+  // Personalized items get their own print file with the buyer's name; anything doubtful goes to Jarne first.
+  const approvedTexts = (payload.approvedTexts as Record<string, string> | undefined) ?? {};
+  for (const item of items.filter((i) => i.personal)) {
+    const p = item.personal!;
+    const result = await personalPrintFile(item, receiptId, approvedTexts[String(p.transactionId)]);
+    if ("url" in result) {
+      item.fileUrl = result.url;
+      await log.info(`Gepersonaliseerde print gemaakt voor bestelling ${receiptId}: "${p.text}"`, { file: result.url }, taskId);
+      continue;
+    }
+    await requestApproval({
+      agentId: ID,
+      kind: "personal_text",
+      title: `Naam controleren voor Etsy-bestelling ${receiptId}`,
+      details:
+        `Gepersonaliseerde bestelling: ${result.problem}.` +
+        (result.preview ? ` Voorbeeld van de print: ${result.preview}.` : "") +
+        ` Goedkeuren = printen zoals de koper het typte ("${p.text ?? ""}"). Afwijzen = niets bestellen; stuur de koper dan een bericht via Etsy.`,
+      payload: { receiptId, approvedTexts: { ...approvedTexts, [String(p.transactionId)]: p.text ?? "" } },
+    });
+    return { waitingForApproval: "personal_text" };
+  }
+  for (const item of items) delete item.personal;
   if (config.dryRun || !printful.isPrintfulConfigured()) {
     await log.warn(`Dry run: receipt ${receiptId} needs fulfilment by hand`, { items }, taskId);
     return { dryRun: true };
@@ -1025,17 +1270,21 @@ registerApprovalExecutor("etsy_publish", async (p) => {
   return "Publishing queued";
 });
 registerApprovalExecutor("printful_order_confirm", confirmPrintfulOrder);
+registerApprovalExecutor("personal_text", async (p) => {
+  await enqueue(ID, "fulfil_receipt", { receiptId: p.receiptId, approvedTexts: p.approvedTexts });
+  return "Bestelling wordt nu bij Printful geplaatst";
+});
 
 export const etsyPodAgent: AgentDefinition = {
   id: ID,
   name: "Etsy-agent",
   phase: 1,
   businessId: "etsy-pod",
-  chatTasks: ["create_listings", "upload_listings", "sync_sales", "sync_listings", "printful_setup", "etsy_setup", "add_photos", "fix_return_policy", "catalog_setup", "maintenance", "add_ai_disclosure", "add_videos"],
+  chatTasks: ["create_listings", "upload_listings", "sync_sales", "sync_listings", "printful_setup", "etsy_setup", "add_photos", "fix_return_policy", "catalog_setup", "maintenance", "add_ai_disclosure", "add_videos", "pricing_report"],
   description: "Zoekt cadeau-niches, ontwerpt mokken, zet ze op Etsy en maakt van Etsy-verkopen Printful-bestellingen.",
   dependsOn: ["database", "claude", "etsy", "printful"],
   taskInfo: {
-    create_listings: "Niches kiezen en per ontwerp listings maken voor meerdere producten (mok, T-shirt, hoodie, totebag, poster), met printbestanden per maat en kleur",
+    create_listings: "Niches kiezen en per ontwerp listings maken voor meerdere producten (mok, T-shirt, hoodie, totebag, poster), met printbestanden per maat en kleur. Met personalized: true krijgt het ontwerp een naam die de koper zelf kiest",
     upload_listings: "Concepten en mockups naar Etsy uploaden, daarna akkoord vragen om te publiceren",
     publish_listings: "Goedgekeurde concepten live zetten op Etsy (kost $0,20 listingkosten per stuk)",
     sync_sales: "Nieuwe betaalde Etsy-bestellingen ophalen als verkopen",
@@ -1043,6 +1292,7 @@ export const etsyPodAgent: AgentDefinition = {
     printful_setup: "Bij Printful de API-winkel, de 11 oz mok en de exacte printmaat opzoeken en opslaan",
     etsy_setup: "Bij Etsy de munt, het verzendprofiel, het retourbeleid, de categorie Mokken en de productiepartner opzoeken",
     add_photos: "Listings op Etsy met te weinig mokfoto's aanvullen met Printful-foto's",
+    pricing_report: "Echte winst per product en markt doorrekenen (Printful-kosten met verzending en btw, Etsy-verzendprijzen en -kosten), ook bij 20% en 30% korting",
     add_videos: "Elke listing zonder video een korte video geven, gemaakt van de eigen productfoto's (Etsy toont die in de zoekresultaten)",
     add_ai_disclosure: "De AI-vermelding die Etsy verplicht toevoegen aan elke listing die ze nog mist",
     maintenance: "Dagelijks onderhoud: ontbrekende productfoto's en video's aanvullen, retourbeleid op elke listing, vastgelopen concepten alsnog uploaden",
@@ -1065,5 +1315,6 @@ export const etsyPodAgent: AgentDefinition = {
     maintenance,
     add_ai_disclosure: addAiDisclosure,
     add_videos: addVideos,
+    pricing_report: pricingReport,
   },
 };

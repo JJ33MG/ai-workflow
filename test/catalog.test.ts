@@ -115,6 +115,17 @@ describe("Orders and mockups", () => {
     expect(() => orderItemsFor([{ listing_id: 9, quantity: 1, transaction_id: 1, sku: null }], [listing])).toThrow(/by hand/);
   });
 
+  it("carries the buyer's name for personalized listings", () => {
+    const listing = { id: "L1", etsyListingId: "9", printfulVariant: 1, designFile: "a.png", title: "Tee", personalized: true, variants: [lv(1, "White", "dark.png")] };
+    const [item] = orderItemsFor(
+      [{ listing_id: 9, quantity: 1, transaction_id: 77, sku: "PF-1", variations: [{ property_id: 54, formatted_name: "Name to print", formatted_value: "Zo&#235; O&#39;Neil" }] }],
+      [listing],
+    );
+    expect(item.personal).toMatchObject({ transactionId: 77, text: "Zoë O'Neil", listingId: "L1" });
+    const [blank] = orderItemsFor([{ listing_id: 9, quantity: 1, transaction_id: 78, sku: "PF-1" }], [listing]);
+    expect(blank.personal?.text).toBeNull();
+  });
+
   it("keeps old single-mug listings and skips listings that aren't ours", () => {
     const old = { etsyListingId: "5", printfulVariant: 1320, designFile: "m.png", title: "Mug", variants: null };
     const manual = { etsyListingId: "6", printfulVariant: null, designFile: "", title: "By hand", variants: null };

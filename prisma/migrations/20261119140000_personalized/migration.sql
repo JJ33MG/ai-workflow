@@ -1,0 +1,1 @@
+ALTER TABLE "Listing" ADD COLUMN "personalized" BOOLEAN NOT NULL DEFAULT false;

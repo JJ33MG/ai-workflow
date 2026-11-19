@@ -9,7 +9,7 @@ import { config } from "./config.js";
 import { setPlanStatus } from "./brain.js";
 import { ChatUnavailableError, chatHistory, sendChat } from "./chat.js";
 import { buildBusinessDetail, buildDashboard } from "./dashboard.js";
-import { db } from "./db.js";
+import { db, getSetting } from "./db.js";
 import * as etsy from "./integrations/etsy.js";
 import * as meta from "./integrations/meta.js";
 import * as pinterest from "./integrations/pinterest.js";
@@ -131,6 +131,11 @@ app.post("/api/marketing/campaigns", requireAdmin, async (req, res) => {
   } catch (err) {
     res.status(400).json({ error: (err as Error).message });
   }
+});
+
+// The latest pricing report (etsy-pod:pricing_report): real profit per product and market.
+app.get("/api/pricing", requireAdmin, async (_req, res) => {
+  res.json((await getSetting("pricing.report")) ?? { rows: [], problems: ["Nog geen prijscheck gedaan: start etsy-pod:pricing_report"] });
 });
 
 // Reviewing listings one by one (Etsy requires individual human oversight): publish or reject a draft.

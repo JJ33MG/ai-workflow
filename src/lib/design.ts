@@ -107,14 +107,14 @@ export async function mirrorSides(sidePng: Buffer): Promise<Buffer> {
 const FILL_WIDTH = 0.66;
 const FILL_HEIGHT = 0.8;
 
-function viewBoxOf(svg: string): [number, number, number, number] {
+export function viewBoxOf(svg: string): [number, number, number, number] {
   const m = svg.match(/<svg\b[^>]*\bviewBox\s*=\s*["']([^"']+)["']/i);
   const v = m?.[1].trim().split(/[\s,]+/).map(Number);
   if (!v || v.length !== 4 || v.some(Number.isNaN)) throw new Error("Design SVG has no usable viewBox");
   return v as [number, number, number, number];
 }
 
-function withViewBox(svg: string, [x, y, w, h]: number[], width: number, height: number): string {
+export function withViewBox(svg: string, [x, y, w, h]: number[], width: number, height: number): string {
   return svg.replace(/<svg\b[^>]*>/i, (tag) =>
     tag
       .replace(/\s(viewBox|width|height|preserveAspectRatio)\s*=\s*("[^"]*"|'[^']*')/gi, "")

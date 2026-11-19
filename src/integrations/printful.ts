@@ -178,4 +178,20 @@ export async function createDraftOrder(input: {
   });
 }
 
+/** What Printful would charge for an order (product, shipping, VAT), without creating it. */
+export async function estimateCosts(input: {
+  recipient: OrderRecipient;
+  items: { variantId: number; quantity: number; fileUrl: string; placement?: string }[];
+}): Promise<{ currency: string; subtotal: string; shipping: string; vat: string; tax: string; total: string }> {
+  const res = await printful<{ costs: { currency: string; subtotal: string; shipping: string; vat: string; tax: string; total: string } }>(
+    "POST",
+    "/orders/estimate-costs",
+    {
+      recipient: input.recipient,
+      items: input.items.map((i) => ({ variant_id: i.variantId, quantity: i.quantity, files: [{ type: i.placement ?? pf.placement, url: i.fileUrl }] })),
+    },
+  );
+  return res.costs;
+}
+
 export const confirmOrder = (orderId: number) => printful<DraftOrder>("POST", `/orders/${orderId}/confirm`);

@@ -103,6 +103,8 @@ export const config = {
     listingsPerRun: num("POD_LISTINGS_PER_RUN", 5),
     // Each design goes on up to this many products (mug, T-shirt, tote …), each its own listing.
     productsPerDesign: num("POD_PRODUCTS_PER_DESIGN", 3),
+    // After the daily batch: this many extra niches with the buyer's name printed in the design (0 = off).
+    personalizedPerRun: num("POD_PERSONALIZED_PER_RUN", 1),
     designWidth: num("POD_DESIGN_WIDTH", 2700),
     designHeight: num("POD_DESIGN_HEIGHT", 1050),
   },

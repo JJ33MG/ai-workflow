@@ -218,6 +218,31 @@ describe.skipIf(!url)("with database", async () => {
     await db.listing.deleteMany({ where: { etsyListingId: { in: ["d1", "d2", "d3"] } } });
   });
 
+  it("holds a personalized order with an unprintable name for Jarne instead of ordering it", async () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 800"><text id="personal-name" x="500" y="400" font-size="150" text-anchor="middle">Emma</text></svg>`;
+    await db.listing.deleteMany({ where: { etsyListingId: "p9" } });
+    await db.sale.deleteMany({ where: { externalId: "r-personal" } });
+    const variant = { variantId: 1, sku: "PF-1", size: "11 oz", color: null, ink: "dark", priceCents: 2599, costUsd: 5, placement: "default", width: 2700, height: 1050, file: "x.png" };
+    await db.listing.create({
+      data: { niche: "x", title: "Personalized mug", description: "", tags: [], priceCents: 2599, currency: "EUR", designSvg: svg, designFile: "x.png", etsyListingId: "p9", printfulVariant: 1, personalized: true, variants: [variant] },
+    });
+    const receipt = {
+      receipt_id: 1, name: "A", first_line: "x", second_line: null, city: "x", state: null, zip: "1", country_iso: "BE", create_timestamp: 1,
+      grandtotal: { amount: 2599, divisor: 100, currency_code: "EUR" },
+      transactions: [{ listing_id: 9, quantity: 1, transaction_id: 5, sku: "PF-1", variations: [{ property_id: 54, formatted_name: "Name to print", formatted_value: "Emma 🎄" }] }],
+    };
+    receipt.transactions[0].listing_id = "p9" as unknown as number;
+    await db.sale.create({ data: { agentId: "etsy-pod", source: "etsy", externalId: "r-personal", amountCents: 2599, currency: "EUR", occurredAt: new Date(), data: receipt } });
+    const log = { info: async () => {}, warn: async () => {}, error: async () => {} };
+    const result = await agents.get("etsy-pod")!.handlers.fulfil_receipt({ receiptId: "r-personal" }, { log });
+    expect(result).toEqual({ waitingForApproval: "personal_text" });
+    const approval = await db.approval.findFirstOrThrow({ where: { kind: "personal_text" } });
+    expect(approval.details).toMatch(/emoji/);
+    expect(approval.payload).toMatchObject({ receiptId: "r-personal", approvedTexts: { "5": "Emma 🎄" } });
+    await db.listing.deleteMany({ where: { etsyListingId: "p9" } });
+    await db.sale.deleteMany({ where: { externalId: "r-personal" } });
+  });
+
   it("blocks Claude calls once the daily budget is spent", async () => {
     await db.cost.create({ data: { agentId: "ceo", category: "claude_api", amountCents: 100_000, currency: "EUR" } });
     await expect(assertApiBudget()).rejects.toBeInstanceOf(BudgetExceededError);
