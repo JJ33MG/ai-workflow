@@ -102,7 +102,7 @@ export const PRODUCT_TYPES: ProductType[] = [
       { printful: "M", label: "M", priceCents: 2799 },
       { printful: "L", label: "L", priceCents: 2799 },
       { printful: "XL", label: "XL", priceCents: 2799 },
-      { printful: "2XL", label: "2XL", priceCents: 2999 },
+      { printful: "2XL", label: "2XL", priceCents: 3099 },
       { printful: "3XL", label: "3XL", priceCents: 3199 },
     ],
     colors: ["White", "Black", "Navy", "Athletic Heather"],

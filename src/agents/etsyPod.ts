@@ -983,6 +983,18 @@ async function pricingReport(_payload: Record<string, unknown>, { log, taskId }:
     const prev = breaking.get(key);
     if (!prev || needed > prev.neededCents) breaking.set(key, { label: r.label, size: r.size, priceCents: r.priceCents, neededCents: needed });
   }
+  // Listings placed by hand (through Printful) aren't priced by the catalogue: they are white mugs,
+  // so anything below what the white 11 oz mug needs loses money or breaks the rule.
+  const mugRows = rows.filter((r) => r.type === "mug" && r.size === "11 oz");
+  const mugFloor = mugRows.length
+    ? Math.max(...mugRows.map((r) => priceFor(MIN_SALE_PROFIT_CENTS, { shippingChargedCents: r.shippingChargedCents, printfulTotalCents: r.printfulCents }, RULE_SALE)))
+    : 0;
+  const handPriced = mugFloor
+    ? await db.listing.findMany({ where: { source: "etsy", status: "active", priceCents: { lt: mugFloor } }, select: { title: true, priceCents: true } })
+    : [];
+  for (const l of handPriced) {
+    breaking.set(`hand|${l.title}`, { label: `Met de hand geplaatst: "${l.title.slice(0, 60)}"`, size: "", priceCents: l.priceCents, neededCents: mugFloor });
+  }
   await setSetting(PRICING_KEY, {
     at: new Date().toISOString(),
     rule: { minProfitCents: MIN_SALE_PROFIT_CENTS, salePct: RULE_SALE * 100 },
@@ -997,7 +1009,7 @@ async function pricingReport(_payload: Record<string, unknown>, { log, taskId }:
     const rs = rows.filter((r) => r.label === label);
     const worst = rs.reduce((a, b) => (a.profit["0"] < b.profit["0"] ? a : b));
     const deepest = Math.min(...rs.map((r) => r.maxDiscountPct));
-    return `${label}: winst ${eur(Math.min(...rs.map((r) => r.profit["0"])))}–${eur(Math.max(...rs.map((r) => r.profit["0"])))} (laagst: ${worst.size} naar ${worst.market}), bij 20% korting ${eur(Math.min(...rs.map((r) => r.profit["20"])))}, max. korting voor €3 winst: ${deepest}%`;
+    return `${label}: winst ${eur(Math.min(...rs.map((r) => r.profit["0"])))}–${eur(Math.max(...rs.map((r) => r.profit["0"])))} (laagst: ${worst.size} naar ${worst.market}), bij 20% korting ${eur(Math.min(...rs.map((r) => r.profit["20"])))}, max. korting voor ${eur(MIN_SALE_PROFIT_CENTS)} winst: ${deepest}%`;
   });
   await log.info(
     `Prijscheck: ${rows.length} combinaties doorgerekend met echte Printful-kosten en je Etsy-verzendprijzen\n${lines.join("\n")}` +
