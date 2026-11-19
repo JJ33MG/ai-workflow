@@ -14,6 +14,7 @@ const PRODUCT_STATUS = {
   published: "gepubliceerd",
   ended: "beëindigd",
   rejected: "afgekeurd",
+  removed: "verwijderd op Etsy",
 };
 
 let selected = null;

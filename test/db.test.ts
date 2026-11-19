@@ -201,6 +201,23 @@ describe.skipIf(!url)("with database", async () => {
     await _db.listing.deleteMany({ where: { etsyListingId: { in: ["9001", "9002"] } } });
   });
 
+  it("closes publish requests for drafts Jarne published or deleted on Etsy", async () => {
+    const { settleReviewedDrafts } = await import("../src/agents/etsyPod.js");
+    await db.listing.deleteMany({ where: { etsyListingId: { in: ["d1", "d2", "d3"] } } });
+    const base = { niche: "x", description: "", tags: [], priceCents: 2199, currency: "EUR", designSvg: "", designFile: "" };
+    const kept = await db.listing.create({ data: { ...base, title: "Still a draft", etsyListingId: "d1", status: "uploaded" } });
+    const deleted = await db.listing.create({ data: { ...base, title: "Deleted", etsyListingId: "d2", status: "uploaded" } });
+    const live = await db.listing.create({ data: { ...base, title: "Published by hand", etsyListingId: "d3", status: "active" } });
+    const open = await requestApproval({ agentId: "etsy-pod", kind: "etsy_publish", title: "a", details: "", payload: { listingIds: [kept.id, deleted.id] } });
+    const done = await requestApproval({ agentId: "etsy-pod", kind: "etsy_publish", title: "b", details: "", payload: { listingIds: [deleted.id, live.id] } });
+
+    expect(await settleReviewedDrafts(new Set(["d1"]))).toEqual({ removed: 1, closedApprovals: 1 });
+    expect((await db.listing.findUniqueOrThrow({ where: { id: deleted.id } })).status).toBe("removed");
+    expect((await db.approval.findUniqueOrThrow({ where: { id: open.id } })).status).toBe("pending");
+    expect((await db.approval.findUniqueOrThrow({ where: { id: done.id } })).status).toBe("executed");
+    await db.listing.deleteMany({ where: { etsyListingId: { in: ["d1", "d2", "d3"] } } });
+  });
+
   it("blocks Claude calls once the daily budget is spent", async () => {
     await db.cost.create({ data: { agentId: "ceo", category: "claude_api", amountCents: 100_000, currency: "EUR" } });
     await expect(assertApiBudget()).rejects.toBeInstanceOf(BudgetExceededError);

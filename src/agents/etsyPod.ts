@@ -695,10 +695,39 @@ export async function upsertEtsyListings(
 async function syncListings(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
   if (!etsy.isEtsyConfigured() || !(await etsy.isEtsyConnected())) return { skipped: "etsy not connected" };
   const result = await upsertEtsyListings(await etsy.getActiveListings(), etsy.getMainImageUrl);
-  if (result.added || result.ended) {
-    await log.info(`Etsy-winkel bijgewerkt: ${result.added} nieuw, ${result.updated} bijgewerkt, ${result.ended} beëindigd`, result, taskId);
+  const drafts = await etsy.getListingsByState("draft");
+  const reviewed = await settleReviewedDrafts(new Set(drafts.map((l) => String(l.listing_id))));
+  if (result.added || result.ended || reviewed.removed || reviewed.closedApprovals) {
+    await log.info(
+      `Etsy-winkel bijgewerkt: ${result.added} nieuw, ${result.updated} bijgewerkt, ${result.ended} beëindigd, ` +
+        `${reviewed.removed} concept(en) verwijderd op Etsy, ${reviewed.closedApprovals} publicatieverzoek(en) afgesloten`,
+      { ...result, ...reviewed },
+      taskId,
+    );
   }
-  return result;
+  return { ...result, ...reviewed };
+}
+
+/**
+ * Drafts Jarne published or deleted by hand on Etsy: a draft that is neither live (the active sync
+ * already marked those) nor still a draft was deleted, so it is marked removed. Publish requests
+ * whose listings are all no longer waiting are closed, so Telegram stops asking about them.
+ */
+export async function settleReviewedDrafts(draftIds: Set<string>): Promise<{ removed: number; closedApprovals: number }> {
+  const waiting = await db.listing.findMany({ where: { status: "uploaded", etsyListingId: { not: null } } });
+  const gone = waiting.filter((l) => !draftIds.has(l.etsyListingId!)).map((l) => l.id);
+  if (gone.length) await db.listing.updateMany({ where: { id: { in: gone } }, data: { status: "removed" } });
+
+  let closedApprovals = 0;
+  const pending = await db.approval.findMany({ where: { kind: "etsy_publish", status: "pending" } });
+  for (const a of pending) {
+    const ids = ((a.payload as { listingIds?: string[] }).listingIds ?? []).map(String);
+    const stillWaiting = await db.listing.count({ where: { id: { in: ids }, status: "uploaded" } });
+    if (stillWaiting > 0) continue;
+    await db.approval.update({ where: { id: a.id }, data: { status: "executed", decidedAt: new Date() } });
+    closedApprovals++;
+  }
+  return { removed: gone.length, closedApprovals };
 }
 
 /**
