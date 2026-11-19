@@ -52,7 +52,7 @@ export const BUSINESSES: BusinessDefinition[] = [
     id: "etsy-pod",
     name: "Etsy-winkel",
     kind: "Print-on-demand",
-    description: "Mokken met tekstontwerpen voor cadeau-niches, verkocht op Etsy en gedrukt en verstuurd door Printful.",
+    description: "Tekstontwerpen voor cadeau-niches op mokken, shirts, hoodies, tassen, posters en printbare posters; verkocht op Etsy, gedrukt en verstuurd door Printful.",
     phase: 1,
     channels: ["Etsy", "Printful"],
     targetCents: [1_000_00, 2_000_00],
