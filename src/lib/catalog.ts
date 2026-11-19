@@ -2,8 +2,9 @@
 // which sizes and colours it offers, and the price of each. One design becomes several listings
 // (a mug, a T-shirt, a tote …); each listing lets the buyer pick size and colour.
 //
-// Prices are in the shop's currency (EUR), chosen against Printful's cost with room for Etsy's
-// fees: roughly €6-15 profit per item. Change them here.
+// Prices are in the shop's currency (EUR). Rule: every size leaves at least €5 profit in every main
+// market even at 20% off (checked with real Printful costs by etsy-pod:pricing_report). Change them
+// here, then run reprice_listings to update the live listings.
 
 export type Ink = "dark" | "light";
 export type Layout = "mug-wrap" | "chest" | "center";
@@ -97,12 +98,12 @@ export const PRODUCT_TYPES: ProductType[] = [
     placements: ["front"],
     layout: "chest",
     sizes: [
-      { printful: "S", label: "S", priceCents: 2699 },
-      { printful: "M", label: "M", priceCents: 2699 },
-      { printful: "L", label: "L", priceCents: 2699 },
-      { printful: "XL", label: "XL", priceCents: 2699 },
-      { printful: "2XL", label: "2XL", priceCents: 2899 },
-      { printful: "3XL", label: "3XL", priceCents: 3099 },
+      { printful: "S", label: "S", priceCents: 2799 },
+      { printful: "M", label: "M", priceCents: 2799 },
+      { printful: "L", label: "L", priceCents: 2799 },
+      { printful: "XL", label: "XL", priceCents: 2799 },
+      { printful: "2XL", label: "2XL", priceCents: 2999 },
+      { printful: "3XL", label: "3XL", priceCents: 3199 },
     ],
     colors: ["White", "Black", "Navy", "Athletic Heather"],
     etsyTaxonomy: ["T-shirts"],
@@ -140,7 +141,7 @@ export const PRODUCT_TYPES: ProductType[] = [
     printfulTitle: /eco tote bag/i,
     placements: ["front", "default"],
     layout: "center",
-    sizes: [{ printful: "One size", label: "One size", priceCents: 2499 }],
+    sizes: [{ printful: "One size", label: "One size", priceCents: 3199 }],
     colors: ["Oyster", "Black", "Pacific"],
     etsyTaxonomy: ["Tote Bags", "Totes"],
     shippingProfile: /tote|bag/i,
@@ -156,7 +157,7 @@ export const PRODUCT_TYPES: ProductType[] = [
     placements: ["default"],
     layout: "center",
     sizes: [
-      { printful: "12″×16″", label: "12 x 16 in", priceCents: 2499 },
+      { printful: "12″×16″", label: "12 x 16 in", priceCents: 2899 },
       { printful: "18″×24″", label: "18 x 24 in", priceCents: 3299 },
       { printful: "24″×36″", label: "24 x 36 in", priceCents: 4499 },
     ],

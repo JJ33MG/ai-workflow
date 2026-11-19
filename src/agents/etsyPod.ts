@@ -15,7 +15,7 @@ import { DesignLayoutError, designUrl, designsDir, getPrintSize, prepareDesign, 
 import { startOfDay, toEurCents } from "../lib/money.js";
 import { findEtsySetup, mostUsedId, saveReturnPolicy } from "../lib/etsySetup.js";
 import { campaignBrief, todayIso } from "../lib/marketing.js";
-import { maxDiscountPct, saleProfit } from "../lib/pricing.js";
+import { maxDiscountPct, priceFor, saleProfit } from "../lib/pricing.js";
 import { findPrintfulSetup } from "../lib/printfulSetup.js";
 import { MAX_PHOTOS, ffmpegAvailable, makeListingVideo } from "../lib/video.js";
 import {
@@ -898,8 +898,9 @@ const PRICING_MARKETS = [
 ];
 export const PRICING_KEY = "pricing.report";
 const SALE_LEVELS = [0, 0.2, 0.3];
-/** A sale must still leave at least this much per item. */
-const MIN_SALE_PROFIT_CENTS = 300;
+/** The shop's rule: every item leaves at least this much, also during a sale of RULE_SALE off. */
+export const MIN_SALE_PROFIT_CENTS = 500;
+export const RULE_SALE = 0.2;
 
 export interface PricingRow {
   type: string;
@@ -936,8 +937,8 @@ async function pricingReport(_payload: Record<string, unknown>, { log, taskId }:
       }
       return files.get(key)!;
     };
-    const byPrice = [...entry.variants].sort((a, b) => a.priceCents - b.priceCents);
-    const picks = [...new Map([byPrice[0], byPrice[byPrice.length - 1]].map((v) => [v.size, v])).values()];
+    // Every size (one colour each: Printful prices a size the same in every colour).
+    const picks = [...new Map(entry.variants.map((v) => [v.size, v] as const)).values()];
     const destinations = entry.shippingProfileId ? (await etsy.getShippingProfile(entry.shippingProfileId)).shipping_profile_destinations : [];
     for (const v of picks) {
       const file = await fileFor(v);
@@ -973,7 +974,23 @@ async function pricingReport(_payload: Record<string, unknown>, { log, taskId }:
     }
   }
   const printable = saleProfit({ priceCents: PRINTABLE.priceCents, shippingChargedCents: 0, printfulTotalCents: 0 });
-  await setSetting(PRICING_KEY, { at: new Date().toISOString(), rows, problems, printableProfitCents: printable.profitCents });
+  // Sizes that break the rule, with the lowest price that would meet it in every market.
+  const breaking = new Map<string, { label: string; size: string; priceCents: number; neededCents: number }>();
+  for (const r of rows) {
+    if (r.profit[String(RULE_SALE * 100)] >= MIN_SALE_PROFIT_CENTS) continue;
+    const needed = priceFor(MIN_SALE_PROFIT_CENTS, { shippingChargedCents: r.shippingChargedCents, printfulTotalCents: r.printfulCents }, RULE_SALE);
+    const key = `${r.label}|${r.size}`;
+    const prev = breaking.get(key);
+    if (!prev || needed > prev.neededCents) breaking.set(key, { label: r.label, size: r.size, priceCents: r.priceCents, neededCents: needed });
+  }
+  await setSetting(PRICING_KEY, {
+    at: new Date().toISOString(),
+    rule: { minProfitCents: MIN_SALE_PROFIT_CENTS, salePct: RULE_SALE * 100 },
+    rows,
+    problems,
+    breaking: [...breaking.values()],
+    printableProfitCents: printable.profitCents,
+  });
 
   const eur = (c: number) => `€${(c / 100).toFixed(2)}`;
   const lines = [...new Set(rows.map((r) => r.label))].map((label) => {
@@ -985,11 +1002,57 @@ async function pricingReport(_payload: Record<string, unknown>, { log, taskId }:
   await log.info(
     `Prijscheck: ${rows.length} combinaties doorgerekend met echte Printful-kosten en je Etsy-verzendprijzen\n${lines.join("\n")}` +
       `\nPrintbare poster: ${eur(printable.profitCents)} per verkoop` +
+      (breaking.size
+        ? `\n⚠️ Onder de regel (min. ${eur(MIN_SALE_PROFIT_CENTS)} winst bij ${RULE_SALE * 100}% korting):\n` +
+          [...breaking.values()].map((b) => `${b.label} ${b.size}: nu ${eur(b.priceCents)}, nodig ${eur(b.neededCents)}`).join("\n")
+        : `\n✓ Elke maat haalt de regel: min. ${eur(MIN_SALE_PROFIT_CENTS)} winst, ook bij ${RULE_SALE * 100}% korting`) +
       (problems.length ? `\nLet op:\n${problems.join("\n")}` : ""),
     undefined,
     taskId,
   );
-  return { rows: rows.length, problems: problems.length };
+  return { rows: rows.length, problems: problems.length, breaking: breaking.size };
+}
+
+/**
+ * Puts the current prices from lib/catalog.ts on every listing the agent made (live and draft):
+ * looks the catalogue up again, then rewrites each listing's sizes and prices on Etsy. Personalized
+ * listings keep their extra. Listings already at the right price are skipped; safe to re-run.
+ */
+async function repriceListings(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
+  if (config.dryRun || !etsy.isEtsyConfigured() || !(await etsy.isEtsyConnected())) return { skipped: "dry run or Etsy not connected" };
+  await findCatalog();
+  const listings = await db.listing.findMany({
+    where: { source: "agent", status: { in: ["uploaded", "active"] }, etsyListingId: { not: null }, productType: { not: PRINTABLE.id } },
+  });
+  let changed = 0;
+  const failed: string[] = [];
+  for (const listing of listings) {
+    const variants = (listing.variants as ListingVariant[] | null) ?? [];
+    const entry = catalogEntry(listing.productType);
+    if (!variants.length || !entry) continue;
+    const extra = listing.personalized ? PERSONALIZATION_EXTRA_CENTS : 0;
+    const price = new Map(entry.variants.map((v) => [v.variantId, v.priceCents + extra]));
+    const updated = variants.map((v) => ({ ...v, priceCents: price.get(v.variantId) ?? v.priceCents }));
+    if (updated.every((v, i) => v.priceCents === variants[i].priceCents)) continue;
+    try {
+      await etsy.updateListingInventory(listing.etsyListingId!, buildInventory(updated, etsy.es.readinessStateId));
+      await db.listing.update({
+        where: { id: listing.id },
+        data: { variants: updated as unknown as object, priceCents: Math.min(...updated.map((v) => v.priceCents)) },
+      });
+      changed++;
+    } catch (err) {
+      failed.push(`${listing.title}: ${(err as Error).message}`);
+    }
+    if (taskId) await db.task.update({ where: { id: taskId }, data: { status: "running" } });
+  }
+  await log.info(
+    `Prijzen bijgewerkt op ${changed} listing(s)` + (failed.length ? `; ${failed.length} mislukt:\n${failed.join("\n")}` : ""),
+    undefined,
+    taskId,
+  );
+  if (failed.length && !changed) throw new Error(`Prijzen bijwerken mislukte: ${failed[0]}`);
+  return { changed, failed: failed.length };
 }
 
 async function maintenance(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
@@ -1287,7 +1350,7 @@ export const etsyPodAgent: AgentDefinition = {
   name: "Etsy-agent",
   phase: 1,
   businessId: "etsy-pod",
-  chatTasks: ["create_listings", "upload_listings", "sync_sales", "sync_listings", "printful_setup", "etsy_setup", "add_photos", "fix_return_policy", "catalog_setup", "maintenance", "add_ai_disclosure", "add_videos", "pricing_report"],
+  chatTasks: ["create_listings", "upload_listings", "sync_sales", "sync_listings", "printful_setup", "etsy_setup", "add_photos", "fix_return_policy", "catalog_setup", "maintenance", "add_ai_disclosure", "add_videos", "pricing_report", "reprice_listings"],
   description: "Zoekt cadeau-niches, ontwerpt mokken, zet ze op Etsy en maakt van Etsy-verkopen Printful-bestellingen.",
   dependsOn: ["database", "claude", "etsy", "printful"],
   taskInfo: {
@@ -1299,6 +1362,7 @@ export const etsyPodAgent: AgentDefinition = {
     printful_setup: "Bij Printful de API-winkel, de 11 oz mok en de exacte printmaat opzoeken en opslaan",
     etsy_setup: "Bij Etsy de munt, het verzendprofiel, het retourbeleid, de categorie Mokken en de productiepartner opzoeken",
     add_photos: "Listings op Etsy met te weinig mokfoto's aanvullen met Printful-foto's",
+    reprice_listings: "De prijzen uit de catalogus op alle listings van de bot zetten (live en concept); gepersonaliseerde houden hun meerprijs",
     pricing_report: "Echte winst per product en markt doorrekenen (Printful-kosten met verzending en btw, Etsy-verzendprijzen en -kosten), ook bij 20% en 30% korting",
     add_videos: "Elke listing zonder video een korte video geven, gemaakt van de eigen productfoto's (Etsy toont die in de zoekresultaten)",
     add_ai_disclosure: "De AI-vermelding die Etsy verplicht toevoegen aan elke listing die ze nog mist",
@@ -1323,5 +1387,6 @@ export const etsyPodAgent: AgentDefinition = {
     add_ai_disclosure: addAiDisclosure,
     add_videos: addVideos,
     pricing_report: pricingReport,
+    reprice_listings: repriceListings,
   },
 };
