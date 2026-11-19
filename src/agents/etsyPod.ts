@@ -311,7 +311,8 @@ const PERSONALIZED_BRIEF =
   "\"This mug belongs to / NAME / hands off\" or \"Best Grandpa Ever / NAME\". Never put NAME in the middle of a sentence. " +
   "Titles start with 'Personalized' or 'Custom Name' plus the search phrase and the product. Each description starts with how it works: " +
   `type the name in the personalization box, up to ${MAX_NAME_CHARS} characters, and it is printed exactly as typed. ` +
-  "Use tags such as 'personalized gift', 'custom name mug', 'gift with name'.\n\n";
+  "Use tags such as 'personalized gift', 'custom name mug', 'gift with name'. NAME is only for the slogan: in titles and descriptions " +
+  "never write NAME or 'by Name' as a placeholder; say 'with custom name' or 'personalized with any name' instead.\n\n";
 
 const DESIGN_ATTEMPTS = 3;
 

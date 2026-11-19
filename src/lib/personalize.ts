@@ -150,8 +150,10 @@ const SAMPLE_NAMES = ["Emma", "Grandpa Joe", "Sophia", "Liam", "Aunt Rosie", "No
 
 /** Three names to show on the listing photo: the design's own example first, then two different ones. */
 export function sampleNames(example: string): string[] {
-  const others = SAMPLE_NAMES.filter((n) => n.toLowerCase() !== example.toLowerCase());
-  return [example || others.shift()!, others[0], others[1]];
+  // Shown the way a buyer types it ("Walter"); the design itself may print it in capitals.
+  const typed = example === example.toUpperCase() ? example.toLowerCase().replace(/\b\p{L}/gu, (c) => c.toUpperCase()) : example;
+  const others = SAMPLE_NAMES.filter((n) => n.toLowerCase() !== typed.toLowerCase());
+  return [typed || others.shift()!, others[0], others[1]];
 }
 
 const CARD = 2000;
@@ -168,10 +170,15 @@ export async function personalizationCard(svg: string): Promise<Buffer> {
   const left0 = Math.round((CARD - (3 * cardW + 2 * gap)) / 2);
   const top = 560;
   const tiles: { input: Buffer; left: number; top: number }[] = [];
+  // Each design fills its card (trimmed to what is drawn, then fitted in the space above the label).
+  const boxW = cardW - 70;
+  const boxH = cardH - 170;
   for (const [i, name] of names.entries()) {
-    const art = await renderPrintFile(await fitName(svg, name), "center", cardW - 60, cardH - 170, "dark");
-    const left = left0 + i * (cardW + gap);
-    tiles.push({ input: art, left: left + 30, top: top + 40 });
+    const drawn = await sharp(await renderPrintFile(await fitName(svg, name), "center", boxW * 2, boxH * 2, "dark")).trim().toBuffer();
+    const art = await sharp(drawn).resize(boxW, boxH, { fit: "inside" }).png().toBuffer();
+    const { width = boxW, height = boxH } = await sharp(art).metadata();
+    const left = left0 + i * (cardW + gap) + Math.round((cardW - width) / 2);
+    tiles.push({ input: art, left, top: top + 45 + Math.round((boxH - height) / 2) });
   }
   const cards = names
     .map((name, i) => {

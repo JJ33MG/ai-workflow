@@ -65,6 +65,7 @@ describe("personalization photo", () => {
   it("shows the design with three different names", async () => {
     const { personalizationCard, sampleNames } = await import("../src/lib/personalize.js");
     expect(sampleNames("Emma")).toEqual(["Emma", "Grandpa Joe", "Sophia"]);
+    expect(sampleNames("WALTER")[0]).toBe("Walter");
     expect(new Set(sampleNames("Sophia")).size).toBe(3);
     const png = await personalizationCard(template);
     const meta = await sharp(png).metadata();
