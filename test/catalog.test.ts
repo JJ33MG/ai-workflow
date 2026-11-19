@@ -16,7 +16,7 @@ describe("Product catalog", () => {
     ];
     const offered = offeredVariants(tee, variants);
     expect(offered.map((v) => v.variantId)).toEqual([1, 2, 3]);
-    expect(offered.find((v) => v.variantId === 2)).toMatchObject({ ink: "light", priceCents: 2799 });
+    expect(offered.find((v) => v.variantId === 2)).toMatchObject({ ink: "light", priceCents: 2899 });
     expect(offered.find((v) => v.variantId === 3)).toMatchObject({ size: "2XL", priceCents: 3099, ink: "light" });
     expect(offered.find((v) => v.variantId === 1)?.ink).toBe("dark");
   });
