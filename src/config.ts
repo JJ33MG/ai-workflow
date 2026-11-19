@@ -75,6 +75,12 @@ export const config = {
     shippingService: str("EBAY_SHIPPING_SERVICE", "USPSGroundAdvantage"),
   },
 
+  // The Routify app (repo roadgem): its /api/stats endpoint and the token it expects.
+  routify: {
+    url: str("ROUTIFY_URL"),
+    statsToken: str("ROUTIFY_STATS_TOKEN"),
+  },
+
   pinterest: {
     appId: str("PINTEREST_APP_ID"),
     appSecret: str("PINTEREST_APP_SECRET"),

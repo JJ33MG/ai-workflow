@@ -1,8 +1,9 @@
 import { config } from "../config.js";
-import { db } from "../db.js";
+import { db, getSetting } from "../db.js";
 import { askText, isClaudeConfigured } from "../lib/claude.js";
 import { formatEur, startOfDay, startOfMonth, toEurCents } from "../lib/money.js";
 import { notify } from "../lib/telegram.js";
+import { routifyLine, type RoutifyStats } from "../integrations/routify.js";
 import type { AgentDefinition, TaskContext } from "./types.js";
 
 const ID = "ceo";
@@ -16,6 +17,8 @@ export interface BriefingData {
   incidents: { task: string; error: string; fixed: boolean }[];
   opportunities: string[];
   approvals: { id: string; title: string; amount?: string }[];
+  /** The latest numbers the Routify agent read from the app; null until it has run once. */
+  routify: RoutifyStats | null;
 }
 
 const sumEur = (rows: { amountCents: number; currency: string }[]) =>
@@ -82,6 +85,7 @@ export async function collectBriefingData(now = new Date()): Promise<BriefingDat
     incidents,
     opportunities,
     approvals,
+    routify: await getSetting<RoutifyStats>("routify.stats"),
   };
 }
 
@@ -95,6 +99,7 @@ export function formatBriefing(d: BriefingData, focus?: string): string {
     `Omzet: ${formatEur(d.revenue.yesterday)} gisteren · ${formatEur(d.revenue.monthToDate)} deze maand`,
     `Kosten: ${formatEur(d.costs.yesterday)} gisteren · ${formatEur(d.costs.monthToDate)} deze maand`,
     `Netto deze maand: ${formatEur(net)} — ${pct}% van €10.000`,
+    ...(d.routify ? ["", "🚗 Routify", routifyLine(d.routify)] : []),
     "",
     "🤖 Agents (laatste 24 uur)",
     ...d.agents.map(

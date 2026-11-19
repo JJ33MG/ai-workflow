@@ -6,10 +6,11 @@ import { etsyDigitalAgent } from "./etsyDigital.js";
 import { etsyPodAgent } from "./etsyPod.js";
 import { kdpColoringAgent } from "./kdpColoring.js";
 import { marketingAgent } from "./marketing.js";
+import { routifyAgent } from "./routify.js";
 import type { AgentDefinition } from "./types.js";
 
 export const agents = new Map<string, AgentDefinition>(
-  [ceoAgent, etsyPodAgent, etsyDigitalAgent, ebayAgent, kdpColoringAgent, marketingAgent, debugAgent].map((a) => [a.id, a]),
+  [ceoAgent, etsyPodAgent, etsyDigitalAgent, ebayAgent, kdpColoringAgent, marketingAgent, routifyAgent, debugAgent].map((a) => [a.id, a]),
 );
 
 /** Make sure every registered agent has a row (logs and costs reference it). */

@@ -167,6 +167,7 @@ describe("formatBriefing", () => {
     incidents: [{ task: "etsy-pod:sync_sales", error: "timeout", fixed: true }],
     opportunities: [],
     approvals: [{ id: "abc", title: "Publish 5 Etsy listing(s)", amount: "€0.92" }],
+    routify: null,
   };
   it("shows progress towards the goal and pending decisions", () => {
     const text = formatBriefing(data, "• Ship more listings");

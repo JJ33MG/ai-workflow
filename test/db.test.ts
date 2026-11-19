@@ -70,7 +70,7 @@ describe.skipIf(!url)("with database", async () => {
     const d = await collectBriefingData();
     expect(d.revenue.monthToDate).toBe(2000);
     expect(d.costs.monthToDate).toBe(50);
-    expect(d.agents.map((a) => a.id).sort()).toEqual(["ceo", "debug", "ebay", "etsy-digital", "etsy-pod", "kdp-coloring", "marketing"]);
+    expect(d.agents.map((a) => a.id).sort()).toEqual(["ceo", "debug", "ebay", "etsy-digital", "etsy-pod", "kdp-coloring", "marketing", "routify"]);
   });
 
   it("shows an escalated task on the dashboard with its fix", async () => {
@@ -138,7 +138,7 @@ describe.skipIf(!url)("with database", async () => {
     expect(etsy.revenueMonth).toBe(1799);
     expect(d.businesses.find((b) => b.id === "cartoon-content")!.stage).toBe("planned");
     expect(d.businesses.find((b) => b.id === "kdp-coloring")!.stage).toBe("setting-up"); // has an agent, no sales yet
-    expect(d.businesses.find((b) => b.id === "roadgem")!.stage).toBe("parked");
+    expect(d.businesses.find((b) => b.id === "roadgem")!.stage).toBe("setting-up");
     const detail = await buildBusinessDetail("etsy-pod");
     expect(detail!.series).toHaveLength(30);
     expect(detail!.series.at(-1)!.revenue).toBe(1799);
@@ -154,7 +154,7 @@ describe.skipIf(!url)("with database", async () => {
     expect(node("svc:database").status.state).toBe("live");
     expect(node("svc:claude").status.state).toBe("error"); // tests run without a key
     expect(node("svc:kdp").status.state).toBe("off");
-    expect(node("biz:roadgem").status.state).toBe("parked");
+    expect(node("biz:roadgem").status.state).toBe("test");
     expect(node("svc:server").status.label).toBe("Niet online");
     for (const [a, b] of d.brain.edges) {
       expect(d.brain.nodes.some((n) => n.id === a)).toBe(true);
@@ -339,5 +339,24 @@ describe.skipIf(!url)("with database", async () => {
     expect(ceo).toContain("read aloud");
     expect(ceo).toContain("Speak English.");
     expect(prompt!("etsy-pod")).not.toContain("Dutch directness");
+  });
+  it("stores the Routify stats and puts them in the briefing data", async () => {
+    const { syncRoutifyStats } = await import("../src/agents/routify.js");
+    const { getSetting } = await import("../src/db.js");
+    const stats = {
+      generatedAt: "2026-11-19T08:10:00.000Z",
+      users: { total: 5, last7d: 3 },
+      trips: { total: 9, last7d: 4 },
+      plus: 1,
+      affiliateClicks: { last7d: 7, byPartner: { booking: 7 } },
+      community: { pending: 0, approved: 0 },
+    };
+    const fake = (async () => new Response(JSON.stringify(stats), { status: 200 })) as typeof fetch;
+    const logged: string[] = [];
+    const log = { info: async (m: string) => void logged.push(m), warn: async () => {}, error: async () => {} };
+    await syncRoutifyStats({ log }, { url: "https://routify.test", statsToken: "t" }, fake);
+    expect(await getSetting("routify.stats")).toEqual(stats);
+    expect(logged).toEqual(["Routify: 3 nieuwe gebruikers, 4 trips, 1 Plus, 7 affiliate-kliks deze week"]);
+    expect((await collectBriefingData()).routify).toEqual(stats);
   });
 });

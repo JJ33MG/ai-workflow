@@ -2,7 +2,8 @@ import { agents as registry } from "./agents/index.js";
 import { BUSINESSES, businessById } from "./businesses.js";
 import { MONTHLY_GOAL_CENTS } from "./agents/ceo.js";
 import { config } from "./config.js";
-import { db } from "./db.js";
+import { db, getSetting } from "./db.js";
+import type { RoutifyStats } from "./integrations/routify.js";
 import { apiSpendTodayCents } from "./lib/budget.js";
 import { runHealthChecks, type CheckStatus, type HealthCheck } from "./lib/health.js";
 import { activeCampaigns, getStrategy } from "./lib/marketing.js";
@@ -354,6 +355,7 @@ export async function buildBusinessDetail(id: string, now = new Date()) {
 
   return {
     id,
+    routify: id === "roadgem" ? await getSetting<RoutifyStats>("routify.stats") : null,
     marketing: {
       strategy,
       campaigns: campaigns.map((c) => ({ name: c.name, direction: c.direction, until: c.until })),

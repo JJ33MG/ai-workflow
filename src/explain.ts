@@ -192,11 +192,11 @@ export const NODES: BrainNode[] = [
   {
     id: "biz:roadgem",
     kind: "business",
-    label: "RoadGem",
+    label: "Routify",
     explain: {
-      what: "Je roadtrip-app. Bewust geparkeerd: eerst geld verdienen met de simpelere bedrijven.",
-      how: ["Komt terug zodra de andere bedrijven geld opleveren."],
-      where: "Bedrijven → RoadGem.",
+      what: "Je roadtrip-app (voorheen RoadGem): routes per dag, gems onderweg, slaapplekken, Plus-abonnement en affiliate-links.",
+      how: ["De Routify-agent leest elke ochtend om 08:10 de cijfers van de app: nieuwe gebruikers, trips, Plus-leden en affiliate-kliks.", "Die cijfers staan in de ochtendbriefing en bij Bedrijven → Routify."],
+      where: "Bedrijven → Routify.",
     },
   },
   {
@@ -401,5 +401,5 @@ export const PLAN: PlanItem[] = [
   { id: "routing", phase: "Groei", title: "Problemen doorgeven tussen agents", detail: "De CEO wijst een probleem toe aan de agent die het best kan oplossen.", owner: "systeem", status: "todo" },
   { id: "dropshipping", phase: "Dropshipping", title: "Dropshipping-agent en eerste winkel", detail: "Fase 3; vraagt advertentiebudget met harde limiet.", owner: "systeem", status: "todo" },
   { id: "cartoon", phase: "AI-cartoonkanaal", title: "AI-cartoonkanaal", detail: "Fase 4.", owner: "systeem", status: "todo" },
-  { id: "roadgem", phase: "RoadGem", title: "RoadGem-agent", detail: "Geparkeerd tot de andere bedrijven geld opleveren.", owner: "systeem", status: "parked" },
+  { id: "roadgem", phase: "Routify", title: "Routify-agent", detail: "Leest elke ochtend de cijfers van de Routify-app voor het dashboard en de briefing.", owner: "systeem", status: "done" },
 ];

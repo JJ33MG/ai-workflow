@@ -154,14 +154,13 @@ export const BUSINESSES: BusinessDefinition[] = [
   },
   {
     id: "roadgem",
-    name: "RoadGem",
+    name: "Routify",
     kind: "App",
-    description: "De RoadGem roadtrip-app: groei, content en support.",
+    description: "Routify (voorheen RoadGem): de roadtrip-planner met gems onderweg, Plus-abonnementen en affiliate-links.",
     phase: 5,
-    channels: ["roadgem app", "Premium subscriptions", "Affiliates"],
+    channels: ["Routify website/app", "Plus-abonnementen", "Affiliates (Booking.com, Airbnb, Rentalcars)"],
     targetCents: [0, 0],
-    plan: "Geparkeerd: eerst geld verdienen met de simpelere bedrijven (mokken, kleurboeken, dropshipping).",
-    parked: true,
+    plan: "Preview testen en bijsturen; daarna live zetten. De Routify-agent volgt elke ochtend gebruikers, trips, Plus en kliks.",
   },
 ];
 

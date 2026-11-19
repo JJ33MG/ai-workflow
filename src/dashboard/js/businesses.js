@@ -177,7 +177,7 @@ function renderDetail(d, b, detail) {
           ),
   );
 
-  fill("business-detail", head, kpis, marketingPanel(detail), h("div", { class: "grid-2" }, chartPanel, teamPanel), productsPanel, salesPanel);
+  fill("business-detail", head, kpis, routifyPanel(b, detail), marketingPanel(detail), h("div", { class: "grid-2" }, chartPanel, teamPanel), productsPanel, salesPanel);
 }
 
 /** Marketing play states and verdicts as shown on the dashboard. */
@@ -270,4 +270,27 @@ function costLine(byCategory) {
     .sort((a, b) => b[1] - a[1])
     .map(([k, v]) => `${names[k] ?? k} ${eur(v)}`);
   return parts.join(" · ") || "Nog geen kosten";
+}
+
+/** Routify's own numbers (users, trips, Plus, affiliate clicks), read daily by the Routify agent. */
+function routifyPanel(b, detail) {
+  if (b.id !== "roadgem") return null;
+  const r = detail?.routify;
+  if (!detail) return h("div", { class: "panel" }, h("h2", {}, "Routify-app"), empty("Laden…"));
+  if (!r) return h("div", { class: "panel" }, h("h2", {}, "Routify-app"), empty("Nog geen cijfers. Zet ROUTIFY_URL en ROUTIFY_STATS_TOKEN in Railway; de agent leest ze elke ochtend om 08:10."));
+  const partners = Object.entries(r.affiliateClicks.byPartner).map(([k, v]) => `${v} ${k}`).join(" · ") || "Nog geen";
+  return h(
+    "div",
+    { class: "panel" },
+    h("h2", {}, "Routify-app"),
+    h(
+      "div",
+      { class: "kpis" },
+      kpi("Gebruikers", String(r.users.total), `${r.users.last7d} nieuw deze week`),
+      kpi("Trips", String(r.trips.total), `${r.trips.last7d} deze week`),
+      kpi("Plus-leden", String(r.plus), "€9 per maand"),
+      kpi("Affiliate-kliks", String(r.affiliateClicks.last7d), partners),
+    ),
+    h("div", { class: "muted" }, `Bijgewerkt ${ago(r.generatedAt)} · gems: ${r.community.approved} officieel, ${r.community.pending} wachten`),
+  );
 }

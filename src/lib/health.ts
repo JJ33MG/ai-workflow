@@ -1,9 +1,10 @@
 import { config } from "../config.js";
-import { db } from "../db.js";
+import { db, getSetting } from "../db.js";
 import { isEtsyConfigured, isEtsyConnected, isEtsyListingReady } from "../integrations/etsy.js";
 import { isMetaConfigured, metaConnection } from "../integrations/meta.js";
 import { getCatalog } from "./catalogSetup.js";
 import { isEbayConfigured, isEbayConnected } from "../integrations/ebay.js";
+import { isRoutifyConfigured } from "../integrations/routify.js";
 import { isPinterestConfigured, isPinterestConnected, pinterestUser } from "../integrations/pinterest.js";
 import { hasPrintfulToken, isPrintfulConfigured, pf } from "../integrations/printful.js";
 import { schedulerState } from "../scheduler.js";
@@ -169,6 +170,24 @@ export async function runHealthChecks(now = new Date()): Promise<HealthCheck[]> 
     });
   } else {
     checks.push({ id: "pinterest", label: "Pinterest", status: "ok", detail: `Gekoppeld als ${(await pinterestUser()) ?? "?"}` });
+  }
+
+  if (!isRoutifyConfigured()) {
+    checks.push({
+      id: "routify",
+      label: "Routify",
+      status: "off",
+      detail: "Niet gekoppeld: de Brain leest de Routify-cijfers nog niet",
+      fix: "Zet ROUTIFY_URL (adres van de Routify-site) en ROUTIFY_STATS_TOKEN (gelijk aan STATS_TOKEN van Routify) in Railway.",
+    });
+  } else {
+    const last = await getSetting<{ generatedAt: string }>("routify.stats");
+    checks.push({
+      id: "routify",
+      label: "Routify",
+      status: "ok",
+      detail: last ? `Cijfers van ${new Date(last.generatedAt).toLocaleString("nl-BE", { timeZone: config.timezone })}` : "Gekoppeld; de eerste cijfers komen om 08:10",
+    });
   }
 
   if (!isEbayConfigured()) {
