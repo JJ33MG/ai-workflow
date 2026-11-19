@@ -44,9 +44,10 @@ const RECEIPTS_CURSOR = "etsy.receipts.since";
  * design's hook. The extra search words belong in the 13 tags, not in a long comma list.
  */
 export const TITLE_RULE =
-  "at most 70 characters, format '[who it is for] [product] – [the design's hook]', e.g. 'Respiratory Therapist Mug – Dear Santa, Just Good Sats'; " +
+  "60 to 80 characters, format '[who it is for] [product] – [the design's hook]', e.g. 'Respiratory Therapist Mug – Dear Santa, Just Good Sats'; " +
   "personalized items start with 'Personalized', e.g. 'Personalized Grandpa Mug with Name – Best Grandpa Ever'; " +
-  "write the recipient in full, never abbreviated (Respiratory Therapist, not RT); the hook is a complete phrase, never cut off mid-sentence; " +
+  "write the recipient in full, never abbreviated (Respiratory Therapist, not RT); the hook is the design's text in full (never cut short) or, if that is too long, another complete phrase; " +
+  "never write the placeholder 'Name' anywhere except in 'with Name'; " +
   "no comma lists of gift occasions or synonyms, no repeated words, no ALL CAPS; the extra search words go in the tags";
 
 const IdeasSchema = z.object({
@@ -1144,6 +1145,8 @@ export function acceptableTitle(oldTitle: string, title: string): boolean {
   if (t.length < 15 || t.length > 80 || t === oldTitle.trim()) return false;
   // A hook cut off mid-phrase ("… Turned By") reads as a mistake.
   if (/\b(by|for|and|of|to|with|the|a|an|from|in|on|&)$/i.test(t)) return false;
+  // "Name" is only allowed once, as in "Personalized … with Name"; "Turned by Name" is a leftover placeholder.
+  if ((t.match(/\bName\b/g) ?? []).length > 1 || /\bby Name\b/i.test(t)) return false;
   for (const word of ["Personalized", "Printable", "Digital Download"]) {
     if (new RegExp(word, "i").test(oldTitle) && !new RegExp(word === "Digital Download" ? "Printable|Digital|Download" : word, "i").test(t)) return false;
   }
