@@ -17,7 +17,7 @@ import { findTaxonomyId } from "../lib/etsySetup.js";
 import { campaignBrief, todayIso } from "../lib/marketing.js";
 import { enqueueOnce } from "../lib/tasks.js";
 import sharp from "sharp";
-import { decodeEntities, normaliseListing, withAiDisclosure } from "./etsyPod.js";
+import { TITLE_RULE, decodeEntities, normaliseListing, withAiDisclosure } from "./etsyPod.js";
 import { drawPage } from "./kdpColoring.js";
 import type { AgentDefinition, TaskContext } from "./types.js";
 
@@ -181,7 +181,7 @@ async function createDigital(payload: Record<string, unknown>, { log, taskId }: 
       (recent.length ? `Downloads we already made (make something different):\n${recent.map((r) => `- ${r.niche}: ${r.title}`).join("\n")}\n\n` : "") +
       (instructions ? `Jarne's direction (follow it): ${instructions}\n\n` : "") +
       `Plan one ${info.noun.toLowerCase()} product. ${KIND_BRIEF[kind]}\n` +
-      `Give: theme; audience (who it is for, e.g. 'kids 3-8'); title (≤140 chars, starts with the search phrase, says it is a printable or ` +
+      `Give: theme; audience (who it is for, e.g. 'kids 3-8'); title (${TITLE_RULE}; it says printable or ` +
       `instant download); coverTitle (≤36 chars, for the photo); coverSubtitle (≤40 chars, e.g. '${info.pages} pages · ages 3-8'); ` +
       `description (3 short paragraphs for a buyer: what is inside, who it is for, and that it is an instant PDF download in US Letter and A4, ` +
       `nothing shipped, for personal use); 13 Etsy tags (each ≤20 chars); accent (one hex colour that suits the theme, dark enough for white text); ` +

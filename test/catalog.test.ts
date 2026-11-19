@@ -228,3 +228,14 @@ describe("One text per product", () => {
     expect(sloganKey("Coffee first")).not.toBe(sloganKey("Hoodie season"));
   });
 });
+
+describe("short titles", () => {
+  it("accepts a short title and refuses one that drops what the item is", async () => {
+    const { acceptableTitle } = await import("../src/agents/etsyPod.js");
+    const old = "Personalized Christmas Gift for Woodturner Hoodie, Handmade Gifts Turned by Name, Custom Woodturning Sweatshirt for Dad";
+    expect(acceptableTitle(old, "Personalized Woodturner Hoodie with Name – Handmade Gifts")).toBe(true);
+    expect(acceptableTitle(old, "Woodturner Hoodie – Handmade Gifts")).toBe(false);
+    expect(acceptableTitle("Kids Christmas Activity Pack Printable, Scavenger Hunt, Bingo", "Christmas Activity Pack for Kids – 12 Games")).toBe(false);
+    expect(acceptableTitle("x".repeat(100), "y".repeat(90))).toBe(false);
+  });
+});

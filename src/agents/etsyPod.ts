@@ -39,6 +39,14 @@ const ID = "etsy-pod";
 const ETSY_LISTING_FEE_USD_CENTS = 20;
 const RECEIPTS_CURSOR = "etsy.receipts.since";
 
+/**
+ * Short, direct titles (Etsy's own advice since 2025): who it is for and what it is first, then the
+ * design's hook. The extra search words belong in the 13 tags, not in a long comma list.
+ */
+export const TITLE_RULE =
+  "at most 70 characters, format '[who it is for] [product] – [the design's hook]', e.g. 'Respiratory Therapist Mug – Dear Santa, Just Good Sats'; " +
+  "no comma lists of gift occasions or synonyms, no repeated words, no ALL CAPS; the extra search words go in the tags";
+
 const IdeasSchema = z.object({
   ideas: z.array(
     z.object({
@@ -218,7 +226,7 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
       "as something the buyer proudly wears and says about themselves; a tote for carrying, shopping and the commute; a poster or print " +
       "as a wall piece worth looking at every day. Use the same text on two products only when it genuinely works on both. " +
       "Each listing: product (its id), slogan (the exact printed text for that product, max ~8 words), designBrief (layout and typographic style), " +
-      "title (≤140 chars, starts with the search phrase and names the product), description (3 short paragraphs with the product facts) " +
+      `title (${TITLE_RULE}), description (3 short paragraphs with the product facts) ` +
       "and 13 Etsy tags (each ≤20 chars)." +
       (printable
         ? ` Also add one '${PRINTABLE.id}' listing per niche, on top of those products: a printable wall-art download with a wall-worthy text ` +
@@ -309,7 +317,7 @@ const PERSONALIZED_BRIEF =
   "the gift (grandparents, parents, aunts and uncles, a child, a teacher or nurse by name, a pet, a couple, a team role). " +
   "Every slogan contains the word NAME exactly once, where the buyer's name goes, and NAME stands on its own line, e.g. " +
   "\"This mug belongs to / NAME / hands off\" or \"Best Grandpa Ever / NAME\". Never put NAME in the middle of a sentence. " +
-  "Titles start with 'Personalized' or 'Custom Name' plus the search phrase and the product. Each description starts with how it works: " +
+  "Titles start with 'Personalized' and say 'with Name' (e.g. 'Personalized Grandpa Mug with Name – Best Grandpa Ever'). Each description starts with how it works: " +
   `type the name in the personalization box, up to ${MAX_NAME_CHARS} characters, and it is printed exactly as typed. ` +
   "Use tags such as 'personalized gift', 'custom name mug', 'gift with name'. NAME is only for the slogan: in titles and descriptions " +
   "never write NAME or 'by Name' as a placeholder; say 'with custom name' or 'personalized with any name' instead.\n\n";
@@ -1125,6 +1133,70 @@ async function refreshListings(payload: Record<string, unknown>, { log, taskId }
   return { refreshed: done.length };
 }
 
+const RetitleSchema = z.object({ titles: z.array(z.object({ id: z.string(), title: z.string() })) });
+const OLD_TITLES_KEY = "etsy.titles.before";
+
+/** A new title is used only when it is short, real and keeps "Personalized" / "Printable" where the old one had it. */
+export function acceptableTitle(oldTitle: string, title: string): boolean {
+  const t = title.trim();
+  if (t.length < 15 || t.length > 80 || t === oldTitle.trim()) return false;
+  for (const word of ["Personalized", "Printable", "Digital Download"]) {
+    if (new RegExp(word, "i").test(oldTitle) && !new RegExp(word === "Digital Download" ? "Printable|Digital|Download" : word, "i").test(t)) return false;
+  }
+  return true;
+}
+
+/**
+ * Rewrites the titles of all live listings (the bot's and those placed by hand) into short, direct
+ * ones (TITLE_RULE). Tags stay as they are and keep carrying the extra search words. The old titles
+ * are kept in the database so this can be undone. Payload: apply=false only proposes.
+ */
+async function retitleListings(payload: Record<string, unknown>, { log, taskId }: TaskContext) {
+  if (config.dryRun || !etsy.isEtsyConfigured() || !(await etsy.isEtsyConnected())) return { skipped: "dry run or Etsy not connected" };
+  const apply = payload.apply !== false;
+  const live = (await etsy.getListingsByState("active")).filter((l) => decodeEntities(l.title).length > 70);
+  const before = (await getSetting<Record<string, string>>(OLD_TITLES_KEY)) ?? {};
+  const changes: { id: string; from: string; to: string; tags: string[] }[] = [];
+  for (let i = 0; i < live.length; i += 20) {
+    const batch = live.slice(i, i + 20);
+    const { titles } = await askJson({
+      agentId: ID,
+      purpose: "pod_retitle",
+      effort: "low",
+      schema: RetitleSchema,
+      system: "You write Etsy listing titles that a buyer understands in one glance and that match what they search for.",
+      prompt:
+        `Rewrite each title: ${TITLE_RULE}. Keep the exact product word (Mug, Hoodie, T-Shirt, Tote Bag, Poster, Printable…), ` +
+        "keep 'Personalized … with Name' for personalized items and 'Printable' for downloads, and keep the design's own text as the hook " +
+        "(shorten it if needed). Return every id with its new title.\n\n" +
+        batch.map((l) => `id ${l.listing_id}: ${decodeEntities(l.title)}`).join("\n"),
+    });
+    for (const l of batch) {
+      const to = titles.find((t) => t.id === String(l.listing_id))?.title?.trim() ?? "";
+      const from = decodeEntities(l.title);
+      if (acceptableTitle(from, to)) changes.push({ id: String(l.listing_id), from, to, tags: l.tags.map(decodeEntities) });
+    }
+  }
+  let changed = 0;
+  if (apply) {
+    for (const c of changes) {
+      try {
+        await etsy.updateListingSeo(c.id, c.to, c.tags);
+        before[c.id] ??= c.from;
+        await db.listing.updateMany({ where: { etsyListingId: c.id }, data: { title: c.to } });
+        changed++;
+      } catch (err) {
+        await log.warn(`Titel niet gewijzigd (${c.from}): ${(err as Error).message}`, undefined, taskId);
+      }
+      if (taskId) await db.task.update({ where: { id: taskId }, data: { status: "running" } });
+    }
+    await setSetting(OLD_TITLES_KEY, before);
+  }
+  const examples = changes.slice(0, 8).map((c) => `• ${c.from}\n  → ${c.to}`).join("\n");
+  await log.info(`${apply ? `Titels ingekort op ${changed}` : `Voorstel voor ${changes.length}`} van ${live.length} lange listings:\n${examples}`, { changes }, taskId);
+  return { long: live.length, proposed: changes.length, changed };
+}
+
 async function maintenance(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
   if (config.dryRun || !etsy.isEtsyConfigured() || !(await etsy.isEtsyConnected())) return { skipped: "dry run or Etsy not connected" };
   const stuck = await db.listing.count({
@@ -1462,7 +1534,7 @@ export const etsyPodAgent: AgentDefinition = {
   name: "Etsy-agent",
   phase: 1,
   businessId: "etsy-pod",
-  chatTasks: ["create_listings", "upload_listings", "sync_sales", "sync_listings", "printful_setup", "etsy_setup", "add_photos", "fix_return_policy", "catalog_setup", "maintenance", "add_ai_disclosure", "add_videos", "pricing_report", "reprice_listings", "sync_shipments", "refresh_listings"],
+  chatTasks: ["create_listings", "upload_listings", "sync_sales", "sync_listings", "printful_setup", "etsy_setup", "add_photos", "fix_return_policy", "catalog_setup", "maintenance", "add_ai_disclosure", "add_videos", "pricing_report", "reprice_listings", "sync_shipments", "refresh_listings", "retitle_listings"],
   description: "Zoekt cadeau-niches, ontwerpt mokken, zet ze op Etsy en maakt van Etsy-verkopen Printful-bestellingen.",
   dependsOn: ["database", "claude", "etsy", "printful"],
   taskInfo: {
@@ -1474,6 +1546,7 @@ export const etsyPodAgent: AgentDefinition = {
     printful_setup: "Bij Printful de API-winkel, de 11 oz mok en de exacte printmaat opzoeken en opslaan",
     etsy_setup: "Bij Etsy de munt, het verzendprofiel, het retourbeleid, de categorie Mokken en de productiepartner opzoeken",
     add_photos: "Listings op Etsy met te weinig mokfoto's aanvullen met Printful-foto's",
+    retitle_listings: "Lange titels van alle live listings inkorten tot korte, directe titels (oude titels worden bewaard)",
     refresh_listings: "Printbestanden opnieuw tekenen met de huidige opmaak en de foto's en video op Etsy vervangen (listingIds of productTypes)",
     sync_shipments: "Verzonden Printful-bestellingen met hun track & trace op Etsy als verzonden markeren",
     reprice_listings: "De prijzen uit de catalogus op alle listings van de bot zetten (live en concept); gepersonaliseerde houden hun meerprijs",
@@ -1504,5 +1577,6 @@ export const etsyPodAgent: AgentDefinition = {
     reprice_listings: repriceListings,
     sync_shipments: syncShipments,
     refresh_listings: refreshListings,
+    retitle_listings: retitleListings,
   },
 };
