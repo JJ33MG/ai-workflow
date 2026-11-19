@@ -194,4 +194,20 @@ export async function estimateCosts(input: {
   return res.costs;
 }
 
+export interface OrderStatus {
+  id: number;
+  status: string;
+  shipments: { carrier: string; service: string; tracking_number: string; tracking_url: string; shipped_at: number }[];
+}
+
+/** An order by our own external id ("etsy-<receipt>"); null when Printful has no such order. */
+export async function getOrderByExternalId(externalId: string): Promise<OrderStatus | null> {
+  try {
+    return await printful<OrderStatus>("GET", `/orders/@${encodeURIComponent(externalId)}`);
+  } catch (err) {
+    if (/404/.test((err as Error).message)) return null;
+    throw err;
+  }
+}
+
 export const confirmOrder = (orderId: number) => printful<DraftOrder>("POST", `/orders/${orderId}/confirm`);

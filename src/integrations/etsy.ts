@@ -7,7 +7,8 @@ import { getSetting, setSetting } from "../db.js";
 const API = "https://openapi.etsy.com/v3/application";
 const TOKEN_URL = "https://api.etsy.com/v3/public/oauth/token";
 // shops_r: /users/me, the shop, its shipping profiles, return policies and production partners.
-const SCOPES = ["shops_r", "listings_r", "listings_w", "transactions_r"];
+// transactions_w: marking orders shipped with Printful's tracking number.
+const SCOPES = ["shops_r", "listings_r", "listings_w", "transactions_r", "transactions_w"];
 const TOKEN_KEY = "etsy.oauth.token";
 const PENDING_KEY = "etsy.oauth.pending";
 
@@ -286,6 +287,20 @@ export interface EtsyReceipt {
     /** Size, colour and the buyer's personalization (property_id 54). */
     variations?: { property_id: number; formatted_name: string; formatted_value: string }[] | null;
   }[];
+}
+
+/**
+ * Marks an order shipped with its tracking number; Etsy emails the buyer. An unknown carrier name
+ * is refused by Etsy, so it is retried as "other" (the tracking code still reaches the buyer).
+ */
+export async function addReceiptTracking(receiptId: string, trackingCode: string, carrier: string): Promise<void> {
+  const path = `/shops/${await shopId()}/receipts/${receiptId}/tracking`;
+  try {
+    await etsy("POST", path, { tracking_code: trackingCode, carrier_name: carrier, send_bcc: false });
+  } catch (err) {
+    if (!/400/.test((err as Error).message) || carrier === "other") throw err;
+    await etsy("POST", path, { tracking_code: trackingCode, carrier_name: "other", send_bcc: false });
+  }
 }
 
 export async function getPaidReceiptsSince(sinceEpochSeconds: number): Promise<EtsyReceipt[]> {

@@ -1342,6 +1342,48 @@ async function fulfilReceipt(payload: Record<string, unknown>, { log, taskId }: 
   return { orderId: order.id, confirmed: false };
 }
 
+const SHIPPED_KEY = "etsy.shipped";
+/** Orders older than this are not checked any more (delivered long ago, or fulfilled by hand). */
+const SHIPMENT_WINDOW_DAYS = 45;
+
+/**
+ * Tells Etsy when Printful has shipped an order, with the tracking number, so the buyer gets the
+ * shipping email and the shop's on-time record stays clean. Checks recent sales hourly; safe to re-run.
+ */
+async function syncShipments(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
+  if (config.dryRun || !printful.hasPrintfulToken() || !etsy.isEtsyConfigured() || !(await etsy.isEtsyConnected())) {
+    return { skipped: "dry run, or Printful/Etsy not connected" };
+  }
+  const shipped = new Set((await getSetting<string[]>(SHIPPED_KEY)) ?? []);
+  const sales = await db.sale.findMany({
+    where: { source: "etsy", occurredAt: { gte: new Date(Date.now() - SHIPMENT_WINDOW_DAYS * 86_400_000) } },
+    select: { externalId: true },
+  });
+  let marked = 0;
+  for (const { externalId } of sales) {
+    if (shipped.has(externalId)) continue;
+    const order = await printful.getOrderByExternalId(`etsy-${externalId}`);
+    const shipment = order?.shipments?.find((s) => s.tracking_number);
+    if (!shipment) continue; // not ours, or not shipped yet
+    try {
+      await etsy.addReceiptTracking(externalId, shipment.tracking_number, shipment.carrier.toLowerCase());
+    } catch (err) {
+      if (/403|insufficient|scope/i.test((err as Error).message)) {
+        throw new Error(
+          "Etsy weigert het verzendnummer: de koppeling mist het recht om bestellingen bij te werken. Koppel Etsy één keer opnieuw via " +
+            `${config.publicUrl}/auth/etsy/start?token=JOUW_ADMIN_TOKEN`,
+        );
+      }
+      throw err;
+    }
+    shipped.add(externalId);
+    await setSetting(SHIPPED_KEY, [...shipped]);
+    await log.info(`Bestelling ${externalId} verzonden: track & trace ${shipment.tracking_number} (${shipment.carrier}) staat op Etsy`, undefined, taskId);
+    marked++;
+  }
+  return { checked: sales.length, marked };
+}
+
 async function confirmPrintfulOrder(p: Record<string, unknown>): Promise<string> {
   await printful.confirmOrder(Number(p.orderId));
   await recordCost({
@@ -1369,7 +1411,7 @@ export const etsyPodAgent: AgentDefinition = {
   name: "Etsy-agent",
   phase: 1,
   businessId: "etsy-pod",
-  chatTasks: ["create_listings", "upload_listings", "sync_sales", "sync_listings", "printful_setup", "etsy_setup", "add_photos", "fix_return_policy", "catalog_setup", "maintenance", "add_ai_disclosure", "add_videos", "pricing_report", "reprice_listings"],
+  chatTasks: ["create_listings", "upload_listings", "sync_sales", "sync_listings", "printful_setup", "etsy_setup", "add_photos", "fix_return_policy", "catalog_setup", "maintenance", "add_ai_disclosure", "add_videos", "pricing_report", "reprice_listings", "sync_shipments"],
   description: "Zoekt cadeau-niches, ontwerpt mokken, zet ze op Etsy en maakt van Etsy-verkopen Printful-bestellingen.",
   dependsOn: ["database", "claude", "etsy", "printful"],
   taskInfo: {
@@ -1381,6 +1423,7 @@ export const etsyPodAgent: AgentDefinition = {
     printful_setup: "Bij Printful de API-winkel, de 11 oz mok en de exacte printmaat opzoeken en opslaan",
     etsy_setup: "Bij Etsy de munt, het verzendprofiel, het retourbeleid, de categorie Mokken en de productiepartner opzoeken",
     add_photos: "Listings op Etsy met te weinig mokfoto's aanvullen met Printful-foto's",
+    sync_shipments: "Verzonden Printful-bestellingen met hun track & trace op Etsy als verzonden markeren",
     reprice_listings: "De prijzen uit de catalogus op alle listings van de bot zetten (live en concept); gepersonaliseerde houden hun meerprijs",
     pricing_report: "Echte winst per product en markt doorrekenen (Printful-kosten met verzending en btw, Etsy-verzendprijzen en -kosten), ook bij 20% en 30% korting",
     add_videos: "Elke listing zonder video een korte video geven, gemaakt van de eigen productfoto's (Etsy toont die in de zoekresultaten)",
@@ -1407,5 +1450,6 @@ export const etsyPodAgent: AgentDefinition = {
     add_videos: addVideos,
     pricing_report: pricingReport,
     reprice_listings: repriceListings,
+    sync_shipments: syncShipments,
   },
 };
