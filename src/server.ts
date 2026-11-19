@@ -22,7 +22,7 @@ import { agentLogger } from "./lib/logger.js";
 import { loadPrintfulSetup } from "./lib/printfulSetup.js";
 import { hasPrintfulToken } from "./integrations/printful.js";
 import { designsDir } from "./lib/design.js";
-import { enqueue, enqueueOnce } from "./lib/tasks.js";
+import { enqueue, enqueueOnce, requeueInterrupted } from "./lib/tasks.js";
 import { notify, startCommandPolling } from "./lib/telegram.js";
 import { startScheduler } from "./scheduler.js";
 
@@ -348,6 +348,8 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 async function main() {
   if (!config.adminToken) console.warn("ADMIN_TOKEN is not set: the /api routes will refuse every request.");
   await syncAgents();
+  const requeued = await requeueInterrupted();
+  if (requeued) console.log(`Requeued ${requeued} task(s) cut off by the last restart`);
   // Printful product and print size: loaded if found before, otherwise looked up in the background.
   if (!(await loadPrintfulSetup()) && hasPrintfulToken()) await enqueueOnce("etsy-pod", "printful_setup");
   if (!(await loadEtsySetup()) && (await etsy.isEtsyConnected())) await enqueueOnce("etsy-pod", "etsy_setup");

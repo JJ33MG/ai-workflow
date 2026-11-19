@@ -243,6 +243,13 @@ describe.skipIf(!url)("with database", async () => {
     await db.sale.deleteMany({ where: { externalId: "r-personal" } });
   });
 
+  it("puts a task cut off by a restart back in the queue without counting the try", async () => {
+    const { requeueInterrupted } = await import("../src/lib/tasks.js");
+    const t = await db.task.create({ data: { agentId: "etsy-digital", type: "create_digital", status: "running", attempts: 1, maxAttempts: 1 } });
+    expect(await requeueInterrupted()).toBe(1);
+    expect(await db.task.findUniqueOrThrow({ where: { id: t.id } })).toMatchObject({ status: "pending", attempts: 0 });
+  });
+
   it("blocks Claude calls once the daily budget is spent", async () => {
     await db.cost.create({ data: { agentId: "ceo", category: "claude_api", amountCents: 100_000, currency: "EUR" } });
     await expect(assertApiBudget()).rejects.toBeInstanceOf(BudgetExceededError);

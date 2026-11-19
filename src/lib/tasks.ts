@@ -21,6 +21,18 @@ export async function enqueueOnce(agentId: string, type: string, payload: Record
   return existing ?? enqueue(agentId, type, payload);
 }
 
+/**
+ * On startup nothing can be running yet: a task still marked running was cut off by the restart
+ * (usually a deploy). It goes back in the queue without counting the interrupted try.
+ */
+export async function requeueInterrupted(): Promise<number> {
+  const res = await db.task.updateMany({
+    where: { status: "running", attempts: { gt: 0 } },
+    data: { status: "pending", attempts: { decrement: 1 }, runAfter: new Date() },
+  });
+  return res.count;
+}
+
 export async function runPendingTasks(agents: Map<string, AgentDefinition>, limit = 10): Promise<number> {
   const due = await db.task.findMany({
     where: { status: "pending", runAfter: { lte: new Date() } },
