@@ -45,6 +45,8 @@ const RECEIPTS_CURSOR = "etsy.receipts.since";
  */
 export const TITLE_RULE =
   "at most 70 characters, format '[who it is for] [product] – [the design's hook]', e.g. 'Respiratory Therapist Mug – Dear Santa, Just Good Sats'; " +
+  "personalized items start with 'Personalized', e.g. 'Personalized Grandpa Mug with Name – Best Grandpa Ever'; " +
+  "write the recipient in full, never abbreviated (Respiratory Therapist, not RT); the hook is a complete phrase, never cut off mid-sentence; " +
   "no comma lists of gift occasions or synonyms, no repeated words, no ALL CAPS; the extra search words go in the tags";
 
 const IdeasSchema = z.object({
@@ -1140,6 +1142,8 @@ const OLD_TITLES_KEY = "etsy.titles.before";
 export function acceptableTitle(oldTitle: string, title: string): boolean {
   const t = title.trim();
   if (t.length < 15 || t.length > 80 || t === oldTitle.trim()) return false;
+  // A hook cut off mid-phrase ("… Turned By") reads as a mistake.
+  if (/\b(by|for|and|of|to|with|the|a|an|from|in|on|&)$/i.test(t)) return false;
   for (const word of ["Personalized", "Printable", "Digital Download"]) {
     if (new RegExp(word, "i").test(oldTitle) && !new RegExp(word === "Digital Download" ? "Printable|Digital|Download" : word, "i").test(t)) return false;
   }

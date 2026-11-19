@@ -237,5 +237,6 @@ describe("short titles", () => {
     expect(acceptableTitle(old, "Woodturner Hoodie – Handmade Gifts")).toBe(false);
     expect(acceptableTitle("Kids Christmas Activity Pack Printable, Scavenger Hunt, Bingo", "Christmas Activity Pack for Kids – 12 Games")).toBe(false);
     expect(acceptableTitle("x".repeat(100), "y".repeat(90))).toBe(false);
+    expect(acceptableTitle(old, "Personalized Woodturner Hoodie with Name – Handmade Gifts Turned By")).toBe(false);
   });
 });
