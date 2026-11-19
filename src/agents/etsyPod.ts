@@ -923,17 +923,21 @@ async function pricingReport(_payload: Record<string, unknown>, { log, taskId }:
   const rows: PricingRow[] = [];
   const problems: string[] = [];
   for (const entry of enabledTypes().filter((e) => !e.digital)) {
-    const sample = await db.listing.findFirst({ where: { productType: entry.typeId, variants: { not: undefined }, designFile: { not: "" }, source: "agent" }, orderBy: { createdAt: "desc" } });
-    const fileFor = (v: CatalogVariant) => ((sample?.variants as ListingVariant[] | null) ?? []).find((x) => x.placement === v.placement && x.width === v.width)?.file ?? sample?.designFile;
+    // Printful's price doesn't depend on the design: a simple test print file of the right size will do.
+    const files = new Map<string, string>();
+    const fileFor = async (v: CatalogVariant) => {
+      const key = `${v.placement}-${v.width}x${v.height}`;
+      if (!files.has(key)) {
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 400"><text x="500" y="250" font-size="160" text-anchor="middle" font-family="sans-serif">SAMPLE</text></svg>`;
+        files.set(key, await saveDesign(await renderPrintFile(svg, entry.layout, v.width, v.height, "dark"), `pricing-sample-${entry.typeId}-${key}`));
+      }
+      return files.get(key)!;
+    };
     const byPrice = [...entry.variants].sort((a, b) => a.priceCents - b.priceCents);
     const picks = [...new Map([byPrice[0], byPrice[byPrice.length - 1]].map((v) => [v.size, v])).values()];
     const destinations = entry.shippingProfileId ? (await etsy.getShippingProfile(entry.shippingProfileId)).shipping_profile_destinations : [];
     for (const v of picks) {
-      const file = fileFor(v);
-      if (!file) {
-        problems.push(`${entry.label}: geen printbestand om mee te rekenen`);
-        continue;
-      }
+      const file = await fileFor(v);
       for (const m of PRICING_MARKETS) {
         try {
           const c = await printful.estimateCosts({ recipient: m.recipient, items: [{ variantId: v.variantId, quantity: 1, fileUrl: designUrl(file), placement: v.placement }] });
