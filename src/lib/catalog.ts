@@ -247,7 +247,7 @@ export function buildInventory(variants: { variantId: number; size: string; colo
       ...(bySize ? [{ property_id: SIZE_PROPERTY, property_name: "Size", value_ids: [], values: [size] }] : []),
       ...(byColor ? [{ property_id: COLOR_PROPERTY, property_name: "Color", value_ids: [], values: [color ?? ""] }] : []),
     ],
-    offerings: [{ price: priceCents / 100, quantity: enabled ? 999 : 1, is_enabled: enabled, readiness_state_id: readinessStateId }],
+    offerings: [{ price: priceCents / 100, quantity: 999, is_enabled: enabled, readiness_state_id: readinessStateId }],
   });
   const products = sizes.flatMap((size) =>
     colors.map((color) => {

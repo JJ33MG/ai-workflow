@@ -82,7 +82,7 @@ describe("Etsy variations", () => {
     expect(inv.products).toHaveLength(4);
     const missing = inv.products.find((p) => p.sku.startsWith("NA-"))!;
     expect(missing.property_values.map((p) => p.values[0])).toEqual(["15 oz", "Yellow"]);
-    expect(missing.offerings[0]).toMatchObject({ is_enabled: false, price: 25.99 });
+    expect(missing.offerings[0]).toMatchObject({ is_enabled: false, price: 25.99, quantity: 999 });
     expect(inv.products.filter((p) => p.offerings[0].is_enabled)).toHaveLength(3);
   });
 
