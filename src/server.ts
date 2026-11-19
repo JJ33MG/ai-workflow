@@ -286,11 +286,12 @@ app.post("/hooks/railway/:secret", async (req, res) => {
 });
 
 // Public privacy policy: Pinterest and Meta ask for one when you create a developer app.
-app.get("/privacy", (_req, res) => {
+// Also under /privacy/<brand>: Pinterest wants the company name in the URL.
+app.get(["/privacy", "/privacy/:brand"], (_req, res) => {
   res.type("html").send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Privacy policy · AllyouwishDesigns</title><style>body{font:16px/1.6 system-ui,sans-serif;max-width:680px;margin:40px auto;padding:0 16px;color:#222}</style></head><body>
+<title>Privacy policy · All You Can Wish</title><style>body{font:16px/1.6 system-ui,sans-serif;max-width:680px;margin:40px auto;padding:0 16px;color:#222}</style></head><body>
 <h1>Privacy policy</h1>
-<p>This app is the private marketing and shop tool of AllyouwishDesigns (<a href="https://www.etsy.com/shop/AllyouwishDesigns">our Etsy shop</a>). It is used only by the shop owner.</p>
+<p>This app is the private marketing and shop tool of All You Can Wish (AllyouwishDesigns, <a href="https://www.etsy.com/shop/AllyouwishDesigns">our Etsy shop</a>). It is used only by the shop owner.</p>
 <h2>What it does</h2>
 <p>With the owner's permission it publishes posts about our own products to the owner's own Pinterest, Facebook and Instagram accounts, and reads the owner's own Etsy shop data (listings, views, orders) to run the shop.</p>
 <h2>Data</h2>
