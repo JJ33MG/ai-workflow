@@ -683,7 +683,7 @@ async function uploadListings(payload: Record<string, unknown>, { log, taskId }:
       title: `${ask.length} Etsy-listing(s) publiceren`,
       details:
         `De concepten staan op Etsy. Bekijk elk ontwerp eerst (Etsy eist menselijke controle per listing) op ` +
-        `${config.publicUrl}/dashboard/ → Bedrijven → Etsy-winkel, en keur ze daar per stuk goed of af. Publiceren kost $0,20 per stuk.`,
+        `${config.publicUrl}/dashboard/ → Bedrijven → Etsy-winkel, en keur ze daar per stuk goed of af. Publiceren kost $0,20 per stuk. Na publiceren: zet ze aan in Etsy Ads (Shop Manager → Marketing → Etsy Ads → Listings → filter Uit → alles selecteren → Aan), tenzij Etsy dat al automatisch deed.`,
       amountCents: ask.length * ETSY_LISTING_FEE_USD_CENTS,
       currency: "USD",
       payload: { listingIds: ask },

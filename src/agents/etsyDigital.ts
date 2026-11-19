@@ -265,7 +265,7 @@ async function createDigital(payload: Record<string, unknown>, { log, taskId }: 
       title: `Download publiceren: ${plan.coverTitle}`,
       details:
         `${info.noun}, ${pages.length} pagina's, €${(info.priceCents / 100).toFixed(2)}. Het concept staat op Etsy met ${photos.length} foto's en de PDF's ` +
-        `(US Letter en A4). Bekijk het eerst (Etsy eist menselijke controle per listing) op ${config.publicUrl}/dashboard/ → Bedrijven → Etsy-winkel.`,
+        `(US Letter en A4). Bekijk het eerst (Etsy eist menselijke controle per listing) op ${config.publicUrl}/dashboard/ → Bedrijven → Etsy-winkel. Na publiceren: zet ze aan in Etsy Ads (Shop Manager → Marketing → Etsy Ads → Listings → filter Uit → alles selecteren → Aan), tenzij Etsy dat al automatisch deed.`,
       amountCents: 20,
       currency: "USD",
       payload: { listingIds: [listing.id] },
