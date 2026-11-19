@@ -7,9 +7,9 @@ describe("profit per sale", () => {
   it("subtracts Printful and every Etsy fee", () => {
     const r = saleProfit(mug);
     expect(r.buyerPaysCents).toBe(2798);
-    // 6.5% + 4% of 27.98 = 2.94, + €0.30 payment + €0.19 listing = 3.43
-    expect(r.etsyFeesCents).toBe(343);
-    expect(r.profitCents).toBe(2798 - 343 - 1250);
+    // Seller fees 6.5% of 27.98 + €0.19 listing = 2.01, +21% VAT = 2.43; payment 4% + €0.30 = 1.42 → 3.85
+    expect(r.etsyFeesCents).toBe(385);
+    expect(r.profitCents).toBe(2798 - 385 - 1250);
   });
 
   it("discounts the item, not the shipping, and counts Offsite Ads when asked", () => {

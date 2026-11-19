@@ -2,11 +2,15 @@
 // the VAT Printful charges), minus Etsy's fees. Used for the pricing report and to check that a sale
 // (a discount on the item price) still leaves a profit. All amounts in euro cents.
 
-/** Etsy's fees for a shop based in Belgium (late 2026). */
+/**
+ * Etsy's fees for a shop based in the Czech Republic (late 2026). A seller without a VAT number also
+ * pays Czech VAT on Etsy's own fees (ETSY_FEE_VAT_PCT, 0 once a VAT number is in the shop settings).
+ */
 export const ETSY_FEES = {
+  feeVatPct: Number(process.env.ETSY_FEE_VAT_PCT ?? 0.21),
   /** On item price + shipping (after discount). */
   transactionPct: 0.065,
-  /** Etsy Payments in Belgium: on the order total. */
+  /** Etsy Payments: on the order total. */
   paymentPct: 0.04,
   paymentFixedCents: 30,
   /** $0.20 listing fee, charged again (auto-renew) for every item sold. */
@@ -40,12 +44,10 @@ export interface SaleResult {
 export function saleProfit(i: SaleInput): SaleResult {
   const item = Math.round(i.priceCents * (1 - (i.discountPct ?? 0)));
   const buyerPays = item + i.shippingChargedCents;
-  const fees =
-    buyerPays * ETSY_FEES.transactionPct +
-    buyerPays * ETSY_FEES.paymentPct +
-    ETSY_FEES.paymentFixedCents +
-    ETSY_FEES.listingFeeCents +
-    (i.offsiteAds ? buyerPays * ETSY_FEES.offsiteAdsPct : 0);
+  // VAT applies to Etsy's seller fees, not to payment processing (a financial service, exempt).
+  const sellerFees =
+    buyerPays * ETSY_FEES.transactionPct + ETSY_FEES.listingFeeCents + (i.offsiteAds ? buyerPays * ETSY_FEES.offsiteAdsPct : 0);
+  const fees = sellerFees * (1 + ETSY_FEES.feeVatPct) + buyerPays * ETSY_FEES.paymentPct + ETSY_FEES.paymentFixedCents;
   const profit = buyerPays - fees - i.printfulTotalCents;
   return {
     buyerPaysCents: buyerPays,
