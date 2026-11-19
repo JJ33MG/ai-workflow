@@ -57,7 +57,8 @@ describe("Etsy variations", () => {
     const inv = buildInventory([v(1, "S", "White", 2699), v(2, "2XL", "Black", 2899)], 77);
     expect(inv.price_on_property).toEqual([513, 514]);
     expect(inv.sku_on_property).toEqual([513, 514]);
-    expect(inv.products[1]).toEqual({
+    expect(inv.products).toHaveLength(4); // S and 2XL × White and Black, two of them switched off
+    expect(inv.products.find((p) => p.sku === "PF-2")).toEqual({
       sku: "PF-2",
       property_values: [
         { property_id: 513, property_name: "Size", value_ids: [], values: ["2XL"] },
@@ -74,6 +75,15 @@ describe("Etsy variations", () => {
     const single = buildInventory([v(1, "One size", "Oyster", 2499)], 1);
     expect(single.price_on_property).toEqual([]);
     expect(single.products[0].property_values).toEqual([]);
+  });
+
+  it("lists every size × colour combination, switching off the ones Printful doesn't make", () => {
+    const inv = buildInventory([v(1, "11 oz", "Yellow", 2299), v(2, "11 oz", "Red", 2299), v(3, "15 oz", "Red", 2599)], 5);
+    expect(inv.products).toHaveLength(4);
+    const missing = inv.products.find((p) => p.sku.startsWith("NA-"))!;
+    expect(missing.property_values.map((p) => p.values[0])).toEqual(["15 oz", "Yellow"]);
+    expect(missing.offerings[0]).toMatchObject({ is_enabled: false, price: 25.99 });
+    expect(inv.products.filter((p) => p.offerings[0].is_enabled)).toHaveLength(3);
   });
 
   it("reads the variant back from the SKU", () => {
@@ -155,6 +165,17 @@ describe("Catalog setup", () => {
     const tree = [{ id: 1, name: "Bags & Purses", children: [{ id: 2, name: "Totes", children: [] }] }];
     expect(taxonomyFor(productType("tote")!, tree)).toBe(2);
     expect(taxonomyFor(tee, tree)).toBeNull();
+  });
+});
+
+describe("Render density", () => {
+  it("oversamples small designs but keeps posters within the pixel limit", async () => {
+    const { renderDensity } = await import("../src/lib/design.js");
+    expect(renderDensity(1000, 800)).toBe(300);
+    const big = renderDensity(5760, 7200);
+    const px = (5760 * big / 72) * (7200 * big / 72);
+    expect(px).toBeLessThan(268_000_000);
+    expect(big).toBeGreaterThanOrEqual(72);
   });
 });
 

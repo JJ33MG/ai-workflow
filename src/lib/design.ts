@@ -152,6 +152,16 @@ async function contentBox(svg: string): Promise<[number, number, number, number]
 }
 
 /**
+ * SVG text is drawn at `density` and then scaled to the target size: oversampling makes small
+ * sizes crisper, but a poster drawn at 300 dpi would be hundreds of megapixels, more than sharp
+ * accepts. Large outputs are already sharp at a lower density, so it scales down with the size.
+ */
+export function renderDensity(width: number, height: number, budgetPixels = 60_000_000): number {
+  const scale = Math.sqrt(budgetPixels / Math.max(1, width * height)); // allowed oversampling factor
+  return Math.round(Math.min(300, Math.max(72, 72 * scale)));
+}
+
+/**
  * Draws the design's content as large as fits in maxW × maxH (vector redraw, so it stays sharp)
  * and places it on a transparent canvas of width × height at the given top (or centred).
  */
@@ -160,7 +170,7 @@ async function placeContent(svg: string, width: number, height: number, maxW: nu
   const fit = Math.min(maxW / box[2], maxH / box[3]);
   const w = Math.max(1, Math.round(box[2] * fit));
   const h = Math.max(1, Math.round(box[3] * fit));
-  const content = await sharp(Buffer.from(withViewBox(svg, box, w, h)), { density: 300 }).resize(w, h).png().toBuffer();
+  const content = await sharp(Buffer.from(withViewBox(svg, box, w, h)), { density: renderDensity(w, h) }).resize(w, h).png().toBuffer();
   return sharp({ create: { width, height, channels: 4, background: TRANSPARENT }, limitInputPixels: false })
     .composite([{ input: content, left: Math.round((width - w) / 2), top: top === "center" ? Math.round((height - h) / 2) : Math.round(top) }])
     .png()

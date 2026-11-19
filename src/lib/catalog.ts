@@ -230,20 +230,35 @@ export const variantFromSku = (sku: string | null | undefined) => {
 const SIZE_PROPERTY = 513;
 const COLOR_PROPERTY = 514;
 
-/** Etsy inventory for a listing: one product per variant with its price and a SKU naming the Printful variant. */
+/**
+ * Etsy inventory for a listing: one product per variant with its price and a SKU naming the Printful
+ * variant. Etsy wants every size × colour combination listed, so a combination Printful doesn't make
+ * (e.g. a 15 oz mug in yellow) is included but switched off.
+ */
 export function buildInventory(variants: { variantId: number; size: string; color: string | null; priceCents: number }[], readinessStateId: number) {
-  const bySize = new Set(variants.map((v) => v.size)).size > 1;
-  const byColor = new Set(variants.map((v) => v.color)).size > 1;
+  const sizes = [...new Set(variants.map((v) => v.size))];
+  const colors = [...new Set(variants.map((v) => v.color))];
+  const bySize = sizes.length > 1;
+  const byColor = colors.length > 1;
   const pricedBy = [...(bySize ? [SIZE_PROPERTY] : []), ...(byColor ? [COLOR_PROPERTY] : [])];
+  const product = (size: string, color: string | null, sku: string, priceCents: number, enabled: boolean) => ({
+    sku,
+    property_values: [
+      ...(bySize ? [{ property_id: SIZE_PROPERTY, property_name: "Size", value_ids: [], values: [size] }] : []),
+      ...(byColor ? [{ property_id: COLOR_PROPERTY, property_name: "Color", value_ids: [], values: [color ?? ""] }] : []),
+    ],
+    offerings: [{ price: priceCents / 100, quantity: enabled ? 999 : 1, is_enabled: enabled, readiness_state_id: readinessStateId }],
+  });
+  const products = sizes.flatMap((size) =>
+    colors.map((color) => {
+      const v = variants.find((x) => x.size === size && x.color === color);
+      if (v) return product(size, color, skuFor(v.variantId), v.priceCents, true);
+      const samePrice = variants.find((x) => x.size === size)?.priceCents ?? variants[0].priceCents;
+      return product(size, color, `NA-${size}-${color ?? ""}`.replace(/\s+/g, ""), samePrice, false);
+    }),
+  );
   return {
-    products: variants.map((v) => ({
-      sku: skuFor(v.variantId),
-      property_values: [
-        ...(bySize ? [{ property_id: SIZE_PROPERTY, property_name: "Size", value_ids: [], values: [v.size] }] : []),
-        ...(byColor ? [{ property_id: COLOR_PROPERTY, property_name: "Color", value_ids: [], values: [v.color ?? ""] }] : []),
-      ],
-      offerings: [{ price: v.priceCents / 100, quantity: 999, is_enabled: true, readiness_state_id: readinessStateId }],
-    })),
+    products,
     price_on_property: pricedBy,
     quantity_on_property: [],
     sku_on_property: pricedBy,
