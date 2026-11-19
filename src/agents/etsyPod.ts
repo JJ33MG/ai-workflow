@@ -27,12 +27,12 @@ const IdeasSchema = z.object({
   ideas: z.array(
     z.object({
       niche: z.string(),
-      slogan: z.string(),
-      designBrief: z.string(),
-      /** One listing per product the design goes on. */
+      /** One listing per product, each with the text that suits that product. */
       listings: z.array(
         z.object({
           product: z.string(),
+          slogan: z.string(),
+          designBrief: z.string(),
           title: z.string(),
           description: z.string(),
           tags: z.array(z.string()),
@@ -43,6 +43,11 @@ const IdeasSchema = z.object({
 });
 type Idea = z.infer<typeof IdeasSchema>["ideas"][number];
 type ListingText = Idea["listings"][number];
+/** What one design is drawn from. */
+type DesignInput = { slogan: string; niche: string; designBrief: string };
+
+/** Same text (ignoring case, spaces and punctuation) = same design, so it is drawn once. */
+export const sloganKey = (slogan: string) => slogan.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
 /** Etsy limits: title ≤ 140 chars, ≤ 13 tags of ≤ 20 chars each. */
 export function normaliseListing<T extends { title: string; tags: string[] }>(l: T): T {
@@ -188,28 +193,39 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
     prompt:
       `Today: ${todayIso()}.\n${await campaignBrief(ID)}\n\n${digest}\n\n${instructions ? `Jarne's direction for this batch (follow it): ${instructions}\n\n` : ""}` +
       `Products you can put a design on:\n${productList}${printableLine}\n\n` +
-      `Propose ${count} new designs. For each give: niche, slogan (the exact printed text, max ~8 words), designBrief (layout and typographic style), ` +
-      `and listings: for ${perDesign} products from the list that suit this design and its buyer (a mug almost always fits; pick apparel, totes and posters ` +
-      "when the joke works worn or on a wall), one listing each with product (its id), title (≤140 chars, starts with the search phrase and names the product), " +
-      "description (3 short paragraphs with the product facts) and 13 Etsy tags (each ≤20 chars)." +
+      `Propose ${count} new gift niches. For each give: niche, and listings for ${perDesign} products from the list that suit its buyer ` +
+      "(a mug almost always fits; pick apparel, totes and posters when the idea works worn or on a wall). " +
+      "Every product gets its OWN text, written for how that product is used: a mug for coffee, mornings and the desk; a T-shirt or hoodie " +
+      "as something the buyer proudly wears and says about themselves; a tote for carrying, shopping and the commute; a poster or print " +
+      "as a wall piece worth looking at every day. Use the same text on two products only when it genuinely works on both. " +
+      "Each listing: product (its id), slogan (the exact printed text for that product, max ~8 words), designBrief (layout and typographic style), " +
+      "title (≤140 chars, starts with the search phrase and names the product), description (3 short paragraphs with the product facts) " +
+      "and 13 Etsy tags (each ≤20 chars)." +
       (printable
-        ? ` Also add one '${PRINTABLE.id}' listing for every design, on top of those products: a printable wall-art download ` +
-          "(title starts with the search phrase and says 'Printable Wall Art' or 'Digital Download'; tags for printable wall art and the niche)."
+        ? ` Also add one '${PRINTABLE.id}' listing per niche, on top of those products: a printable wall-art download with a wall-worthy text ` +
+          "(it may share the poster's text); title starts with the search phrase and says 'Printable Wall Art' or 'Digital Download'."
         : ""),
   });
 
   const created: string[] = [];
   for (const idea of ideas.slice(0, count)) {
-    try {
-      const { svg } = await designWithRetry(idea, log, taskId);
-      const chosen = [
-        ...idea.listings.filter((l) => l.product !== PRINTABLE.id).slice(0, perDesign),
-        ...idea.listings.filter((l) => l.product === PRINTABLE.id).slice(0, 1),
-      ];
-      for (const raw of chosen) {
+    // A text used on two products is drawn once.
+    const drawn = new Map<string, string>();
+    const chosen = [
+      ...idea.listings.filter((l) => l.product !== PRINTABLE.id).slice(0, perDesign),
+      ...idea.listings.filter((l) => l.product === PRINTABLE.id).slice(0, 1),
+    ];
+    for (const raw of chosen) {
+      try {
         const entry = types.find((t) => t.typeId === raw.product);
         if (!entry) continue; // a product that isn't available
         const text: ListingText = normaliseListing(raw);
+        const key = sloganKey(raw.slogan);
+        let svg = drawn.get(key);
+        if (!svg) {
+          svg = (await designWithRetry({ slogan: raw.slogan, niche: idea.niche, designBrief: raw.designBrief }, log, taskId)).svg;
+          drawn.set(key, svg);
+        }
         if (entry.digital) {
           const listing = await db.listing.create({
             data: {
@@ -252,9 +268,9 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
         await db.listing.update({ where: { id: listing.id }, data: { variants: variants as unknown as object, designFile: variants[0].file } });
         created.push(listing.id);
         await log.info(`Draft design created: ${text.title}`, { listingId: listing.id, niche: idea.niche, product: entry.typeId }, taskId);
+      } catch (err) {
+        await log.warn(`Skipped ${raw.product} "${raw.slogan}": ${(err as Error).message}`, undefined, taskId);
       }
-    } catch (err) {
-      await log.warn(`Skipped idea "${idea.slogan}": ${(err as Error).message}`, undefined, taskId);
     }
   }
 
@@ -315,7 +331,7 @@ export async function reviewDesign(png: Buffer, slogan: string) {
  * Asks Claude for one side of the mug, renders it, checks nothing is cut off and has it reviewed.
  * Claude can't see its own rendering, so a layout miss or a failed review is sent back as feedback.
  */
-async function designWithRetry(idea: Idea, log?: TaskContext["log"], taskId?: string): Promise<{ svg: string; png: Buffer }> {
+async function designWithRetry(idea: DesignInput, log?: TaskContext["log"], taskId?: string): Promise<{ svg: string; png: Buffer }> {
   const side = sideSize();
   const mx = Math.round(side.width * 0.08);
   const my = Math.round(side.height * 0.08);

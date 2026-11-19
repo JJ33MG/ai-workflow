@@ -188,3 +188,11 @@ describe("Etsy rules and clean text", () => {
     expect(decodeEntities("I&#39;m on 20 Meters &amp; more &quot;fun&quot;")).toBe('I\'m on 20 Meters & more "fun"');
   });
 });
+
+describe("One text per product", () => {
+  it("draws a text once even when two products share it, ignoring case and punctuation", async () => {
+    const { sloganKey } = await import("../src/agents/etsyPod.js");
+    expect(sloganKey("Fifty Thousand Coworkers!")).toBe(sloganKey("fifty thousand coworkers"));
+    expect(sloganKey("Coffee first")).not.toBe(sloganKey("Hoodie season"));
+  });
+});
