@@ -2,12 +2,14 @@
 // morning briefing show users, trips, Plus members and affiliate clicks next to the shops.
 import { config } from "../config.js";
 import { setSetting } from "../db.js";
-import { fetchRoutifyStats, routifyLine, type RoutifyConfig } from "../integrations/routify.js";
+import { fetchRoutifyStats, isRoutifyConfigured, routifyLine, type RoutifyConfig } from "../integrations/routify.js";
 import type { AgentDefinition, TaskContext } from "./types.js";
 
 export const ROUTIFY_STATS_KEY = "routify.stats";
 
 export async function syncRoutifyStats({ log }: Pick<TaskContext, "log">, c: RoutifyConfig = config.routify, fetchImpl: typeof fetch = fetch) {
+  // Not set up yet: nothing to read, and not a failure for the Debug Agent to chase.
+  if (!isRoutifyConfigured(c)) return { skipped: "Routify is niet ingesteld" };
   const stats = await fetchRoutifyStats(c, fetchImpl);
   await setSetting(ROUTIFY_STATS_KEY, stats);
   await log.info(routifyLine(stats));

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { syncRoutifyStats } from "../src/agents/routify.js";
 import { fetchRoutifyStats, routifyLine, type RoutifyStats } from "../src/integrations/routify.js";
 
 const STATS: RoutifyStats = {
@@ -37,5 +38,14 @@ describe("Routify stats", () => {
 
   it("sums the week up in one Dutch line", () => {
     expect(routifyLine(STATS)).toBe("Routify: 12 nieuwe gebruikers, 30 trips, 2 Plus, 41 affiliate-kliks deze week");
+  });
+
+  it("skips quietly while Routify is not set up", async () => {
+    const log = { info: async () => {}, warn: async () => {}, error: async () => {} };
+    await expect(syncRoutifyStats({ log }, { url: "", statsToken: "" })).resolves.toEqual({ skipped: "Routify is niet ingesteld" });
+  });
+
+  it("refuses a reply that is not Routify's stats", async () => {
+    await expect(fetchRoutifyStats({ url: "https://routify.test", statsToken: "t" }, reply(200, { hello: "world" }))).rejects.toThrow(/onverwacht/);
   });
 });
