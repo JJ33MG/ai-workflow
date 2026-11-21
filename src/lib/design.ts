@@ -172,7 +172,7 @@ async function placeContent(svg: string, width: number, height: number, maxW: nu
   const h = Math.max(1, Math.round(box[3] * fit));
   const content = await sharp(Buffer.from(withViewBox(svg, box, w, h)), { density: renderDensity(w, h) }).resize(w, h).png().toBuffer();
   return sharp({ create: { width, height, channels: 4, background: TRANSPARENT }, limitInputPixels: false })
-    .composite([{ input: content, left: Math.round((width - w) / 2), top: top === "center" ? Math.round((height - h) / 2) : top === "chest-centre" ? Math.round((height - h) * 0.4) : Math.round(top) }])
+    .composite([{ input: content, left: Math.round((width - w) / 2), top: top === "center" ? Math.round((height - h) / 2) : top === "chest-centre" ? Math.round((height - h) * 0.65) : Math.round(top) }])
     .png()
     .toBuffer();
 }
@@ -220,7 +220,7 @@ export async function renderPrintFile(
     if (width >= height * 0.9) {
       // Printful print files are 150 dpi: never wider than ~11 in or taller than ~10 in, however large the area.
       const DPI = 150;
-      return placeContent(art, width, height, Math.min(width * 0.78, 11 * DPI), Math.min(height * 0.74, 10 * DPI), "chest-centre");
+      return placeContent(art, width, height, Math.min(width * 0.78, 11 * DPI), Math.min(height * 0.66, 10 * DPI), "chest-centre");
     }
     return placeContent(art, width, height, width * 0.85, height * 0.58, height * 0.06);
   }

@@ -18,8 +18,8 @@ async function inkBox(png: Buffer) {
 describe("chest print on a hoodie (wide print area)", () => {
   it("prints the slogan large and centred on the chest, not squeezed under the collar", async () => {
     const box = await inkBox(await renderPrintFile(SLOGAN, "chest", 2250, 1800, "dark"));
-    expect(box.h).toBeGreaterThan(0.6); // was capped at 58% of the height
-    expect(box.top).toBeGreaterThan(0.08); // was 6% from the top edge
+    expect(box.h).toBeGreaterThan(0.6); // large: well over half of the area
+    expect(box.top).toBeGreaterThan(0.18); // was 6% from the top edge: sits mid-chest, below the collar
     expect(Math.abs(box.left + box.w / 2 - 0.5)).toBeLessThan(0.02); // centred left to right
   });
 });
