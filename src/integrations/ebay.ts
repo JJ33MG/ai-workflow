@@ -109,6 +109,18 @@ export function ebayHeaders(token: string): Record<string, string> {
   };
 }
 
+type ApiError = { errorId?: number; message?: string; longMessage?: string; parameters?: { name?: string; value?: string }[] };
+
+/** eBay's message with its error number and parameters: the vague texts are only clear with those. */
+export function errorText(errors: ApiError[]): string {
+  return errors
+    .map((e) => {
+      const params = (e.parameters ?? []).map((p) => `${p.name}=${p.value}`).join(", ");
+      return `${e.longMessage ?? e.message ?? ""}${e.errorId ? ` [${e.errorId}]` : ""}${params ? ` (${params})` : ""}`;
+    })
+    .join("; ");
+}
+
 async function ebay<T>(method: string, path: string, body?: unknown, token?: string): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     const res = await fetch(`${API}${path}`, {
@@ -123,8 +135,8 @@ async function ebay<T>(method: string, path: string, body?: unknown, token?: str
     const text = await res.text();
     const json = text ? (JSON.parse(text) as T & { errors?: { errorId?: number; message?: string; longMessage?: string }[] }) : ({} as T);
     if (!res.ok) {
-      const errors = (json as { errors?: { errorId?: number; message?: string; longMessage?: string }[] }).errors ?? [];
-      throw new EbayError(res.status, errors, `eBay ${method} ${path} failed: ${res.status} ${errors.map((e) => e.longMessage ?? e.message).join("; ") || text.slice(0, 300)}`);
+      const errors = (json as { errors?: ApiError[] }).errors ?? [];
+      throw new EbayError(res.status, errors, `eBay ${method} ${path} failed: ${res.status} ${errorText(errors) || text.slice(0, 300)}`);
     }
     return json;
   }

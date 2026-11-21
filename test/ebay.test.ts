@@ -95,3 +95,11 @@ describe("eBay seller status line", () => {
     expect(privilegeLine({ sellerRegistrationCompleted: false })).toBe("eBay-verkopersaccount: registratie NIET voltooid, verkooplimiet onbekend");
   });
 });
+
+import { errorText } from "../src/integrations/ebay.js";
+
+describe("eBay error text", () => {
+  it("keeps the error number and parameters next to eBay's message", () => {
+    expect(errorText([{ errorId: 25002, longMessage: "Cannot revise listing.", parameters: [{ name: "0", value: "title" }] }])).toBe("Cannot revise listing. [25002] (0=title)");
+  });
+});
