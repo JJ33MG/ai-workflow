@@ -165,14 +165,14 @@ export function renderDensity(width: number, height: number, budgetPixels = 60_0
  * Draws the design's content as large as fits in maxW × maxH (vector redraw, so it stays sharp)
  * and places it on a transparent canvas of width × height at the given top (or centred).
  */
-async function placeContent(svg: string, width: number, height: number, maxW: number, maxH: number, top: number | "center"): Promise<Buffer> {
+async function placeContent(svg: string, width: number, height: number, maxW: number, maxH: number, top: number | "center" | "chest-centre"): Promise<Buffer> {
   const box = await contentBox(svg);
   const fit = Math.min(maxW / box[2], maxH / box[3]);
   const w = Math.max(1, Math.round(box[2] * fit));
   const h = Math.max(1, Math.round(box[3] * fit));
   const content = await sharp(Buffer.from(withViewBox(svg, box, w, h)), { density: renderDensity(w, h) }).resize(w, h).png().toBuffer();
   return sharp({ create: { width, height, channels: 4, background: TRANSPARENT }, limitInputPixels: false })
-    .composite([{ input: content, left: Math.round((width - w) / 2), top: top === "center" ? Math.round((height - h) / 2) : Math.round(top) }])
+    .composite([{ input: content, left: Math.round((width - w) / 2), top: top === "center" ? Math.round((height - h) / 2) : top === "chest-centre" ? Math.round((height - h) * 0.4) : Math.round(top) }])
     .png()
     .toBuffer();
 }
@@ -214,7 +214,16 @@ export async function renderPrintFile(
   if (layout === "mug-wrap") return mirrorSides(await fitToSide(art, { width: Math.round(width / 2), height }));
   // On a shirt the design sits on the chest, near the top of the print area: up to 85% of the width and
   // 58% of the height, so a slogan of four or five lines still prints 10-12 inches wide, not a small patch.
-  if (layout === "chest") return placeContent(art, width, height, width * 0.85, height * 0.58, height * 0.06);
+  if (layout === "chest") {
+    // A hoodie's front area is wider than tall (the pouch pocket limits it below): the slogan is
+    // drawn larger and sits lower, centred on the chest the way printed hoodies look, not under the collar.
+    if (width >= height * 0.9) {
+      // Printful print files are 150 dpi: never wider than ~11 in or taller than ~10 in, however large the area.
+      const DPI = 150;
+      return placeContent(art, width, height, Math.min(width * 0.78, 11 * DPI), Math.min(height * 0.74, 10 * DPI), "chest-centre");
+    }
+    return placeContent(art, width, height, width * 0.85, height * 0.58, height * 0.06);
+  }
   return placeContent(art, width, height, width * 0.8, height * 0.7, "center");
 }
 
