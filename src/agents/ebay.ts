@@ -26,8 +26,21 @@ const CATEGORIES_KEY = "ebay.categories";
 const LISTINGS_KEY = "ebay.listings";
 const SHIPPED_KEY = "ebay.shipped";
 const BRAND = "All You Can Wish";
-/** Units on offer per variant; topped up after every sale (made to order, so never really out). */
-const STOCK = 3;
+/**
+ * Units on offer per variant; topped up after every sale (made to order, so never really out). eBay counts every
+ * unit against a new seller's monthly limit, so it stays 1.
+ */
+export const EBAY_STOCK = 1;
+const STOCK = EBAY_STOCK;
+/** Apparel on eBay: the first two colours, every size (a hoodie in four colours would count as 24 items). */
+const MAX_EBAY_COLORS = 2;
+
+export function ebayVariants<T extends { color: string | null }>(variants: T[]): T[] {
+  const colors = [...new Set(variants.map((v) => v.color).filter((c): c is string => !!c))];
+  if (colors.length <= MAX_EBAY_COLORS) return variants;
+  const keep = new Set(colors.slice(0, MAX_EBAY_COLORS));
+  return variants.filter((v) => !v.color || keep.has(v.color));
+}
 const SHIPMENT_WINDOW_DAYS = 45;
 
 /** What eBay's category search is asked per product type. */
@@ -212,7 +225,7 @@ async function list(_payload: Record<string, unknown>, { log, taskId }: TaskCont
   const added: string[] = [];
   for (const listing of candidates) {
     try {
-      const variants = (listing.variants as ListingVariant[] | null) ?? [];
+      const variants = ebayVariants((listing.variants as ListingVariant[] | null) ?? []);
       const cat = await categoryFor(listing.productType, log, taskId);
       if (!variants.length || !cat) continue;
       const imageUrls = (await etsy.getListingImageUrls(listing.etsyListingId!)).slice(0, 12);

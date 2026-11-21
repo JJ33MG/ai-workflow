@@ -103,3 +103,20 @@ describe("eBay error text", () => {
     expect(errorText([{ errorId: 25002, longMessage: "Cannot revise listing.", parameters: [{ name: "0", value: "title" }] }])).toBe("Cannot revise listing. [25002] (0=title)");
   });
 });
+
+import { ebayVariants, EBAY_STOCK } from "../src/agents/ebay.js";
+
+describe("eBay variants within a new seller's limit", () => {
+  const v = (size: string, color: string | null) => ({ size, color, variantId: Math.random() });
+  it("lists one unit per variant and at most two colours of apparel, all sizes", () => {
+    expect(EBAY_STOCK).toBe(1);
+    const hoodie = ["Black", "Navy", "Sport Grey", "White"].flatMap((c) => ["S", "M", "L"].map((s) => v(s, c)));
+    const picked = ebayVariants(hoodie);
+    expect(new Set(picked.map((x) => x.color))).toEqual(new Set(["Black", "Navy"]));
+    expect(picked).toHaveLength(6);
+  });
+  it("keeps products without colours as they are", () => {
+    const mug = [v("11 oz", null), v("15 oz", null)];
+    expect(ebayVariants(mug)).toHaveLength(2);
+  });
+});
