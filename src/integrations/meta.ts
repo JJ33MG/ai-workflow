@@ -66,14 +66,20 @@ interface PageInfo {
 }
 
 /** META_PAGE_ID wins; otherwise the Page with an Instagram account; otherwise the first Page. */
-export function pickPage(pages: PageInfo[], wanted = config.meta.pageId): PageInfo | null {
+/** The shop's own Page: META_PAGE_ID, else the Page with the shop's name, else the only Page. Never a guess. */
+export function pickPage(pages: PageInfo[], wanted = config.meta.pageId, shopName = config.meta.pageName): PageInfo | null {
   if (wanted) return pages.find((p) => p.id === wanted) ?? null;
-  return pages.find((p) => p.instagram_business_account) ?? pages[0] ?? null;
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const named = pages.find((p) => norm(p.name) === norm(shopName));
+  if (named) return named;
+  return pages.length === 1 ? pages[0] : null;
 }
 
 export async function handleCallback(code: string, state: string): Promise<MetaConnection> {
   const pending = await getSetting<{ state: string }>(PENDING_KEY);
   if (!pending || pending.state !== state) throw new Error("OAuth state mismatch; start again");
+  // A new connection replaces the old one entirely: if this attempt fails, nothing posts to an old Page.
+  await setSetting(CONNECTION_KEY, null);
   const short = await call<{ access_token: string }>("GET", "/oauth/access_token", {
     client_id: config.meta.appId,
     client_secret: config.meta.appSecret,
@@ -92,7 +98,10 @@ export async function handleCallback(code: string, state: string): Promise<MetaC
     access_token: long.access_token,
   });
   const page = pickPage(pages.data);
-  if (!page) throw new Error("No Facebook Page found for this account (or META_PAGE_ID does not match one). Create a Page for the shop first.");
+  if (!page) {
+    const names = pages.data.map((p) => `${p.name} (${p.id})`).join(", ") || "geen";
+    throw new Error(`Geen Facebook-pagina "${config.meta.pageName}" gevonden. Pagina's die Meta toegaf: ${names}. Kies bij het koppelen de juiste pagina, of zet META_PAGE_ID in Railway.`);
+  }
 
   let instagramUsername: string | null = null;
   const instagramId = page.instagram_business_account?.id ?? null;

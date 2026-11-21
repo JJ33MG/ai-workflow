@@ -95,6 +95,8 @@ export const config = {
     appSecret: str("META_APP_SECRET"),
     // Optional: which Facebook Page to post to when the account manages several.
     pageId: str("META_PAGE_ID"),
+    // Without META_PAGE_ID the Page with this name is used (never just the first Page of the account).
+    pageName: str("META_PAGE_NAME", "All You Can Wish"),
     graphVersion: str("META_GRAPH_VERSION", "v21.0"),
     // One post a day per platform: steady, and well below Instagram's limit of 50 a day.
     postsPerDay: num("META_POSTS_PER_DAY", 1),

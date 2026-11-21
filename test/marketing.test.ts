@@ -53,12 +53,17 @@ describe("Pinterest boards", () => {
 describe("Instagram + Facebook", () => {
   const page = (id: string, ig?: string) => ({ id, name: `Page ${id}`, access_token: `t${id}`, ...(ig ? { instagram_business_account: { id: ig } } : {}) });
 
-  it("posts to the Page with Instagram, unless a Page is named", async () => {
+  it("posts to the shop's own Page: by id, else by the shop name; never guesses between several Pages", async () => {
     const { pickPage } = await import("../src/integrations/meta.js");
-    expect(pickPage([page("1"), page("2", "ig2")], "")?.id).toBe("2");
-    expect(pickPage([page("1"), page("2", "ig2")], "1")?.id).toBe("1");
-    expect(pickPage([page("1")], "9")).toBeNull();
-    expect(pickPage([], "")).toBeNull();
+    const other = { ...page("1", "ig1"), name: "Limitededitionclothingandshoes" };
+    const shop = { ...page("2"), name: "All You Can Wish" };
+    expect(pickPage([other, shop], "", "All You Can Wish")?.id).toBe("2");
+    expect(pickPage([other, shop], "1", "All You Can Wish")?.id).toBe("1");
+    expect(pickPage([other, page("3")], "", "All You Can Wish")).toBeNull();
+    expect(pickPage([shop], "", "All You Can Wish")?.id).toBe("2");
+    expect(pickPage([page("5")], "", "All You Can Wish")?.id).toBe("5"); // only one Page: that one
+    expect(pickPage([page("1")], "9", "All You Can Wish")).toBeNull();
+    expect(pickPage([], "", "All You Can Wish")).toBeNull();
   });
 
   it("publishes to Instagram in two steps: container, then publish", async () => {
