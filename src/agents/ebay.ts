@@ -57,6 +57,10 @@ interface EbayListingRef {
 
 export const skuFor = (listingId: string, variantId: number) => `EB-${variantId}-${listingId.slice(-10)}`;
 
+/** eBay requires a Color item specific: the variant's colour, else the product's own colour. */
+const OWN_COLOR: Record<string, string> = { mug: "White", "mug-black": "Black", "mug-color": "White", tshirt: "White", hoodie: "Black", tote: "Beige", poster: "Multicolor" };
+export const colorAspect = (typeId: string, variantColor: string | null | undefined) => variantColor || OWN_COLOR[typeId] || "Multicolor";
+
 /** eBay titles are at most 80 characters: cut at a word, never mid-word. */
 export function ebayTitle(title: string): string {
   if (title.length <= 80) return title;
@@ -225,7 +229,7 @@ async function list(_payload: Record<string, unknown>, { log, taskId }: TaskCont
         if (!cost) throw new Error(`geen Printful-kosten voor ${listing.productType} ${v.size}`);
         const aspects: Record<string, string[]> = { ...cat.aspects };
         if (v.size) aspects.Size = [v.size];
-        if (v.color) aspects.Color = [v.color];
+        aspects.Color = [colorAspect(listing.productType, v.color)];
         await ebay.putInventoryItem(sku, { title, description, aspects, imageUrls, quantity: STOCK });
         offerIds.push(
           await ebay.upsertOffer({
@@ -243,7 +247,9 @@ async function list(_payload: Record<string, unknown>, { log, taskId }: TaskCont
       let groupKey: string | null = null;
       if (multi) {
         groupKey = `AYCW-${listing.id}`;
-        await ebay.putInventoryGroup(groupKey, { title, description, imageUrls, aspects: cat.aspects, skus: Object.keys(skus), varies });
+        // A colour that does not vary is a shared item specific of the whole group.
+        const groupAspects = varies.Color ? cat.aspects : { ...cat.aspects, Color: [colorAspect(listing.productType, variants[0].color)] };
+        await ebay.putInventoryGroup(groupKey, { title, description, imageUrls, aspects: groupAspects, skus: Object.keys(skus), varies });
         ebayListingId = await ebay.publishGroup(groupKey);
       } else {
         ebayListingId = await ebay.publishOffer(offerIds[0]);

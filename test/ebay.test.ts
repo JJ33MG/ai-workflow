@@ -74,3 +74,14 @@ describe("eBay request headers", () => {
     expect(h.authorization).toBe("Bearer tok");
   });
 });
+
+import { colorAspect } from "../src/agents/ebay.js";
+
+describe("eBay colour item specific", () => {
+  it("is the variant's colour, else the product's own colour", () => {
+    expect(colorAspect("hoodie", "Navy")).toBe("Navy");
+    expect(colorAspect("mug", null)).toBe("White");
+    expect(colorAspect("mug-black", null)).toBe("Black");
+    expect(colorAspect("poster", null)).toBe("Multicolor");
+  });
+});
