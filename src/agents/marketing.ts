@@ -439,9 +439,11 @@ const MetaSchema = z.object({
 async function metaPosts(payload: Record<string, unknown>, { log, taskId }: TaskContext) {
   const c = await meta.metaConnection();
   if (!meta.isMetaConfigured() || !c) return { skipped: "Instagram/Facebook niet gekoppeld" };
-  if (config.dryRun) return { skipped: "dry run" };
+  // Preview: the posts exactly as they would go out, without approval and without posting (so also in dry run).
+  const preview = payload.preview === true;
+  if (config.dryRun && !preview) return { skipped: "dry run" };
   const platforms = c.instagramId ? "Facebook en Instagram" : "Facebook";
-  const approved = await platformApproved(
+  const approved = preview || await platformApproved(
     "meta",
     platforms,
     `Elke dag ${config.meta.postsPerDay} post(s) op ${platforms} over een live Etsy-listing, met de productfoto. Gratis.`,
@@ -474,11 +476,16 @@ async function metaPosts(payload: Record<string, unknown>, { log, taskId }: Task
   });
 
   let made = 0;
+  const drafts: { title: string; imageUrl: string; link: string; facebook: string; instagram: string }[] = [];
   for (const l of candidates) {
     const text = posts.find((p) => p.listingId === l.id);
     const imageUrl = text && (await etsy.getLargeImageUrl(l.etsyListingId!).catch(() => null));
     if (!text || !imageUrl) continue;
     const link = `https://www.etsy.com/listing/${l.etsyListingId}`;
+    if (preview) {
+      drafts.push({ title: l.title, imageUrl, link, facebook: text.facebook, instagram: text.instagram });
+      continue;
+    }
     for (const platform of wanted) {
       if (done(platform, l.id)) continue;
       try {
@@ -491,6 +498,10 @@ async function metaPosts(payload: Record<string, unknown>, { log, taskId }: Task
         await log.warn(`${platform} post mislukt voor ${l.title}: ${(err as Error).message}`, undefined, taskId);
       }
     }
+  }
+  if (preview) {
+    await log.info(`Voorbeeld van ${drafts.length} post(s) voor ${platforms} (niets geplaatst)`, { preview: drafts }, taskId);
+    return { preview: drafts };
   }
   await log.info(`${platforms}: ${made} post(s) geplaatst`, undefined, taskId);
   return { posted: made };
