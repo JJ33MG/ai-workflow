@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
@@ -244,9 +245,12 @@ export async function prepareDesign(svg: string): Promise<Buffer> {
   return mirrorSides(await fitToSide(svg));
 }
 
+/** A file name that changes with the content: Printful caches files by address, so a redrawn file needs a new one. */
+export const versionedId = (id: string, content: Buffer) => `${id}-${createHash("sha256").update(content).digest("hex").slice(0, 10)}`;
+
 export async function saveDesign(png: Buffer, id: string, ext: "png" | "jpg" = "png"): Promise<string> {
   await mkdir(designsDir(), { recursive: true });
-  const file = `${id}.${ext}`;
+  const file = `${versionedId(id, png)}.${ext}`;
   await writeFile(path.join(designsDir(), file), png);
   return file;
 }
