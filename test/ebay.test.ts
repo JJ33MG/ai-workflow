@@ -85,3 +85,13 @@ describe("eBay colour item specific", () => {
     expect(colorAspect("poster", null)).toBe("Multicolor");
   });
 });
+
+import { privilegeLine } from "../src/integrations/ebay.js";
+
+describe("eBay seller status line", () => {
+  it("says whether registration is complete and the selling limit", () => {
+    expect(privilegeLine({ sellerRegistrationCompleted: true, sellingLimit: { quantity: 10, amount: { value: "500.0", currency: "USD" } } }))
+      .toBe("eBay-verkopersaccount: registratie voltooid, verkooplimiet 10 stuks of 500.0 USD per maand");
+    expect(privilegeLine({ sellerRegistrationCompleted: false })).toBe("eBay-verkopersaccount: registratie NIET voltooid, verkooplimiet onbekend");
+  });
+});

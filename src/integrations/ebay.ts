@@ -132,6 +132,19 @@ async function ebay<T>(method: string, path: string, body?: unknown, token?: str
 
 // ---- Account: business policies and the item location -------------------------------------
 
+export interface Privileges {
+  sellerRegistrationCompleted?: boolean;
+  sellingLimit?: { quantity?: number; amount?: { value: string; currency: string } };
+}
+
+/** Whether eBay finished the seller registration, and the monthly selling limit of a new seller. */
+export const getPrivileges = () => ebay<Privileges>("GET", "/sell/account/v1/privilege");
+
+export function privilegeLine(p: Privileges): string {
+  const limit = p.sellingLimit?.quantity != null ? `${p.sellingLimit.quantity} stuks of ${p.sellingLimit.amount?.value} ${p.sellingLimit.amount?.currency} per maand` : "onbekend";
+  return `eBay-verkopersaccount: registratie ${p.sellerRegistrationCompleted ? "voltooid" : "NIET voltooid"}, verkooplimiet ${limit}`;
+}
+
 export async function optInToBusinessPolicies(): Promise<void> {
   try {
     await ebay("POST", "/sell/account/v1/program/opt_in", { programType: "SELLING_POLICY_MANAGEMENT" });

@@ -133,6 +133,8 @@ async function categoryFor(typeId: string, log: TaskContext["log"], taskId?: str
 
 async function setup(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
   if (config.dryRun || !ebay.isEbayConfigured() || !(await ebay.isEbayConnected())) return { skipped: "dry run or eBay not connected" };
+  const privileges = await ebay.getPrivileges().catch(() => null);
+  if (privileges) await log.info(ebay.privilegeLine(privileges), privileges, taskId);
   await ebay.optInToBusinessPolicies();
   const policies = await ebay.ensurePolicies();
   await ebay.ensureLocation();

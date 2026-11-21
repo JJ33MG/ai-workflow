@@ -332,8 +332,10 @@ export async function buildBusinessDetail(id: string, now = new Date()) {
     db.cost.findMany({ where: { agentId: { in: team }, occurredAt: { gte: startOfMonth(now, config.timezone) } } }),
   ]);
   const days = new Map<string, { date: string; revenue: number; costs: number }>();
+  // Count back in calendar days (not 24-hour steps, which skip a day around midnight when summer time ends).
+  const [y, m, d] = dayKey(now).split("-").map(Number);
   for (let i = 29; i >= 0; i--) {
-    const key = dayKey(new Date(now.getTime() - i * DAY));
+    const key = new Date(Date.UTC(y, m - 1, d - i, 12)).toISOString().slice(0, 10);
     days.set(key, { date: key, revenue: 0, costs: 0 });
   }
   for (const s of sales) {
