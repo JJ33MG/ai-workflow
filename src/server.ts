@@ -15,7 +15,7 @@ import * as ebay from "./integrations/ebay.js";
 import * as meta from "./integrations/meta.js";
 import * as pinterest from "./integrations/pinterest.js";
 import { decide, decideAll } from "./lib/approvals.js";
-import { loadCatalog } from "./lib/catalogSetup.js";
+import { getCatalog, loadCatalog } from "./lib/catalogSetup.js";
 import { addCampaign } from "./lib/marketing.js";
 import { businessById } from "./businesses.js";
 import { loadEtsySetup } from "./lib/etsySetup.js";
@@ -206,6 +206,18 @@ app.post(["/api/agents/:id/pause", "/api/agents/:id/resume"], requireAdmin, asyn
   }
   await db.agent.update({ where: { id }, data: { enabled: action === "resume" } });
   res.json({ message: `${id} ${action === "resume" ? "resumed" : "paused"}` });
+});
+
+// Print sizes per product type (read-only, for checking layouts).
+app.get("/api/catalog", requireAdmin, (_req, res) => {
+  res.json(
+    getCatalog().map((e) => ({
+      type: e.typeId,
+      layout: e.layout,
+      enabled: e.enabled,
+      printAreas: [...new Set(e.variants.map((v) => `${v.placement} ${v.width}x${v.height}`))],
+    })),
+  );
 });
 
 app.get("/api/status", requireAdmin, async (_req, res) => {
