@@ -2,13 +2,15 @@ import { collectBriefingData, formatBriefing } from "./agents/ceo.js";
 import { agents } from "./agents/index.js";
 import { db } from "./db.js";
 import { decide, decideAll } from "./lib/approvals.js";
+import { approvalButtons, notify } from "./lib/telegram.js";
 import { enqueue } from "./lib/tasks.js";
 
 const HELP = [
   "/status — agents en de cijfers van vandaag",
   "/approvals — beslissingen die op jou wachten",
   "/approve <id> · /reject <id> — goedkeuren of afwijzen",
-  "/approve alles — alle wachtende listings in één keer publiceren",
+  "/alles — alle wachtende publicaties (listings en downloads) in één keer goedkeuren",
+  "Of tik op de knoppen onder een bericht.",
   "/brief — stuur de ochtendbriefing nu",
   "/run <agent> <taak> — start een taak, bv. /run etsy-pod create_listings",
   "/pause <agent> · /resume <agent> — agent pauzeren of hervatten",
@@ -29,8 +31,14 @@ export async function handleCommand(command: string, args: string[]): Promise<st
       return "Briefing staat in de wachtrij; je krijgt hem binnen een minuut.";
     case "approvals": {
       const pending = await db.approval.findMany({ where: { status: "pending" }, orderBy: { createdAt: "asc" } });
-      return pending.length ? pending.map((a) => `• ${a.title}\n  /approve ${a.id}`).join("\n") : "Er wacht niets op een beslissing.";
+      if (!pending.length) return "Er wacht niets op een beslissing.";
+      // Each decision as its own message with buttons, so nothing needs copying.
+      for (const a of pending) await notify(`🟡 ${a.title}`, approvalButtons(a.id, a.kind));
+      const publications = pending.filter((a) => a.kind === "etsy_publish").length;
+      return `${pending.length} beslissing(en) hierboven.${publications > 1 ? ` Alle ${publications} publicaties in één keer: /alles` : ""}`;
     }
+    case "alles":
+      return decideAll("etsy_publish");
     case "approve":
     case "reject":
       if (!args[0]) return `Gebruik: /${command} <id>`;

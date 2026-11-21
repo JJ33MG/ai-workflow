@@ -33,6 +33,9 @@ export async function requeueInterrupted(): Promise<number> {
   return res.count;
 }
 
+/** The task the worker is on right now (read by the health check: a long task is not a stopped worker). */
+export const currentTask: { since: Date | null; label: string | null } = { since: null, label: null };
+
 export async function runPendingTasks(agents: Map<string, AgentDefinition>, limit = 10): Promise<number> {
   const due = await db.task.findMany({
     where: { status: "pending", runAfter: { lte: new Date() } },
@@ -47,7 +50,14 @@ export async function runPendingTasks(agents: Map<string, AgentDefinition>, limi
       data: { status: "running", attempts: { increment: 1 } },
     });
     if (claimed.count !== 1) continue;
-    await runTask(agents, task.id, task.agentId, task.type, task.payload as Record<string, unknown>);
+    currentTask.since = new Date();
+    currentTask.label = `${task.agentId}:${task.type}`;
+    try {
+      await runTask(agents, task.id, task.agentId, task.type, task.payload as Record<string, unknown>);
+    } finally {
+      currentTask.since = null;
+      currentTask.label = null;
+    }
     ran++;
   }
   return ran;

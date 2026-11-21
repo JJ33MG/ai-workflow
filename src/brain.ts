@@ -38,7 +38,7 @@ export async function setPlanStatus(id: string, status: PlanStatus): Promise<Pla
 interface Inputs {
   checks: HealthCheck[];
   agents: { id: string; severity: string; health: string; reason: string; enabled: boolean }[];
-  businesses: { id: string; stage: string; revenueMonth: number; products: { total: number } }[];
+  businesses: { id: string; stage: string; revenueMonth: number; products: { total: number; byStatus?: Record<string, number> } }[];
   approvals: unknown[];
   plan: (PlanItem & { status: PlanStatus })[];
 }
@@ -104,6 +104,15 @@ export function buildBrain({ checks, agents, businesses, approvals, plan }: Inpu
     if (b.stage === "parked") status[id] = { state: "parked", label: "Geparkeerd", detail: "Bewust stilgezet." };
     else if (b.stage === "planned") status[id] = { state: "planned", label: "Gepland", detail: "Komt in een latere fase." };
     else if (b.stage === "earning") status[id] = { state: "live", label: "Verdient", detail: "Er zijn verkopen in de laatste 30 dagen." };
+    else if ((b.products.byStatus?.active ?? 0) > 0) {
+      const live = b.products.byStatus!.active;
+      const waiting = b.products.byStatus?.uploaded ?? 0;
+      status[id] = {
+        state: "live",
+        label: "Live",
+        detail: `${live} product(en) live${waiting ? `, ${waiting} wachten op jouw akkoord` : ""}; nog geen verkoop in 30 dagen.`,
+      };
+    } else if (b.id === "roadgem") status[id] = { state: "test", label: "Preview", detail: "Routify-preview staat online om te testen; de cijfers komen elke ochtend binnen." };
     else if (b.id === "etsy-pod" && done("etsy-live")) status[id] = { state: "manual", label: "Live (handmatig)", detail: "Mokken staan op Etsy; verkopen verschijnen hier zodra het systeem gekoppeld is." };
     else if (b.id === "kdp-coloring" && done("first-book")) status[id] = { state: "manual", label: "Live (handmatig)", detail: "Boek staat op Amazon." };
     else status[id] = { state: "test", label: "In opbouw", detail: `${b.products.total} product(en) klaar, nog niet live.` };

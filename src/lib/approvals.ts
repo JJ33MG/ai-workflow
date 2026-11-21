@@ -1,6 +1,6 @@
 import { db } from "../db.js";
 import { formatEur, toEurCents } from "./money.js";
-import { notify } from "./telegram.js";
+import { approvalButtons, notify } from "./telegram.js";
 
 const STATUS_NL: Record<string, string> = {
   approved: "goedgekeurd",
@@ -34,9 +34,7 @@ export async function requestApproval(input: {
     input.amountCents != null && input.currency
       ? ` (${formatEur(toEurCents(input.amountCents, input.currency))})`
       : "";
-  await notify(
-    `🟡 Jouw akkoord nodig${amount}: ${input.title}\n${input.details}\n\nGoedkeuren: /approve ${approval.id}\nAfwijzen: /reject ${approval.id}`,
-  );
+  await notify(`🟡 Jouw akkoord nodig${amount}: ${input.title}\n${input.details}`, approvalButtons(approval.id, input.kind));
   return approval;
 }
 

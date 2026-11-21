@@ -9,6 +9,7 @@ import { isPinterestConfigured, isPinterestConnected, pinterestUser } from "../i
 import { hasPrintfulToken, isPrintfulConfigured, pf } from "../integrations/printful.js";
 import { schedulerState } from "../scheduler.js";
 import { apiSpendTodayCents } from "./budget.js";
+import { currentTask } from "./tasks.js";
 import { isClaudeConfigured } from "./claude.js";
 import { isTelegramConfigured } from "./telegram.js";
 
@@ -24,6 +25,40 @@ export interface HealthCheck {
 }
 
 const WORKER_STALE_MS = 2 * 60 * 1000;
+const BUSY_WARN_MS = 2 * 60 * 60 * 1000;
+const BUSY_ERROR_MS = 4 * 60 * 60 * 1000;
+
+export interface WorkerState {
+  startedAt: Date | null;
+  lastWorkerTickAt: Date | null;
+  /** Set while a task runs: one long task (e.g. redoing 20 listings) is not a stopped worker. */
+  busySince: Date | null;
+  busyWith: string | null;
+}
+
+export function workerCheck(w: WorkerState, now: Date): HealthCheck {
+  const base = { id: "worker", label: "Takenwachtrij" } as const;
+  const min = (d: Date) => Math.round((now.getTime() - d.getTime()) / 60000);
+  if (w.busySince) {
+    const busy = now.getTime() - w.busySince.getTime();
+    if (busy < BUSY_WARN_MS) return { ...base, status: "ok", detail: `Bezig met ${w.busyWith} (${min(w.busySince)} min)` };
+    return {
+      ...base,
+      status: busy < BUSY_ERROR_MS ? "warn" : "error",
+      detail: `Al ${min(w.busySince)} min bezig met ${w.busyWith}`,
+      fix: "Eén taak duurt erg lang. Kijk in Problemen of het serverlog of ze vastzit; herstart de server als ze niet verder gaat.",
+    };
+  }
+  const fresh = w.lastWorkerTickAt && now.getTime() - w.lastWorkerTickAt.getTime() < WORKER_STALE_MS;
+  const justStarted = w.startedAt && now.getTime() - w.startedAt.getTime() < WORKER_STALE_MS;
+  if (fresh || justStarted) return { ...base, status: "ok", detail: "Pakt elke 15 seconden taken op" };
+  return {
+    ...base,
+    status: "error",
+    detail: w.lastWorkerTickAt ? `Laatst gedraaid ${min(w.lastWorkerTickAt)} min geleden` : "Heeft nog niet gedraaid",
+    fix: "De takenwachtrij is gestopt. Herstart de server en kijk in het serverlog naar een crash.",
+  };
+}
 
 export async function runHealthChecks(now = new Date()): Promise<HealthCheck[]> {
   const checks: HealthCheck[] = [];
@@ -46,20 +81,11 @@ export async function runHealthChecks(now = new Date()): Promise<HealthCheck[]> 
         },
   );
 
-  const tick = schedulerState.lastWorkerTickAt;
-  const started = schedulerState.startedAt;
-  const workerFresh = tick && now.getTime() - tick.getTime() < WORKER_STALE_MS;
-  const justStarted = started && now.getTime() - started.getTime() < WORKER_STALE_MS;
   checks.push(
-    workerFresh || justStarted
-      ? { id: "worker", label: "Takenwachtrij", status: "ok", detail: "Pakt elke 15 seconden taken op" }
-      : {
-          id: "worker",
-          label: "Takenwachtrij",
-          status: "error",
-          detail: tick ? `Laatst gedraaid ${Math.round((now.getTime() - tick.getTime()) / 60000)} min geleden` : "Heeft nog niet gedraaid",
-          fix: "De takenwachtrij is gestopt. Herstart de server en kijk in het serverlog naar een crash.",
-        },
+    workerCheck(
+      { startedAt: schedulerState.startedAt, lastWorkerTickAt: schedulerState.lastWorkerTickAt, busySince: currentTask.since, busyWith: currentTask.label },
+      now,
+    ),
   );
 
   if (!isClaudeConfigured()) {

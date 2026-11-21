@@ -141,17 +141,20 @@ function throttled<T>(fn: () => Promise<T>): Promise<T> {
   return run;
 }
 
-async function etsy<T>(method: string, path: string, body?: unknown | FormData): Promise<T> {
+/** Sends through the shared queue and, on a 429, waits (Retry-After, else 1s, 2s, 4s, 8s) and sends again. */
+export async function withRateLimitRetry(send: () => Promise<Response>): Promise<Response> {
   for (let attempt = 0; ; attempt++) {
-    const res = await throttled(() => etsyRequest(method, path, body));
-    if (res.status === 429 && attempt < RATE_LIMIT_RETRIES) {
-      const retryAfter = Number(res.headers.get("retry-after"));
-      await sleep(retryAfter > 0 ? retryAfter * 1000 : 1000 * 2 ** attempt);
-      continue;
-    }
-    if (!res.ok) throw new Error(`Etsy ${method} ${path} failed: ${res.status} ${await res.text()}`);
-    return (await res.json()) as T;
+    const res = await throttled(send);
+    if (res.status !== 429 || attempt >= RATE_LIMIT_RETRIES) return res;
+    const retryAfter = Number(res.headers.get("retry-after"));
+    await sleep(retryAfter > 0 ? retryAfter * 1000 : 1000 * 2 ** attempt);
   }
+}
+
+async function etsy<T>(method: string, path: string, body?: unknown | FormData): Promise<T> {
+  const res = await withRateLimitRetry(() => etsyRequest(method, path, body));
+  if (!res.ok) throw new Error(`Etsy ${method} ${path} failed: ${res.status} ${await res.text()}`);
+  return (await res.json()) as T;
 }
 
 async function etsyRequest(method: string, path: string, body?: unknown | FormData): Promise<Response> {
@@ -264,7 +267,8 @@ export async function getListingImageIds(listingId: string): Promise<number[]> {
 }
 
 export async function deleteListingImage(listingId: string, imageId: number): Promise<void> {
-  const res = await etsyRequest("DELETE", `/shops/${await shopId()}/listings/${listingId}/images/${imageId}`);
+  const shop = await shopId();
+  const res = await withRateLimitRetry(() => etsyRequest("DELETE", `/shops/${shop}/listings/${listingId}/images/${imageId}`));
   if (!res.ok && res.status !== 404) throw new Error(`Etsy DELETE image ${imageId} failed: ${res.status} ${await res.text()}`);
 }
 
@@ -274,7 +278,8 @@ export async function getListingVideoIds(listingId: string): Promise<number[]> {
 }
 
 export async function deleteListingVideo(listingId: string, videoId: number): Promise<void> {
-  const res = await etsyRequest("DELETE", `/shops/${await shopId()}/listings/${listingId}/videos/${videoId}`);
+  const shop = await shopId();
+  const res = await withRateLimitRetry(() => etsyRequest("DELETE", `/shops/${shop}/listings/${listingId}/videos/${videoId}`));
   if (!res.ok && res.status !== 404) throw new Error(`Etsy DELETE video ${videoId} failed: ${res.status} ${await res.text()}`);
 }
 

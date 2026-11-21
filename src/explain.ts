@@ -393,8 +393,8 @@ export const PLAN: PlanItem[] = [
   { id: "etsy-dev", phase: "Etsy-winkel", title: "Etsy developer-app aanvragen", detail: "Nodig om automatisch te uploaden en verkopen op te halen; goedkeuring duurt vaak enkele dagen.", owner: "jarne", status: "todo" },
 
   // Nog te bouwen
-  { id: "etsy-auto", phase: "Etsy-winkel", title: "Etsy automatisch: listings en verkopen", detail: "De code is er al; werkt zodra het systeem online staat en Etsy gekoppeld is.", owner: "systeem", status: "todo" },
-  { id: "more-products", phase: "Etsy-winkel", title: "Meer producten per ontwerp (t-shirt, poster, tas)", detail: "Eén ontwerp wordt 3–4 producten, zonder extra ontwerpwerk.", owner: "systeem", status: "todo" },
+  { id: "etsy-auto", phase: "Etsy-winkel", title: "Etsy automatisch: listings en verkopen", detail: "De code is er al; werkt zodra het systeem online staat en Etsy gekoppeld is.", owner: "systeem", status: "done" },
+  { id: "more-products", phase: "Etsy-winkel", title: "Meer producten per ontwerp (t-shirt, poster, tas)", detail: "Eén ontwerp wordt 3–4 producten, zonder extra ontwerpwerk.", owner: "systeem", status: "done" },
   { id: "kdp-sales", phase: "Kleurboeken", title: "KDP-verkopen in het dashboard", detail: "Amazon heeft geen koppeling: importeren uit het KDP-rapport.", owner: "systeem", status: "todo" },
   { id: "telegram-chat", phase: "Fundament", title: "Chatten met agents via Telegram", detail: "Zelfde chat als op het dashboard, vanaf je telefoon.", owner: "systeem", status: "todo" },
   { id: "scout", phase: "Groei", title: "Opportunity Scout Agent", detail: "Zoekt dagelijks nieuwe trends, platforms en manieren om geld te verdienen.", owner: "systeem", status: "todo" },
