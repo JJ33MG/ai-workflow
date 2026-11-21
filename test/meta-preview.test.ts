@@ -7,8 +7,9 @@ vi.mock("../src/integrations/meta.js", () => ({
   postToFacebook: async () => { posted.push("facebook"); return "fb1"; },
   postToInstagram: async () => { posted.push("instagram"); return "ig1"; },
 }));
+const prompts: string[] = [];
 vi.mock("../src/lib/claude.js", () => ({
-  askJson: async () => ({ posts: [{ listingId: "L1", facebook: "FB text https://www.etsy.com/listing/99", instagram: "IG text. Link in bio #gift" }] }),
+  askJson: async (o: { system: string }) => (prompts.push(o.system), undefined) ?? ({ posts: [{ listingId: "L1", facebook: "FB text https://www.etsy.com/listing/99", instagram: "IG text. Link in bio #gift" }] }),
   askText: async () => "",
   isClaudeConfigured: () => true,
 }));
@@ -32,5 +33,10 @@ describe("Meta post preview", () => {
       { title: "Snowplow Hoodie", imageUrl: "https://i.etsystatic.com/x.jpg", link: "https://www.etsy.com/listing/99", facebook: "FB text https://www.etsy.com/listing/99", instagram: "IG text. Link in bio #gift" },
     ]);
     expect(posted).toEqual([]);
+  });
+
+  it("tells the writer today's date, so it names the coming occasion and not one months away", async () => {
+    expect(prompts.at(-1)).toMatch(/Today is \d{4}-\d{2}-\d{2}/);
+    expect(prompts.at(-1)).toMatch(/more than 6 weeks away/);
   });
 });

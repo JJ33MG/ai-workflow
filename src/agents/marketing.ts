@@ -469,7 +469,9 @@ async function metaPosts(payload: Record<string, unknown>, { log, taskId }: Task
       "You write social posts that make people want a gift from a small Etsy shop. Warm, short, human; a relatable line about the recipient " +
       "(their job or hobby), then what the product is and who it's a perfect gift for. No fake urgency, no ALL CAPS, at most 2 emoji. " +
       "Facebook: 2-4 sentences and end with the listing link given to you. Instagram: 2-4 sentences, then 'Link in bio', then 8-12 relevant " +
-      "hashtags on one line; never a URL. Write in the language of the listing.",
+      "hashtags on one line; never a URL, never a brand name as hashtag. Write in the language of the listing. " +
+      `Today is ${new Date().toISOString().slice(0, 10)}: when a gift occasion is near (Christmas, Valentine's, Mother's Day, Father's Day, ` +
+      "graduation), mention it; never mention an occasion or awareness week that is more than 6 weeks away.",
     prompt: JSON.stringify(
       candidates.map((l) => ({ listingId: l.id, title: l.title, niche: l.niche, tags: l.tags, link: `https://www.etsy.com/listing/${l.etsyListingId}` })),
     ),
