@@ -37,6 +37,7 @@ const CATEGORY_QUERY: Record<string, string> = {
   "mug-color": "ceramic coffee mug",
   tshirt: "graphic t-shirt",
   hoodie: "pullover hoodie",
+  sweatshirt: "crewneck sweatshirt",
   tote: "canvas tote bag",
   poster: "art poster print",
 };
@@ -58,7 +59,7 @@ interface EbayListingRef {
 export const skuFor = (listingId: string, variantId: number) => `EB-${variantId}-${listingId.slice(-10)}`;
 
 /** eBay requires a Color item specific: the variant's colour, else the product's own colour. */
-const OWN_COLOR: Record<string, string> = { mug: "White", "mug-black": "Black", "mug-color": "White", tshirt: "White", hoodie: "Black", tote: "Beige", poster: "Multicolor" };
+const OWN_COLOR: Record<string, string> = { mug: "White", "mug-black": "Black", "mug-color": "White", tshirt: "White", hoodie: "Black", sweatshirt: "Black", tote: "Beige", poster: "Multicolor" };
 export const colorAspect = (typeId: string, variantColor: string | null | undefined) => variantColor || OWN_COLOR[typeId] || "Multicolor";
 
 /** eBay titles are at most 80 characters: cut at a word, never mid-word. */

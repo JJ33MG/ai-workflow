@@ -166,6 +166,30 @@ async function renderVariants(svg: string, entry: CatalogEntry, listingId: strin
   return out;
 }
 
+const MUGS = new Set(["mug", "mug-black", "mug-color"]);
+const APPAREL = ["hoodie", "sweatshirt", "tshirt"];
+
+/**
+ * Which proposed products of one design are made: apparel first, then the rest, at most one mug, and no mug
+ * at all while the shop already has far more mugs than apparel (the mix buyers browse should not be all mugs).
+ */
+export function chooseProducts<T extends { product: string }>(listings: T[], perDesign: number, mix?: { mugs: number; apparel: number }): T[] {
+  const tooManyMugs = mix ? mix.mugs > 2 * Math.max(1, mix.apparel) : false;
+  const rank = (p: string) => (APPAREL.includes(p) ? APPAREL.indexOf(p) : MUGS.has(p) ? 100 : 50);
+  const out: T[] = [];
+  let mug = false;
+  for (const x of [...listings].sort((a, b) => rank(a.product) - rank(b.product))) {
+    if (out.length >= perDesign) break;
+    if (MUGS.has(x.product)) {
+      if (mug || tooManyMugs) continue;
+      mug = true;
+    }
+    if (out.some((o) => o.product === x.product)) continue;
+    out.push(x);
+  }
+  return out;
+}
+
 async function knowledgeDigest(): Promise<string> {
   const rows = await db.knowledge.findMany({
     where: { kind: { in: ["niche", "product", "lesson"] } },
@@ -197,6 +221,9 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
   const physical = types.filter((t) => !t.digital);
   const printable = personalized ? undefined : types.find((t) => t.digital);
   const perDesign = Math.max(1, Math.min(config.pod.productsPerDesign, physical.length));
+  const live = await db.listing.groupBy({ by: ["productType"], where: { status: { in: ["active", "uploaded"] } }, _count: { _all: true } });
+  const countOf = (ids: Iterable<string>) => live.filter((r) => [...ids].includes(r.productType)).reduce((n, r) => n + r._count._all, 0);
+  const mix = { mugs: countOf(MUGS), apparel: countOf(APPAREL) };
   const productList = physical
     .map((t) => {
       const def = productType(t.typeId);
@@ -224,7 +251,9 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
       `Products you can put a design on:\n${productList}${printableLine}\n\n` +
       (personalized ? PERSONALIZED_BRIEF : "") +
       `Propose ${count} new gift niches. For each give: niche, and listings for ${perDesign} products from the list that suit its buyer ` +
-      "(a mug almost always fits; pick apparel, totes and posters when the idea works worn or on a wall). " +
+      `(the shop already has ${mix.mugs} mugs and only ${mix.apparel} apparel items: lead with apparel people want to wear, ` +
+      "hoodies, sweatshirts and T-shirts, for men and women, young and older, and add a tote or poster when it fits; a mug only if " +
+      "the idea is clearly a desk or coffee gift). " +
       "Every product gets its OWN text, written for how that product is used: a mug for coffee, mornings and the desk; a T-shirt or hoodie " +
       "as something the buyer proudly wears and says about themselves; a tote for carrying, shopping and the commute; a poster or print " +
       "as a wall piece worth looking at every day. Use the same text on two products only when it genuinely works on both. " +
@@ -242,7 +271,7 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
     // A text used on two products is drawn once.
     const drawn = new Map<string, string>();
     const chosen = [
-      ...idea.listings.filter((l) => l.product !== PRINTABLE.id).slice(0, perDesign),
+      ...chooseProducts(idea.listings.filter((l) => l.product !== PRINTABLE.id), perDesign, mix),
       ...idea.listings.filter((l) => l.product === PRINTABLE.id).slice(0, 1),
     ];
     for (const raw of chosen) {
