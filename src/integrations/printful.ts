@@ -80,6 +80,15 @@ export const getPrintfiles = (productId: number) =>
 
 type MockupTask = Record<string, unknown>;
 
+/**
+ * Photos of the product worn or held (lifestyle, men's, women's, couple, kids) first: they get more clicks in
+ * search than a flat shot on white. The rest keeps its order.
+ */
+export function lifestyleFirst(photos: { url: string; label: string }[]): string[] {
+  const inUse = (l: string) => /lifestyle|men'?s|women'?s|couple|kid|model|person|hand|wear/i.test(l) && !/flat|ghost/i.test(l);
+  return [...photos.filter((p) => inUse(p.label)), ...photos.filter((p) => !inUse(p.label))].map((p) => p.url);
+}
+
 /** Starts one mockup task and polls until done (max ~2 min). Returns every photo, extra angles included. */
 async function runMockupTask(productId: number, body: MockupTask): Promise<string[]> {
   const { task_key } = await printful<{ task_key: string }>("POST", `/mockup-generator/create-task/${productId}`, body);
@@ -88,11 +97,15 @@ async function runMockupTask(productId: number, body: MockupTask): Promise<strin
     const task = await printful<{
       status: string;
       error?: string;
-      mockups?: { mockup_url: string; extra?: { url: string }[] }[];
+      mockups?: { mockup_url: string; placement?: string; extra?: { url: string; title?: string; option?: string; option_group?: string }[] }[];
     }>("GET", `/mockup-generator/task?task_key=${encodeURIComponent(task_key)}`);
     // Each mockup has its main photo plus "extra" angles (left, right, in use).
     if (task.status === "completed") {
-      return (task.mockups ?? []).flatMap((m) => [m.mockup_url, ...(m.extra ?? []).map((e) => e.url)]).filter(Boolean);
+      const photos = (task.mockups ?? []).flatMap((m) => [
+        { url: m.mockup_url, label: m.placement ?? "Front" },
+        ...(m.extra ?? []).map((e) => ({ url: e.url, label: [e.option_group, e.option, e.title].filter(Boolean).join(" ") })),
+      ]);
+      return lifestyleFirst(photos.filter((p) => p.url));
     }
     if (task.status === "failed") throw new Error(`Printful mockup failed: ${task.error ?? "unknown"}`);
   }

@@ -166,6 +166,13 @@ async function renderVariants(svg: string, entry: CatalogEntry, listingId: strin
   return out;
 }
 
+/** The niches buyers already favour (Etsy favorites), best first: new designs go there before new niches. */
+export function nicheFocus(rows: { niche: string; favorites: number }[], max = 8): string[] {
+  const sum = new Map<string, number>();
+  for (const r of rows) sum.set(r.niche, (sum.get(r.niche) ?? 0) + r.favorites);
+  return [...sum.entries()].filter(([, f]) => f > 0).sort((a, b) => b[1] - a[1]).slice(0, max).map(([n, f]) => `${n} (${f} favorites)`);
+}
+
 const MUGS = new Set(["mug", "mug-black", "mug-color"]);
 const APPAREL = ["hoodie", "sweatshirt", "tshirt"];
 
@@ -224,6 +231,9 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
   const live = await db.listing.groupBy({ by: ["productType"], where: { status: { in: ["active", "uploaded"] } }, _count: { _all: true } });
   const countOf = (ids: Iterable<string>) => live.filter((r) => [...ids].includes(r.productType)).reduce((n, r) => n + r._count._all, 0);
   const mix = { mugs: countOf(MUGS), apparel: countOf(APPAREL) };
+  const favoured = nicheFocus(
+    await db.listing.findMany({ where: { status: "active" }, select: { niche: true, favorites: true } }).then((rows) => rows.map((r) => ({ niche: r.niche ?? "", favorites: r.favorites }))),
+  );
   const productList = physical
     .map((t) => {
       const def = productType(t.typeId);
@@ -250,14 +260,20 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
       `Today: ${todayIso()}.\n${await campaignBrief(ID)}\n\n${digest}\n\n${instructions ? `Jarne's direction for this batch (follow it): ${instructions}\n\n` : ""}` +
       `Products you can put a design on:\n${productList}${printableLine}\n\n` +
       (personalized ? PERSONALIZED_BRIEF : "") +
-      `Propose ${count} new gift niches. For each give: niche, and listings for ${perDesign} products from the list that suit its buyer ` +
+      (favoured.length
+        ? `Niches buyers already favour in this shop (more designs here sell better than a new niche): ${favoured.join("; ")}. ` +
+          "At least half of this batch goes to these niches, with new slogans and other products than they already have.\n"
+        : "") +
+      "Choose mid-sized gift groups with many buyers (nurses, teachers, dental hygienists, vets, mechanics, firefighters, " +
+      "dog and cat owners, gardeners, gamers, new parents, grandparents) over tiny professions only a handful of people search for.\n" +
+      `Propose ${count} gift niches. For each give: niche, and listings for ${perDesign} products from the list that suit its buyer ` +
       `(the shop already has ${mix.mugs} mugs and only ${mix.apparel} apparel items: lead with apparel people want to wear, ` +
       "hoodies, sweatshirts and T-shirts, for men and women, young and older, and add a tote or poster when it fits; a mug only if " +
       "the idea is clearly a desk or coffee gift). " +
       "Every product gets its OWN text, written for how that product is used: a mug for coffee, mornings and the desk; a T-shirt or hoodie " +
       "as something the buyer proudly wears and says about themselves; a tote for carrying, shopping and the commute; a poster or print " +
       "as a wall piece worth looking at every day. Use the same text on two products only when it genuinely works on both. " +
-      "Each listing: product (its id), slogan (the exact printed text for that product, max ~8 words), designBrief (layout and typographic style), " +
+      "Each listing: product (its id), slogan (the exact printed text for that product: 3 to 6 words, one punchline people get in a second), designBrief (layout and typographic style), " +
       `title (${TITLE_RULE}), description (3 short paragraphs with the product facts) ` +
       "and 13 Etsy tags (each ≤20 chars)." +
       (printable
@@ -367,6 +383,8 @@ const DESIGN_RULES =
   "Typography only, set straight and level: never put text on a curve or path, never rotate or tilt words or single letters, " +
   "never use textLength, lengthAdjust or letter squeezing. Every word separated by a real space. " +
   "Nothing smaller than one tenth of the canvas height: tiny captions, coordinates, call signs or fake small print are unreadable on a mug, leave them out. " +
+  "Big and bold: the main words fill most of the width and must still read when the whole design is shown as a 150-pixel thumbnail " +
+  "in Etsy search; at most 6 words in total. " +
   "At most 3 text sizes and 2 colours; one simple icon at most, beside the text, never behind or touching it. " +
   "Frames, banners and boxes only when every letter stays well inside them with clear space around it; when in doubt, no frame. " +
   "No brand names, logos, characters, celebrities, song lyrics, film or TV quotes, sports teams or trademarked phrases.";
