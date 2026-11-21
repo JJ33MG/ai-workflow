@@ -1,5 +1,5 @@
 import { config } from "../config.js";
-import { db } from "../db.js";
+import { db, getSetting, setSetting } from "../db.js";
 import { apiSpendTodayCents } from "../lib/budget.js";
 import { askText, isClaudeConfigured } from "../lib/claude.js";
 import { notify } from "../lib/telegram.js";
@@ -77,13 +77,22 @@ async function check(_payload: Record<string, unknown>, { log, taskId }: TaskCon
         (diagnosis ? `\n\nWaarschijnlijke oplossing:\n${diagnosis}` : ""),
     );
   }
-  if (budgetWarning) {
-    await log.warn(`API spend today is ${spent.toFixed(1)} of ${config.budget.dailyApiCapCents} cents`, undefined, taskId);
+  const today = new Date().toISOString().slice(0, 10);
+  if (shouldWarnBudget(spent, config.budget.dailyApiCapCents, await getSetting<string>(BUDGET_WARNED_KEY), today)) {
+    await setSetting(BUDGET_WARNED_KEY, today);
+    await log.warn(`Claude-budget vandaag: ${(spent / 100).toFixed(2)} van €${(config.budget.dailyApiCapCents / 100).toFixed(2)} gebruikt`, undefined, taskId);
   }
 
   const summary = { stuck: stuck.count, retried, escalated: escalated.length, newErrors: errors.count, budgetWarning };
   if (stuck.count || retried || escalated.length) await log.info("Health check", summary, taskId);
   return summary;
+}
+
+const BUDGET_WARNED_KEY = "debug.budgetWarnedOn";
+
+/** Warn about spend above 80% of the daily cap once per day, not on every 30-minute check. */
+export function shouldWarnBudget(spent: number, cap: number, lastWarnedDay: string | null, today: string): boolean {
+  return spent >= cap * 0.8 && lastWarnedDay !== today;
 }
 
 export const debugAgent: AgentDefinition = {

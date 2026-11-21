@@ -153,10 +153,17 @@ async function taxonomyFor(kind: DigitalKind): Promise<number | null> {
 
 const accentOf = (hex: string) => (/^#[0-9a-f]{6}$/i.test(hex.trim()) ? hex.trim() : "#b3262e");
 
+/** Not enough budget today is no failure: the product is made on the next scheduled run. */
+export function budgetSkip(leftCents: number, neededCents: number): { skipped: string } | null {
+  if (leftCents >= neededCents) return null;
+  return { skipped: `Niet genoeg Claude-budget vandaag (€${(Math.max(0, leftCents) / 100).toFixed(2)} over, nodig tot €${(neededCents / 100).toFixed(2)}); morgen opnieuw.` };
+}
+
 async function createDigital(payload: Record<string, unknown>, { log, taskId }: TaskContext) {
-  const left = config.budget.dailyApiCapCents - (await apiSpendTodayCents());
-  if (left < PRODUCT_BUDGET_CENTS) {
-    throw new Error(`Not enough Claude budget left today for a download product (€${(left / 100).toFixed(2)} left, one needs up to €${(PRODUCT_BUDGET_CENTS / 100).toFixed(2)}). It runs again tomorrow.`);
+  const skip = budgetSkip(config.budget.dailyApiCapCents - (await apiSpendTodayCents()), PRODUCT_BUDGET_CENTS);
+  if (skip) {
+    await log.info(skip.skipped, undefined, taskId);
+    return skip;
   }
   const kind = kindFor(payload);
   const info = DIGITAL_KINDS[kind];

@@ -56,7 +56,7 @@ const PAGE_RULES =
   "One clear, friendly main subject fills most of the page, with a few simple background elements (sun, clouds, flowers, grass tufts). " +
   "The ground is a single line or gentle curve: never a box, panel or frame behind the subject. Shapes must not cut through each other. " +
   "No shading, hatching, grey, text or letters. Use only <path>, <circle>, <ellipse>, <rect>, <line>, <polyline>, <polygon>, <g>. " +
-  "Keep everything at least 120 units from every edge.";
+  "Keep everything at least 120 units from every edge. Keep the SVG short: at most 80 shapes and under 15,000 characters.";
 
 const COVER_RULES =
   "You draw the colourful front illustration for a children's coloring book cover. Output one standalone SVG document and nothing else. " +
@@ -93,26 +93,39 @@ export function drawModels(): string[] {
   return config.kdp.drawModel === config.claude.model ? tries : [...tries, config.claude.model];
 }
 
-export async function drawPage(subject: string, theme: string, ageRange: string): Promise<{ svg: string; png: Buffer } | null> {
+export interface DrawIO {
+  ask: (model: string, prompt: string) => Promise<string>;
+  render: (svg: string) => Promise<Buffer>;
+  edges: (png: Buffer) => Promise<string[]>;
+  review: (png: Buffer, subject: string) => Promise<{ ok: boolean; problems: string[] }>;
+}
+
+const realDraw: DrawIO = {
+  ask: (model, prompt) =>
+    askText({ agentId: ID, purpose: "kdp_page_svg", model, effort: "medium", system: PAGE_RULES, prompt }),
+  render: (svg) => renderPage(svg),
+  edges: (png) => inkedEdges(png),
+  review: (png, subject) => review(png, subject, "page"),
+};
+
+/** Every model in drawModels() gets a try; a drawing that is cut off, broken or rejected leads to another try with feedback. */
+export async function drawPage(subject: string, theme: string, ageRange: string, io: DrawIO = realDraw): Promise<{ svg: string; png: Buffer } | null> {
   let feedback = "";
   for (const model of drawModels()) {
-    const svg = sanitizeSvg(
-      await askText({
-        agentId: ID,
-        purpose: "kdp_page_svg",
-        model,
-        effort: "medium",
-        system: PAGE_RULES,
-        prompt: `Book theme: ${theme} (ages ${ageRange}).\nDraw: ${subject}${feedback}`,
-      }),
-    );
-    const png = await renderPage(svg);
-    const edges = await inkedEdges(png);
-    const verdict = edges.length
-      ? { ok: false, problems: [`the drawing runs off the ${edges.join(" and ")} edge`] }
-      : await review(png, subject, "page");
-    if (verdict.ok) return { svg, png };
-    feedback = `\n\nA reviewer rejected your previous drawing of this subject: ${verdict.problems.join("; ")}. Draw it again and avoid these problems.`;
+    try {
+      const svg = sanitizeSvg(await io.ask(model, `Book theme: ${theme} (ages ${ageRange}).\nDraw: ${subject}${feedback}`));
+      const png = await io.render(svg);
+      const edges = await io.edges(png);
+      const verdict = edges.length ? { ok: false, problems: [`the drawing runs off the ${edges.join(" and ")} edge`] } : await io.review(png, subject);
+      if (verdict.ok) return { svg, png };
+      feedback = `\n\nA reviewer rejected your previous drawing of this subject: ${verdict.problems.join("; ")}. Draw it again and avoid these problems.`;
+    } catch (err) {
+      // Too long (cut off) or broken SVG: ask for a simpler drawing instead of losing the page.
+      feedback =
+        "\n\nYour previous drawing could not be used (it was too long or the SVG was broken). Draw it again, simpler and shorter: " +
+        "at most 60 shapes, short paths, no repeated details, and close every tag.";
+      void err;
+    }
   }
   return null;
 }
