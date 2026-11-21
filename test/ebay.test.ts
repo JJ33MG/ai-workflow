@@ -63,3 +63,14 @@ describe("eBay shipping service", () => {
     await expect(firstAcceptedShipping(async () => { throw new Error("401 unauthorized"); }, "USPS", "USPSGroundAdvantage")).rejects.toThrow(/401/);
   });
 });
+
+import { ebayHeaders } from "../src/integrations/ebay.js";
+
+describe("eBay request headers", () => {
+  it("names the language itself (fetch would otherwise send Accept-Language: *, which eBay refuses)", () => {
+    const h = ebayHeaders("tok");
+    expect(h["accept-language"]).toBe("en-US");
+    expect(h["content-language"]).toBe("en-US");
+    expect(h.authorization).toBe("Bearer tok");
+  });
+});

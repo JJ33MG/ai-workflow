@@ -97,17 +97,23 @@ export class EbayError extends Error {
   }
 }
 
+/** Every eBay call's headers. Accept-Language is named: fetch would send "*", which eBay rejects. */
+export function ebayHeaders(token: string): Record<string, string> {
+  return {
+    authorization: `Bearer ${token}`,
+    "content-type": "application/json",
+    "content-language": "en-US",
+    "accept-language": "en-US",
+    accept: "application/json",
+    "x-ebay-c-marketplace-id": config.ebay.marketplaceId,
+  };
+}
+
 async function ebay<T>(method: string, path: string, body?: unknown, token?: string): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     const res = await fetch(`${API}${path}`, {
       method,
-      headers: {
-        authorization: `Bearer ${token ?? (await userToken())}`,
-        "content-type": "application/json",
-        "content-language": "en-US",
-        accept: "application/json",
-        "x-ebay-c-marketplace-id": config.ebay.marketplaceId,
-      },
+      headers: ebayHeaders(token ?? (await userToken())),
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     if (res.status === 429 && attempt < 4) {
