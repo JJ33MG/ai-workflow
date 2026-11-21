@@ -144,6 +144,32 @@ async function findPolicy(kind: "fulfillment" | "payment" | "return", name: stri
 }
 
 const POLICY_NAME = "All You Can Wish (bot)";
+
+/** Tried in order when eBay refuses a shipping service for this seller (often a non-US seller account). */
+export const SHIPPING_FALLBACKS: { carrier: string | null; service: string }[] = [
+  { carrier: "USPS", service: "USPSParcel" },
+  { carrier: null, service: "ShippingMethodStandard" },
+  { carrier: null, service: "Other" },
+];
+
+/** The first shipping service eBay accepts: the configured one, then the fallbacks. Other errors are not hidden. */
+export async function firstAcceptedShipping(
+  create: (s: { carrier: string | null; service: string }) => Promise<string>,
+  carrier: string,
+  service: string,
+): Promise<string> {
+  const options = [{ carrier, service }, ...SHIPPING_FALLBACKS.filter((f) => f.service !== service)];
+  let last: Error | null = null;
+  for (const option of options) {
+    try {
+      return await create(option);
+    } catch (err) {
+      last = err as Error;
+      if (!/LSAS|shipping ?service|shippingServiceCode/i.test(last.message)) throw last;
+    }
+  }
+  throw last ?? new Error("No shipping service accepted");
+}
 const ALL = [{ name: "ALL_EXCLUDING_MOTORS_VEHICLES" }];
 
 /** The shop's three policies, made once: free shipping, payment, and no returns (items are made to order). */
@@ -151,23 +177,28 @@ export async function ensurePolicies(): Promise<{ fulfillmentPolicyId: string; p
   const marketplaceId = config.ebay.marketplaceId;
   const fulfillmentPolicyId =
     (await findPolicy("fulfillment", POLICY_NAME)) ??
-    (
-      await ebay<{ fulfillmentPolicyId: string }>("POST", "/sell/account/v1/fulfillment_policy", {
-        name: POLICY_NAME,
-        marketplaceId,
-        categoryTypes: ALL,
-        handlingTime: { unit: "DAY", value: config.ebay.handlingDays },
-        shippingOptions: [
-          {
-            optionType: "DOMESTIC",
-            costType: "FLAT_RATE",
-            shippingServices: [
-              { sortOrder: 1, shippingCarrierCode: config.ebay.shippingCarrier, shippingServiceCode: config.ebay.shippingService, freeShipping: true, buyerResponsibleForShipping: false },
+    (await firstAcceptedShipping(
+      async ({ carrier, service }) =>
+        (
+          await ebay<{ fulfillmentPolicyId: string }>("POST", "/sell/account/v1/fulfillment_policy", {
+            name: POLICY_NAME,
+            marketplaceId,
+            categoryTypes: ALL,
+            handlingTime: { unit: "DAY", value: config.ebay.handlingDays },
+            shippingOptions: [
+              {
+                optionType: "DOMESTIC",
+                costType: "FLAT_RATE",
+                shippingServices: [
+                  { sortOrder: 1, ...(carrier ? { shippingCarrierCode: carrier } : {}), shippingServiceCode: service, freeShipping: true, buyerResponsibleForShipping: false },
+                ],
+              },
             ],
-          },
-        ],
-      })
-    ).fulfillmentPolicyId;
+          })
+        ).fulfillmentPolicyId,
+      config.ebay.shippingCarrier,
+      config.ebay.shippingService,
+    ));
   const paymentPolicyId =
     (await findPolicy("payment", POLICY_NAME)) ??
     (await ebay<{ paymentPolicyId: string }>("POST", "/sell/account/v1/payment_policy", { name: POLICY_NAME, marketplaceId, categoryTypes: ALL, immediatePay: true })).paymentPolicyId;

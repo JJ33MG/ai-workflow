@@ -44,3 +44,22 @@ describe("eBay deletion check uses the address eBay called", () => {
     expect(calledEndpoint("ai.example.app", "/hooks/ebay/deletion/?challenge_code=abc")).toBe("https://ai.example.app/hooks/ebay/deletion/");
   });
 });
+
+import { firstAcceptedShipping, SHIPPING_FALLBACKS } from "../src/integrations/ebay.js";
+
+describe("eBay shipping service", () => {
+  it("tries the next shipping service when eBay refuses one for this seller", async () => {
+    const tried: string[] = [];
+    const id = await firstAcceptedShipping(async (s) => {
+      tried.push(s.service);
+      if (s.service === "USPSGroundAdvantage") throw new Error("eBay POST /sell/account/v1/fulfillment_policy failed: 400 LSAS validation failed.; LSAS validation failed : USPSGroundAdvantage");
+      return "policy-1";
+    }, "USPS", "USPSGroundAdvantage");
+    expect(id).toBe("policy-1");
+    expect(tried).toEqual(["USPSGroundAdvantage", SHIPPING_FALLBACKS[0].service]);
+  });
+
+  it("does not hide other errors", async () => {
+    await expect(firstAcceptedShipping(async () => { throw new Error("401 unauthorized"); }, "USPS", "USPSGroundAdvantage")).rejects.toThrow(/401/);
+  });
+});
