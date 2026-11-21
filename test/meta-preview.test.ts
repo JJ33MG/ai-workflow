@@ -9,7 +9,10 @@ vi.mock("../src/integrations/meta.js", () => ({
 }));
 const prompts: string[] = [];
 vi.mock("../src/lib/claude.js", () => ({
-  askJson: async (o: { system: string }) => (prompts.push(o.system), undefined) ?? ({ posts: [{ listingId: "L1", facebook: "FB text https://www.etsy.com/listing/99", instagram: "IG text. Link in bio #gift" }] }),
+  askJson: async (o: { system: string }) => {
+    prompts.push(o.system);
+    return ({ posts: [{ listingId: "L1", facebook: "FB text https://www.etsy.com/listing/99", instagram: "IG text. Link in bio #gift" }] });
+  },
   askText: async () => "",
   isClaudeConfigured: () => true,
 }));
