@@ -352,15 +352,18 @@ app.get("/auth/ebay/info", requireAdmin, (_req, res) => {
 
 // eBay's marketplace account deletion notifications (required for every production app). We keep no
 // eBay user data beyond orders, so a notification only needs acknowledging.
-app.get("/hooks/ebay/deletion", (req, res) => {
+app.get(["/hooks/ebay/deletion", "/hooks/ebay/deletion/"], (req, res) => {
   const code = String(req.query.challenge_code ?? "");
   if (!code) {
     res.status(400).json({ error: "challenge_code missing" });
     return;
   }
-  res.type("application/json").json({ challengeResponse: ebay.challengeResponse(code) });
+  // Hash with the address eBay called; it matches what was typed in eBay's portal character for character.
+  const endpoint = ebay.calledEndpoint(String(req.get("host") ?? ""), req.originalUrl);
+  console.log(`[ebay] deletion check for ${endpoint} (configured: ${ebay.deletionEndpoint()})`);
+  res.status(200).type("application/json").json({ challengeResponse: ebay.challengeResponse(code, ebay.verificationToken(), endpoint) });
 });
-app.post("/hooks/ebay/deletion", (_req, res) => {
+app.post(["/hooks/ebay/deletion", "/hooks/ebay/deletion/"], (_req, res) => {
   res.status(200).end();
 });
 

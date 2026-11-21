@@ -376,6 +376,9 @@ export function verificationToken(): string {
 }
 export const deletionEndpoint = () => `${config.publicUrl}/hooks/ebay/deletion`;
 
+/** The endpoint exactly as eBay called it (eBay hashes the address as typed in its portal). */
+export const calledEndpoint = (host: string, originalUrl: string) => `https://${host}${originalUrl.split("?")[0]}`;
+
 /** eBay's check that we own the endpoint: sha256(challengeCode + verificationToken + endpoint). */
 export function challengeResponse(challengeCode: string, token = verificationToken(), endpoint = deletionEndpoint()): string {
   return createHash("sha256").update(challengeCode).update(token).update(endpoint).digest("hex");

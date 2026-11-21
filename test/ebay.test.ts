@@ -35,3 +35,12 @@ describe("eBay listings", () => {
     expect(challengeResponse("abc", "token123", "https://x.test/hooks/ebay/deletion")).toBe(expected);
   });
 });
+
+import { calledEndpoint } from "../src/integrations/ebay.js";
+
+describe("eBay deletion check uses the address eBay called", () => {
+  it("rebuilds the https address from the request, keeping a trailing slash and dropping the query", () => {
+    expect(calledEndpoint("ai.example.app", "/hooks/ebay/deletion?challenge_code=abc")).toBe("https://ai.example.app/hooks/ebay/deletion");
+    expect(calledEndpoint("ai.example.app", "/hooks/ebay/deletion/?challenge_code=abc")).toBe("https://ai.example.app/hooks/ebay/deletion/");
+  });
+});
