@@ -108,12 +108,12 @@ import { ebayVariants, EBAY_STOCK } from "../src/agents/ebay.js";
 
 describe("eBay variants within a new seller's limit", () => {
   const v = (size: string, color: string | null) => ({ size, color, variantId: Math.random() });
-  it("lists one unit per variant and at most two colours of apparel, all sizes", () => {
+  it("lists one unit per variant and one colour of apparel, all sizes", () => {
     expect(EBAY_STOCK).toBe(1);
     const hoodie = ["Black", "Navy", "Sport Grey", "White"].flatMap((c) => ["S", "M", "L"].map((s) => v(s, c)));
     const picked = ebayVariants(hoodie);
-    expect(new Set(picked.map((x) => x.color))).toEqual(new Set(["Black", "Navy"]));
-    expect(picked).toHaveLength(6);
+    expect(new Set(picked.map((x) => x.color))).toEqual(new Set(["Black"]));
+    expect(picked).toHaveLength(3);
   });
   it("keeps products without colours as they are", () => {
     const mug = [v("11 oz", null), v("15 oz", null)];
@@ -141,5 +141,22 @@ describe("eBay selling limit and check", () => {
       { sku: "d", status: "UNPUBLISHED" },
     ]);
     expect(s).toEqual({ offers: 4, byStatus: { PUBLISHED: 3, UNPUBLISHED: 1 }, listings: { ACTIVE: ["1"], ENDED: ["2"] } });
+  });
+});
+
+import { byFewestItems, ebayVariants as variantsForEbay } from "../src/agents/ebay.js";
+
+describe("fitting eBay's monthly item limit", () => {
+  it("lists apparel in one colour, every size", () => {
+    const v = ["Black", "Navy", "White"].flatMap((color) => ["S", "M", "L"].map((size) => ({ color, size })));
+    const kept = variantsForEbay(v);
+    expect(new Set(kept.map((x) => x.color))).toEqual(new Set(["Black"]));
+    expect(kept).toHaveLength(3);
+  });
+
+  it("puts products that use few items (a mug, a poster) before ones that use many (a hoodie in every size)", () => {
+    const mk = (id: string, n: number, favorites = 0) => ({ id, favorites, variants: Array.from({ length: n }, (_, i) => ({ color: "Black", size: String(i) })) });
+    const order = (byFewestItems([mk("hoodie", 5, 9), mk("mug", 1, 0), mk("poster", 2, 3), mk("mug2", 1, 4)] as never) as { id: string }[]).map((l) => l.id);
+    expect(order).toEqual(["mug2", "mug", "poster", "hoodie"]);
   });
 });

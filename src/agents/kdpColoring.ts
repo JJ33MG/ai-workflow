@@ -100,9 +100,15 @@ export interface DrawIO {
   review: (png: Buffer, subject: string) => Promise<{ ok: boolean; problems: string[] }>;
 }
 
+/**
+ * Thinking counts against max_tokens: at "medium" it used most of the 16k and cut the SVG off.
+ * Low effort and ~20k tokens leave room for the whole drawing (above ~21k the SDK wants streaming).
+ */
+export const PAGE_REQUEST = { effort: "low" as const, maxTokens: 20000 };
+
 const realDraw: DrawIO = {
   ask: (model, prompt) =>
-    askText({ agentId: ID, purpose: "kdp_page_svg", model, effort: "medium", system: PAGE_RULES, prompt }),
+    askText({ agentId: ID, purpose: "kdp_page_svg", model, ...PAGE_REQUEST, system: PAGE_RULES, prompt }),
   render: (svg) => renderPage(svg),
   edges: (png) => inkedEdges(png),
   review: (png, subject) => review(png, subject, "page"),

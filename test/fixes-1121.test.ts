@@ -53,3 +53,13 @@ describe("budget warning", () => {
     expect(shouldWarnBudget(100, 500, null, "2026-11-21")).toBe(false);
   });
 });
+
+import { PAGE_REQUEST } from "../src/agents/kdpColoring.js";
+
+describe("drawing a coloring page", () => {
+  it("leaves the answer room for the whole drawing: little thinking, a large token limit that still works without streaming", () => {
+    expect(PAGE_REQUEST.effort).toBe("low");
+    expect(PAGE_REQUEST.maxTokens).toBeGreaterThanOrEqual(20000);
+    expect(PAGE_REQUEST.maxTokens).toBeLessThanOrEqual(21000);
+  });
+});

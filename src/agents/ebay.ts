@@ -55,14 +55,19 @@ export function summarizeOffers(offers: ebay.OfferInfo[]) {
   }
   return { offers: offers.length, byStatus, listings };
 }
-/** Apparel on eBay: the first two colours, every size (a hoodie in four colours would count as 24 items). */
-const MAX_EBAY_COLORS = 2;
+/** Apparel on eBay: the first colour, every size. Each size counts against the 70 items a month a new seller may list. */
+const MAX_EBAY_COLORS = 1;
 
 export function ebayVariants<T extends { color: string | null }>(variants: T[]): T[] {
   const colors = [...new Set(variants.map((v) => v.color).filter((c): c is string => !!c))];
   if (colors.length <= MAX_EBAY_COLORS) return variants;
   const keep = new Set(colors.slice(0, MAX_EBAY_COLORS));
   return variants.filter((v) => !v.color || keep.has(v.color));
+}
+/** Listings that use the fewest of the month's items first (a mug before a hoodie in every size); then the most favourited. */
+export function byFewestItems<T extends { favorites: number | null; variants: unknown }>(listings: T[]): T[] {
+  const items = (l: T) => ebayVariants(((l.variants as { color: string | null }[] | null) ?? [])).length || 99;
+  return [...listings].sort((a, b) => items(a) - items(b) || (b.favorites ?? 0) - (a.favorites ?? 0));
 }
 const SHIPMENT_WINDOW_DAYS = 45;
 
@@ -232,7 +237,7 @@ async function list(_payload: Record<string, unknown>, { log, taskId }: TaskCont
   }
 
   const room = waiting ? 0 : config.ebay.maxListings - Object.keys(refs).length;
-  const candidates = room > 0
+  const pool = room > 0
     ? await db.listing.findMany({
         where: {
           source: "agent",
@@ -243,9 +248,9 @@ async function list(_payload: Record<string, unknown>, { log, taskId }: TaskCont
           productType: { in: Object.keys(CATEGORY_QUERY) },
         },
         orderBy: [{ favorites: "desc" }, { createdAt: "desc" }],
-        take: room,
       })
     : [];
+  const candidates = byFewestItems(pool).slice(0, Math.max(0, room));
 
   const added: string[] = [];
   for (const listing of candidates) {
