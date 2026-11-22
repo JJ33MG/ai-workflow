@@ -32,6 +32,29 @@ const BRAND = "All You Can Wish";
  */
 export const EBAY_STOCK = 1;
 const STOCK = EBAY_STOCK;
+const LIMIT_KEY = "ebay.limitUntil";
+
+/** eBay's monthly selling limit for the account (error 25002): retrying before next month is pointless. */
+export const isSellingLimit = (err: unknown) => err instanceof ebay.EbayError && err.errors.some((e) => e.errorId === 25002);
+
+/** Midnight UTC on the first day of the next month (eBay's limits are per calendar month). */
+export const nextMonthStart = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1));
+
+/** What eBay holds for the account: offers per status, and listing ids per listing state. */
+export function summarizeOffers(offers: ebay.OfferInfo[]) {
+  const byStatus: Record<string, number> = {};
+  const listings: Record<string, string[]> = {};
+  for (const o of offers) {
+    byStatus[o.status ?? "UNKNOWN"] = (byStatus[o.status ?? "UNKNOWN"] ?? 0) + 1;
+    const id = o.listing?.listingId;
+    if (id) {
+      const state = o.listing?.listingStatus ?? "UNKNOWN";
+      listings[state] ??= [];
+      if (!listings[state].includes(id)) listings[state].push(id);
+    }
+  }
+  return { offers: offers.length, byStatus, listings };
+}
 /** Apparel on eBay: the first two colours, every size (a hoodie in four colours would count as 24 items). */
 const MAX_EBAY_COLORS = 2;
 
@@ -188,6 +211,8 @@ async function list(_payload: Record<string, unknown>, { log, taskId }: TaskCont
     throw new Error("Nog geen prijscheck met Printful-kosten voor de VS: pricing_report is gestart, probeer daarna opnieuw.");
   }
 
+  const limitUntil = await getSetting<string>(LIMIT_KEY);
+  const waiting = Boolean(limitUntil && new Date(limitUntil) > new Date());
   const refs = (await getSetting<Record<string, EbayListingRef>>(LISTINGS_KEY)) ?? {};
   // End eBay listings whose Etsy product is no longer for sale.
   const listed = await db.listing.findMany({ where: { id: { in: Object.keys(refs) } }, select: { id: true, status: true, title: true } });
@@ -206,7 +231,7 @@ async function list(_payload: Record<string, unknown>, { log, taskId }: TaskCont
     ended++;
   }
 
-  const room = config.ebay.maxListings - Object.keys(refs).length;
+  const room = waiting ? 0 : config.ebay.maxListings - Object.keys(refs).length;
   const candidates = room > 0
     ? await db.listing.findMany({
         where: {
@@ -274,6 +299,13 @@ async function list(_payload: Record<string, unknown>, { log, taskId }: TaskCont
       await setSetting(LISTINGS_KEY, refs);
       added.push(title);
     } catch (err) {
+      if (isSellingLimit(err)) {
+        // The month's limit is reached: stop here and try again on the 1st, not on every run.
+        const until = nextMonthStart(new Date()).toISOString();
+        await setSetting(LIMIT_KEY, until);
+        await log.warn(`eBay-verkooplimiet van deze maand bereikt: nieuwe listings wachten tot ${until.slice(0, 10)}. Vraag eBay om een hogere limiet om eerder verder te gaan.`, undefined, taskId);
+        break;
+      }
       await log.warn(`Niet op eBay gezet: ${listing.title}: ${(err as Error).message}`, undefined, taskId);
     }
     if (taskId) await db.task.update({ where: { id: taskId }, data: { status: "running" } });
@@ -288,6 +320,24 @@ async function list(_payload: Record<string, unknown>, { log, taskId }: TaskCont
     );
   }
   return { added: added.length, ended, total: Object.keys(refs).length };
+}
+
+/** Asks eBay what it really holds: the selling limit, and every offer with its listing state. */
+async function check(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
+  if (!ebay.isEbayConfigured() || !(await ebay.isEbayConnected())) return { skipped: "eBay not connected" };
+  const privileges = await ebay.getPrivileges().catch(() => null);
+  const offers: ebay.OfferInfo[] = [];
+  for (const sku of await ebay.allInventorySkus()) offers.push(...(await ebay.offersForSku(sku)));
+  const summary = summarizeOffers(offers);
+  const refs = (await getSetting<Record<string, EbayListingRef>>(LISTINGS_KEY)) ?? {};
+  const states = Object.entries(summary.listings).map(([state, ids]) => `${ids.length} ${state}`).join(", ") || "geen";
+  await log.info(
+    `eBay-check: ${summary.offers} aanbieding(en) (${Object.entries(summary.byStatus).map(([k, v]) => `${v} ${k}`).join(", ") || "geen"}); listings: ${states}. ` +
+      `De Brain kent ${Object.keys(refs).length} listing(s).` + (privileges ? ` ${ebay.privilegeLine(privileges)}.` : ""),
+    { ...summary, privileges, known: Object.values(refs).map((r) => r.ebayListingId) },
+    taskId,
+  );
+  return summary;
 }
 
 /** New paid eBay orders become sales and Printful orders (one task per order, so each can be retried). */
@@ -407,10 +457,11 @@ export const ebayAgent: AgentDefinition = {
   description: "Zet de beste fysieke Etsy-producten ook op eBay (ebay.com), verwerkt eBay-bestellingen via Printful en stuurt de track & trace terug.",
   dependsOn: ["database", "ebay", "printful"],
   chatTasks: ["ebay_setup", "ebay_list", "ebay_orders", "ebay_shipments"],
-  handlers: { ebay_setup: setup, ebay_list: list, ebay_orders: syncOrders, ebay_fulfil: fulfil, ebay_shipments: syncShipments },
+  handlers: { ebay_setup: setup, ebay_list: list, ebay_check: check, ebay_orders: syncOrders, ebay_fulfil: fulfil, ebay_shipments: syncShipments },
   taskInfo: {
     ebay_setup: "Eenmalig: verzend-, betaal- en retourbeleid en de verzendlocatie op eBay aanmaken",
     ebay_list: "De beste live Etsy-producten op eBay zetten (tot de limiet) en eBay-listings beëindigen die niet meer op Etsy staan",
+    ebay_check: "Bij eBay navragen wat er echt staat: elke aanbieding, de staat van elke listing en de verkooplimiet",
     ebay_orders: "Nieuwe betaalde eBay-bestellingen ophalen",
     ebay_fulfil: "De Printful-bestelling maken voor een eBay-bestelling",
     ebay_shipments: "Verzonden eBay-bestellingen met track & trace op eBay markeren",

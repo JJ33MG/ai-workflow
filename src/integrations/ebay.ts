@@ -385,6 +385,28 @@ export async function publishOffer(offerId: string): Promise<string> {
   return (await ebay<{ listingId: string }>("POST", `/sell/inventory/v1/offer/${offerId}/publish`)).listingId;
 }
 
+export type OfferInfo = { sku: string; status?: string; listing?: { listingId?: string; listingStatus?: string } };
+
+/** Every SKU the seller account holds in the Inventory API (pages of 100). */
+export async function allInventorySkus(): Promise<string[]> {
+  const skus: string[] = [];
+  for (let offset = 0; offset < 2000; offset += 100) {
+    const page = await ebay<{ inventoryItems?: { sku: string }[]; total?: number }>("GET", `/sell/inventory/v1/inventory_item?limit=100&offset=${offset}`);
+    skus.push(...(page.inventoryItems ?? []).map((i) => i.sku));
+    if (!page.inventoryItems?.length || skus.length >= (page.total ?? 0)) break;
+  }
+  return skus;
+}
+
+/** The offers for one SKU, with their listing (id and state) when published. */
+export async function offersForSku(sku: string): Promise<OfferInfo[]> {
+  const res = await ebay<{ offers?: OfferInfo[] }>("GET", `/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}`).catch((err) => {
+    if (err instanceof EbayError && err.status === 404) return { offers: [] };
+    throw err;
+  });
+  return (res.offers ?? []).map((o) => ({ sku, status: o.status, listing: o.listing }));
+}
+
 /** Ends a listing (its items and offers stay, so it can be published again). */
 export async function withdrawGroup(groupKey: string): Promise<void> {
   await ebay("POST", "/sell/inventory/v1/offer/withdraw_by_inventory_item_group", { inventoryItemGroupKey: groupKey, marketplaceId: config.ebay.marketplaceId });

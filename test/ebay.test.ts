@@ -120,3 +120,26 @@ describe("eBay variants within a new seller's limit", () => {
     expect(ebayVariants(mug)).toHaveLength(2);
   });
 });
+
+import { EbayError } from "../src/integrations/ebay.js";
+import { isSellingLimit, nextMonthStart, summarizeOffers } from "../src/agents/ebay.js";
+
+describe("eBay selling limit and check", () => {
+  it("recognises eBay's monthly selling limit (error 25002) and waits until the next month", () => {
+    expect(isSellingLimit(new EbayError(400, [{ errorId: 25002 }], "limit"))).toBe(true);
+    expect(isSellingLimit(new EbayError(400, [{ errorId: 25001 }], "other"))).toBe(false);
+    expect(isSellingLimit(new Error("x"))).toBe(false);
+    expect(nextMonthStart(new Date("2026-11-21T22:00:00Z")).toISOString()).toBe("2026-12-01T00:00:00.000Z");
+    expect(nextMonthStart(new Date("2026-12-31T10:00:00Z")).toISOString()).toBe("2027-01-01T00:00:00.000Z");
+  });
+
+  it("sums up what eBay holds: offers per status and listings per state", () => {
+    const s = summarizeOffers([
+      { sku: "a", status: "PUBLISHED", listing: { listingId: "1", listingStatus: "ACTIVE" } },
+      { sku: "b", status: "PUBLISHED", listing: { listingId: "1", listingStatus: "ACTIVE" } },
+      { sku: "c", status: "PUBLISHED", listing: { listingId: "2", listingStatus: "ENDED" } },
+      { sku: "d", status: "UNPUBLISHED" },
+    ]);
+    expect(s).toEqual({ offers: 4, byStatus: { PUBLISHED: 3, UNPUBLISHED: 1 }, listings: { ACTIVE: ["1"], ENDED: ["2"] } });
+  });
+});
