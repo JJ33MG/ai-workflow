@@ -23,6 +23,8 @@ function line(item) {
       {},
       h("div", { class: "plan-title" }, item.title),
       item.detail && h("div", { class: "muted" }, item.detail),
+      item.link && h("div", {}, h("a", { href: item.link, target: "_blank", rel: "noopener noreferrer" }, item.link.replace(/^https?:\/\//, "").replace(/\/$/, ""))),
+      item.steps && h("ol", { class: "launch-steps" }, item.steps.map((st) => h("li", {}, st))),
       item.auto && h("div", { class: "auto-note" }, "Automatisch afgevinkt: Routify meldt dat het klaar is"),
     ),
     !item.auto &&

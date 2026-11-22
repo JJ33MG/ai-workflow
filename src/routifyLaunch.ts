@@ -20,6 +20,10 @@ export interface LaunchItem {
   title: string;
   detail: string;
   status: LaunchStatus;
+  /** Where to go (sign-up page, settings). */
+  link?: string;
+  /** Short how-to, in order. */
+  steps?: string[];
   /** Done as soon as Routify's numbers say so. */
   doneWhen?: (s: RoutifySetup) => boolean;
 }
@@ -30,17 +34,45 @@ const partner = (...ids: string[]) => (s: RoutifySetup) => ids.some((id) => s.se
 
 export const LAUNCH: LaunchItem[] = [
   // Soft launch: real people can use it and pay, with a small group of testers (target mid-December).
-  { id: "j-maps", stage: "soft", owner: "jarne", status: "todo", title: "Maps Static API aanzetten", detail: "Google Cloud → APIs & Services → Library → \"Maps Static API\" → Enable (zelfde project als de sleutel). Dan toont elke trip een echte Google-kaart.", doneWhen: (s) => s.setup?.mapsStatic === "ok" },
-  { id: "j-stripe", stage: "soft", owner: "jarne", status: "todo", title: "Stripe-verificatie afronden", detail: "Maak in Stripe twee prijzen voor Plus (€9 per maand en €59 per jaar) en een webhook naar /api/stripe/webhook. Zet STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_ID en STRIPE_PRICE_ID_YEARLY in Railway. De Trip pass (€4.99) heeft geen prijs nodig.", doneWhen: (s) => s.setup?.stripe === true },
-  { id: "j-domain", stage: "soft", owner: "jarne", status: "todo", title: "Domeinnaam kopen", detail: "Bijvoorbeeld routify.eu of routify.app (check of hij vrij is). Claude koppelt hem aan Railway." },
-  { id: "j-booking", stage: "soft", owner: "jarne", status: "todo", title: "Aanmelden bij Booking.com Affiliate Partner", detail: "Zet je ID als BOOKING_AFFILIATE_ID op routify-preview. Hotels en campings betalen dan commissie.", doneWhen: partner("booking") },
-  { id: "j-gyg", stage: "soft", owner: "jarne", status: "todo", title: "Aanmelden bij GetYourGuide Partner", detail: "ID als GETYOURGUIDE_AFFILIATE_ID. Voor \"Things to do in …\" op elke dag.", doneWhen: partner("getyourguide") },
-  { id: "j-awin", stage: "soft", owner: "jarne", status: "todo", title: "Awin (of CJ) voor Pitchup, Vrbo, Roadsurfer, Indie Campers", detail: "Per partner de deep link met {url} als PITCHUP_DEEPLINK, VRBO_DEEPLINK, ROADSURFER_DEEPLINK of INDIECAMPERS_DEEPLINK.", doneWhen: partner("pitchup", "vrbo", "roadsurfer", "indiecampers") },
-  { id: "j-admin", stage: "soft", owner: "jarne", status: "todo", title: "ADMIN_EMAILS zetten op routify-preview", detail: "Jouw e-mailadres, zodat jij community-foto's kunt goedkeuren.", doneWhen: (s) => s.setup?.adminEmails === true },
-  { id: "j-seed", stage: "soft", owner: "jarne", status: "todo", title: "Gem-bibliotheek vullen (ongeveer €150)", detail: "Zeg \"start de seed\" tegen Claude: zo'n 5.000 Google-zoekopdrachten langs Europa's wegen, eenmalig.", doneWhen: (s) => (s.gems?.seedBudget ?? 0) > 0 },
-  { id: "j-legal", stage: "soft", owner: "jarne", status: "todo", title: "Privacybeleid en voorwaarden nalezen", detail: "Ze staan op /privacy en /terms. Geef Claude je bedrijfsnaam, adres, contact-e-mail en land: die staan er nu als [tussen haakjes]." },
+  { id: "j-travelpayouts", stage: "soft", owner: "jarne", status: "todo", title: "Aanmelden bij Travelpayouts (vanavond, 10 min)", detail: "Eén netwerk met 100+ reismerken (GetYourGuide, Viator, autoverhuur…). Gratis.",
+    link: "https://www.travelpayouts.com/en/",
+    steps: ["Klik Join / Sign up en maak een account (e-mail van Routify, niet je privé-adres).", "Maak een Project aan: type Website, URL https://routify-preview-production.up.railway.app, onderwerp Road trips in Europe.", "Ga naar Programs en vraag toegang tot GetYourGuide, Viator, DiscoverCars en andere autoverhuur-/campermerken.", "Zeg Claude welke merken goedgekeurd zijn; de links zet Claude erin."] },
+  { id: "j-stay22", stage: "soft", owner: "jarne", status: "todo", title: "Aanmelden bij Stay22 (vanavond, 10 min)", detail: "Slaapplekken bij Booking.com, Expedia en meer via één partnerlink.",
+    link: "https://www.stay22.com/",
+    steps: ["Klik Sign up / Get started, kies 'Creator' of 'Publisher'.", "Vul de website in: https://routify-preview-production.up.railway.app.", "Zoek in het dashboard je 'Allez'-link of affiliate-ID en zet die in Railway (routify-preview, Variables) als STAY22_DEEPLINK; vraag Claude welk formaat met {url}."] },
+  { id: "j-booking", stage: "soft", owner: "jarne", status: "todo", title: "Aanmelden bij Booking.com (via CJ)", detail: "Hotels en campings betalen commissie. Goedkeuring kan een paar dagen duren.",
+    link: "https://partnerships.booking.com/",
+    steps: ["Klik 'Join' en kies je regio: je komt bij het netwerk CJ (cj.com).", "Maak een CJ-publisheraccount (website = de Routify-preview).", "Zoek in CJ het programma 'Booking.com' en vraag toegang.", "Na goedkeuring: maak in CJ een deep link en zet hem in Railway als BOOKING_DEEPLINK (met {url} waar de Booking-link komt). Claude helpt met het formaat."],
+    doneWhen: partner("booking") },
+  { id: "j-discovercars", stage: "soft", owner: "jarne", status: "todo", title: "Aanmelden bij DiscoverCars (autoverhuur)", detail: "Hoge commissie op huurauto's. Je gebruikersnaam wordt je partner-ID.",
+    link: "https://www.discovercars.com/affiliate",
+    steps: ["Vul het formulier in: gebruikersnaam (wordt je ID), website = de Routify-preview.", "Zet je gebruikersnaam in Railway (routify-preview, Variables) als DISCOVERCARS_AFFILIATE_ID.", "Zeg Claude welke link-parameters voor datum en plaats in je partnerpaneel staan; dan vult de knop die ook in."],
+    doneWhen: partner("discovercars") },
+  { id: "j-gyg", stage: "soft", owner: "jarne", status: "todo", title: "Aanmelden bij GetYourGuide Partner", detail: "Voor 'Things to do in …' op elke dag. Kan ook via Travelpayouts.",
+    link: "https://partner.getyourguide.com/en-us/signup",
+    steps: ["Maak een partneraccount met de Routify-preview als website.", "Zet je partner-ID in Railway als GETYOURGUIDE_AFFILIATE_ID."],
+    doneWhen: partner("getyourguide") },
+  { id: "j-vrbo", stage: "soft", owner: "jarne", status: "todo", title: "Aanmelden bij Expedia Group (Vrbo)", detail: "Vakantiehuizen. Tot 4% commissie.",
+    link: "https://creator.expediagroup.com/affiliates",
+    steps: ["Meld je aan voor het Travel Creator Program.", "Na goedkeuring: maak een deep link en zet hem in Railway als VRBO_DEEPLINK (met {url})."],
+    doneWhen: partner("vrbo") },
+  { id: "j-maps", stage: "soft", owner: "jarne", status: "todo", title: "Maps Static API aanzetten (2 min)", detail: "Dan toont elke trip een echte Google-kaart in plaats van de globe.",
+    link: "https://console.cloud.google.com/apis/library/static-maps-backend.googleapis.com",
+    steps: ["Open de link, kies bovenaan hetzelfde project als je Google Maps-sleutel.", "Klik Enable. Klaar: dit vinkt zichzelf af zodra een kaart lukt."],
+    doneWhen: (s) => s.setup?.mapsStatic === "ok" },
+  { id: "j-admin", stage: "soft", owner: "jarne", status: "todo", title: "ADMIN_EMAILS zetten (2 min)", detail: "Dan kun jij community-foto's goedkeuren en posten als 'Routify team'.",
+    link: "https://railway.com/dashboard",
+    steps: ["Railway → project renewed-growth → service routify-preview → Variables.", "Nieuwe variabele ADMIN_EMAILS = het e-mailadres van je Routify-account.", "Log daarna in op Routify met dat account."],
+    doneWhen: (s) => s.setup?.adminEmails === true },
+  { id: "j-legal", stage: "soft", owner: "jarne", status: "todo", title: "Bedrijfsgegevens voor /privacy en /terms", detail: "Stuur Claude: bedrijfsnaam, adres, contact-e-mail, land, ondernemingsnummer, btw-nummer (als je dat hebt).",
+    link: "https://routify-preview-production.up.railway.app/privacy" },
+  { id: "j-domain", stage: "soft", owner: "jarne", status: "todo", title: "Domeinnaam kopen", detail: "Bijvoorbeeld routify.eu of routify.app (kijk of hij vrij is). Claude koppelt hem aan Railway.",
+    link: "https://www.namecheap.com/" },
+  { id: "j-stripe", stage: "soft", owner: "jarne", status: "todo", title: "Stripe-verificatie afronden", detail: "Maak in Stripe twee prijzen voor Plus (€9 per maand en €59 per jaar) en een webhook naar /api/stripe/webhook. Zet STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_ID en STRIPE_PRICE_ID_YEARLY in Railway.",
+    link: "https://dashboard.stripe.com/", doneWhen: (s) => s.setup?.stripe === true },
+  { id: "j-seed", stage: "soft", owner: "jarne", status: "todo", title: "Gem-bibliotheek vullen (ongeveer €150)", detail: "Zeg 'start de seed' tegen Claude: zo'n 5.000 Google-zoekopdrachten langs Europa's wegen, eenmalig.", doneWhen: (s) => (s.gems?.seedBudget ?? 0) > 0 },
   { id: "j-testers", stage: "soft", owner: "jarne", status: "todo", title: "10 tot 20 testers zoeken", detail: "Vrienden, campergroepen op Facebook, forums. Hun feedback is de testronde." },
-  { id: "j-oldservice", stage: "soft", owner: "jarne", status: "todo", title: "Oude roadgem-deployment verwijderen in Railway", detail: "De oude service crasht en slaapt; verwijderen voorkomt verwarring en kosten." },
+  { id: "j-oldservice", stage: "soft", owner: "jarne", status: "todo", title: "Oude roadgem-deployment verwijderen in Railway", detail: "Project renewed-growth → service 'roadgem' → Settings → Delete service.", link: "https://railway.com/dashboard" },
 
   { id: "c-map", stage: "soft", owner: "claude", status: "done", title: "Echte Google-kaart van de trip", detail: "De dag in donker bovenop de route; de globe als reserve. Wacht alleen op de Maps Static API." },
   { id: "c-tolls", stage: "soft", owner: "claude", status: "done", title: "Goedkoopste route (tolvrij) met besparing", detail: "Plus wisselt met één tik." },
