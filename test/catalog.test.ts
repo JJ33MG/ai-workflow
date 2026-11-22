@@ -264,7 +264,7 @@ describe("round ornament", () => {
     const t = productType("ornament")!;
     expect(t.printfulProductId).toBe(881);
     expect(t.layout).toBe("round");
-    expect(t.sizes).toEqual([{ printful: "Circle", label: "Round", priceCents: 1799 }]);
+    expect(t.sizes).toEqual([{ printful: "Circle", label: "Round", priceCents: 2199 }]);
   });
 });
 
@@ -277,5 +277,21 @@ describe("Christmas ornaments in season", () => {
   });
   it("keeps ornaments behind clothing the rest of the year", () => {
     expect(chooseProducts(offers, 3, undefined, new Date("2027-03-01")).map((x) => x.product)).toEqual(["hoodie", "tshirt", "ornament"]);
+  });
+});
+
+describe("ornaments take turns", () => {
+  const all = ["ornament", "ornament-wood", "ornament-acrylic", "hoodie", "tshirt"].map((product) => ({ product }));
+  const firstOn = (iso: string) => chooseProducts(all, 3, undefined, new Date(iso)).map((x) => x.product);
+  it("leads with a different kind of ornament from day to day, one ornament per design", () => {
+    const days = ["2026-11-22", "2026-11-23", "2026-11-24"].map(firstOn);
+    expect(new Set(days.map((d) => d[0])).size).toBe(3);
+    for (const d of days) expect(d.filter((p) => p.startsWith("ornament"))).toHaveLength(1);
+  });
+
+  it("prices every ornament for at least €5 profit in the EU during a 20% sale", () => {
+    expect(productType("ornament")!.sizes[0].priceCents).toBe(2199);
+    expect(productType("ornament-acrylic")!).toMatchObject({ printfulProductId: 793, layout: "center", sizes: [{ printful: "Rectangle", label: "Rectangle", priceCents: 2399 }] });
+    expect(productType("ornament-wood")!).toMatchObject({ printfulProductId: 634, layout: "round", sizes: [{ printful: "Oval", label: "Oval", priceCents: 2499 }] });
   });
 });

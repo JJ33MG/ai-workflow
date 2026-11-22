@@ -175,6 +175,7 @@ export function nicheFocus(rows: { niche: string; favorites: number }[], max = 8
 
 const MUGS = new Set(["mug", "mug-black", "mug-color"]);
 const APPAREL = ["hoodie", "sweatshirt", "tshirt"];
+const ORNAMENTS = ["ornament", "ornament-wood", "ornament-acrylic"];
 
 /**
  * Which proposed products of one design are made: apparel first, then the rest, at most one mug, and no mug
@@ -182,10 +183,14 @@ const APPAREL = ["hoodie", "sweatshirt", "tshirt"];
  */
 export function chooseProducts<T extends { product: string }>(listings: T[], perDesign: number, mix?: { mugs: number; apparel: number }, now = new Date()): T[] {
   const tooManyMugs = mix ? mix.mugs > 2 * Math.max(1, mix.apparel) : false;
-  // November and December: a Christmas ornament sells before anything else.
+  // November and December: a Christmas ornament sells before anything else, a different kind each day.
   const ornamentSeason = now.getUTCMonth() >= 10;
+  const day = Math.floor(now.getTime() / 86_400_000);
+  const offered = ORNAMENTS.filter((o) => listings.some((l) => l.product === o));
+  const lead = offered.length ? offered[day % offered.length] : null;
   const rank = (p: string) =>
-    p === "ornament" && ornamentSeason ? -1 : APPAREL.includes(p) ? APPAREL.indexOf(p) : MUGS.has(p) ? 100 : 50;
+    p === lead && ornamentSeason ? -1 : APPAREL.includes(p) ? APPAREL.indexOf(p) : MUGS.has(p) ? 100 : 50;
+  let ornament = false;
   const out: T[] = [];
   let mug = false;
   for (const x of [...listings].sort((a, b) => rank(a.product) - rank(b.product))) {
@@ -193,6 +198,11 @@ export function chooseProducts<T extends { product: string }>(listings: T[], per
     if (MUGS.has(x.product)) {
       if (mug || tooManyMugs) continue;
       mug = true;
+    }
+    // One ornament per design: the kinds take turns over the days.
+    if (ORNAMENTS.includes(x.product)) {
+      if (ornament) continue;
+      ornament = true;
     }
     if (out.some((o) => o.product === x.product)) continue;
     out.push(x);
