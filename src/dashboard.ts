@@ -10,6 +10,7 @@ import { activeCampaigns, getStrategy } from "./lib/marketing.js";
 import { startOfDay, startOfMonth, toEurCents } from "./lib/money.js";
 import { allGuides, diagnose } from "./lib/troubleshoot.js";
 import { buildBrain, planWithStatus } from "./brain.js";
+import { LAUNCH_KEY, launchView, type LaunchStatus } from "./routifyLaunch.js";
 import { SCHEDULE, nextRunOf, schedulerState } from "./scheduler.js";
 
 export type AgentHealth = "ok" | "running" | "waiting" | "paused" | "retrying" | "stale" | "blocked" | "failing";
@@ -287,12 +288,18 @@ export async function buildDashboard(now = new Date()) {
 
   const plan = await planWithStatus();
   const brain = buildBrain({ checks, agents, businesses, approvals, plan });
+  const [routifyStats, launchTicks] = await Promise.all([
+    getSetting<RoutifyStats>("routify.stats"),
+    getSetting<Record<string, LaunchStatus>>(LAUNCH_KEY),
+  ]);
+  const routify = { stats: routifyStats, ...launchView(routifyStats, launchTicks ?? {}) };
 
   return {
     generatedAt: now,
     dryRun: config.dryRun,
     brain,
     plan,
+    routify,
     timezone: config.timezone,
     serverStartedAt: schedulerState.startedAt,
     overall,

@@ -158,9 +158,9 @@ export const BUSINESSES: BusinessDefinition[] = [
     kind: "App",
     description: "Routify (voorheen RoadGem): de roadtrip-planner met gems onderweg, Plus-abonnementen en affiliate-links.",
     phase: 5,
-    channels: ["Routify website/app", "Plus-abonnementen", "Affiliates (Booking.com, Airbnb, Rentalcars)"],
+    channels: ["Routify website/app", "Plus-abonnementen en Trip pass", "Affiliates (Booking.com, Pitchup, Vrbo, Roadsurfer, Indie Campers, GetYourGuide, Rentalcars)"],
     targetCents: [0, 0],
-    plan: "Preview testen en bijsturen; daarna live zetten. De Routify-agent volgt elke ochtend gebruikers, trips, Plus en kliks.",
+    plan: "Soft launch half december met testers, harde lancering eind januari of februari; de stappen staan op de Routify-pagina. De Routify-agent volgt elke ochtend gebruikers, trips, Plus, kliks en de gem-bibliotheek.",
   },
 ];
 

@@ -8,6 +8,7 @@ import { $, api, openSection, state, toast } from "./js/core.js";
 import { renderHandbook } from "./js/handbook.js";
 import { renderOverview } from "./js/overview.js";
 import { renderPlan } from "./js/plan.js";
+import { renderRoutify } from "./js/routify.js";
 import { renderGuide, renderProblems } from "./js/problems.js";
 
 const TOKEN_KEY = "agency-brain-token";
@@ -48,6 +49,7 @@ function render() {
   renderBrainMap(d);
   renderOverview(d);
   renderPlan(d);
+  renderRoutify(d);
   renderHandbook(d);
   renderAgents(d);
   renderProblems(d);
@@ -109,6 +111,7 @@ $("filter-level").addEventListener("change", () => state.data && renderActivity(
 $("brain-kind").addEventListener("change", () => state.data && renderBrain(state.data));
 $("brain-search").addEventListener("input", () => state.data && renderBrain(state.data));
 $("plan-mine").addEventListener("change", () => state.data && renderPlan(state.data));
+$("routify-mine").addEventListener("change", () => state.data && renderRoutify(state.data));
 document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && state.data && load());
 initChat();
 

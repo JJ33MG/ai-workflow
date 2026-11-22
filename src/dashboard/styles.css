@@ -1799,3 +1799,31 @@ svg.map .dim {
     flex-basis: 100%;
   }
 }
+
+/* Routify launch page */
+.routify-stage {
+  display: grid;
+  gap: 12px;
+}
+.routify-stage .plan-board {
+  margin-top: 4px;
+}
+.routify-ideas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.routify-idea {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.routify-idea .plan-title {
+  margin-bottom: 4px;
+}
+.auto-note {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--good);
+}

@@ -9,7 +9,8 @@ import { config } from "./config.js";
 import { setPlanStatus } from "./brain.js";
 import { ChatUnavailableError, chatHistory, sendChat } from "./chat.js";
 import { buildBusinessDetail, buildDashboard } from "./dashboard.js";
-import { db, getSetting } from "./db.js";
+import { db, getSetting, setSetting } from "./db.js";
+import { LAUNCH, LAUNCH_KEY, type LaunchStatus } from "./routifyLaunch.js";
 import * as etsy from "./integrations/etsy.js";
 import * as ebay from "./integrations/ebay.js";
 import * as meta from "./integrations/meta.js";
@@ -104,6 +105,20 @@ app.post("/api/agents/:id/chat", requireAdmin, async (req, res) => {
 });
 
 // Jarne ticks off his own steps in the build plan.
+// Routify's launch list: Jarne ticks a step (steps Routify reports on tick themselves).
+app.post("/api/routify/launch/:id", requireAdmin, async (req, res) => {
+  const status = String((req.body as { status?: string }).status ?? "");
+  const item = LAUNCH.find((i) => i.id === req.params.id);
+  if (!item || !["done", "doing", "todo"].includes(status)) {
+    res.status(400).json({ error: "Onbekende stap of status" });
+    return;
+  }
+  const ticks = (await getSetting<Record<string, LaunchStatus>>(LAUNCH_KEY)) ?? {};
+  ticks[item.id] = status as LaunchStatus;
+  await setSetting(LAUNCH_KEY, ticks);
+  res.json({ message: status === "done" ? `Afgevinkt: ${item.title}` : `Bijgewerkt: ${item.title}` });
+});
+
 app.post("/api/plan/:id", requireAdmin, async (req, res) => {
   const status = String((req.body as { status?: string }).status ?? "");
   if (!["done", "doing", "todo"].includes(status)) {

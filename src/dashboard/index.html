@@ -30,6 +30,7 @@
           <button data-section="map" aria-current="true">Het brein</button>
           <button data-section="overview">Overzicht</button>
           <button data-section="businesses">Bedrijven</button>
+          <button data-section="routify">Routify</button>
           <button data-section="agents">Agents</button>
           <button data-section="chat">Chat</button>
           <button data-section="problems">Problemen <span id="problem-count" class="count" hidden></span></button>
@@ -115,6 +116,25 @@
           <div class="panel">
             <h2>Fouten en waarschuwingen, laatste 48 uur</h2>
             <div id="issues"></div>
+          </div>
+        </section>
+
+        <section id="section-routify" class="section" hidden>
+          <div class="panel">
+            <div class="panel-head">
+              <div>
+                <h1 class="flush">Routify</h1>
+                <p class="muted flush">De weg naar de lancering: wat jij nog doet, wat Claude nog bouwt, en ideeën voor later. Stappen die Routify zelf meldt, vinken zichzelf af.</p>
+              </div>
+              <label class="toggle"><input id="routify-mine" type="checkbox" /> Alleen mijn stappen</label>
+            </div>
+            <div id="routify-kpis" class="kpis"></div>
+          </div>
+          <div id="routify-launch" class="stack"></div>
+          <div class="panel">
+            <h2>Ideeën voor later</h2>
+            <p class="muted flush">Uit onze gesprekken en nieuwe voorstellen; nog niet ingepland.</p>
+            <div id="routify-ideas" class="routify-ideas"></div>
           </div>
         </section>
 
