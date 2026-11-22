@@ -156,7 +156,7 @@ describe("fitting eBay's monthly item limit", () => {
 
   it("puts products that use few items (a mug, a poster) before ones that use many (a hoodie in every size)", () => {
     const mk = (id: string, n: number, favorites = 0) => ({ id, favorites, variants: Array.from({ length: n }, (_, i) => ({ color: "Black", size: String(i) })) });
-    const order = (byFewestItems([mk("hoodie", 5, 9), mk("mug", 1, 0), mk("poster", 2, 3), mk("mug2", 1, 4)] as never) as { id: string }[]).map((l) => l.id);
+    const order = (byFewestItems([mk("hoodie", 5, 9), mk("mug", 1, 0), mk("poster", 2, 3), mk("mug2", 1, 4)] as never) as unknown as { id: string }[]).map((l) => l.id);
     expect(order).toEqual(["mug2", "mug", "poster", "hoodie"]);
   });
 });
