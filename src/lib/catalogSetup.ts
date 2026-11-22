@@ -3,7 +3,7 @@
 // A type without an Etsy shipping profile for its kind of product is switched off with the reason,
 // so the shop never charges mug shipping for a hoodie. Saved and loaded at startup.
 import { getSetting, setSetting } from "../db.js";
-import { es, getShippingProfiles, getTaxonomy, type TaxonomyNode } from "../integrations/etsy.js";
+import { es, getListingsByState, getShippingProfiles, getTaxonomy, type EtsyListing, type TaxonomyNode } from "../integrations/etsy.js";
 import { getCatalogProduct, getPrintfiles, type PrintfileInfo } from "../integrations/printful.js";
 import { PRINTABLE, PRODUCT_TYPES, offeredVariants, type Ink, type Layout, type ProductType } from "./catalog.js";
 import { findTaxonomyId } from "./etsySetup.js";
@@ -54,6 +54,19 @@ export function placementFor(info: PrintfileInfo, variantId: number, preferred: 
 }
 
 /** "Printful: Mugs (20oz)" must not count as a poster profile because "Printful" contains "print". */
+/**
+ * The profile a product placed through Printful already uses: Printful names profiles after its own
+ * product groups (not always "ornament"), but the listing it pushed to Etsy carries the right one.
+ */
+export function profileFromListings<P extends { shipping_profile_id: number; title: string }>(
+  type: ProductType,
+  listings: Pick<EtsyListing, "title" | "shipping_profile_id">[],
+  profiles: P[],
+): P | undefined {
+  const hit = listings.find((l) => l.shipping_profile_id && type.shippingProfile.test(l.title));
+  return hit ? profiles.find((p) => p.shipping_profile_id === hit.shipping_profile_id) : undefined;
+}
+
 export const profileMatches = (type: ProductType, title: string) => type.shippingProfile.test(title.replace(/\bprintful\b:?/gi, ""));
 
 /** The first category whose name matches, in the order the type lists them. */
@@ -71,7 +84,13 @@ export async function loadCatalog(): Promise<boolean> {
 }
 
 export async function findCatalog(): Promise<CatalogEntry[]> {
-  const [profiles, tree] = await Promise.all([getShippingProfiles(), getTaxonomy()]);
+  const [profiles, tree, active, drafts] = await Promise.all([
+    getShippingProfiles(),
+    getTaxonomy(),
+    getListingsByState("active").catch(() => []),
+    getListingsByState("draft").catch(() => []),
+  ]);
+  const shopListings = [...active, ...drafts];
   const entries: CatalogEntry[] = [];
   for (const type of PRODUCT_TYPES) {
     const base = { typeId: type.id, label: type.label, productId: type.printfulProductId, layout: type.layout };
@@ -103,7 +122,7 @@ export async function findCatalog(): Promise<CatalogEntry[]> {
       // Mugs use the profile the shop's own mugs use (found by etsy_setup); others need their own.
       const profile = type.shippingProfile.test("mug") && es.shippingProfileId
         ? profiles.find((p) => p.shipping_profile_id === es.shippingProfileId) ?? profiles.find((p) => profileMatches(type, p.title))
-        : profiles.find((p) => profileMatches(type, p.title));
+        : profiles.find((p) => profileMatches(type, p.title)) ?? profileFromListings(type, shopListings, profiles);
       const taxonomyId = taxonomyFor(type, tree);
       const entry: CatalogEntry = {
         ...base,

@@ -295,3 +295,17 @@ describe("ornaments take turns", () => {
     expect(productType("ornament-wood")!).toMatchObject({ printfulProductId: 634, layout: "round", sizes: [{ printful: "Oval", label: "Oval", priceCents: 2499 }] });
   });
 });
+
+import { profileFromListings } from "../src/lib/catalogSetup.js";
+
+describe("shipping profile from a Printful listing", () => {
+  it("uses the profile of the shop's own ornament listing when no profile is named after ornaments", () => {
+    const profiles = [{ shipping_profile_id: 1, title: "Printful: Mugs (#PF-1)" }, { shipping_profile_id: 7, title: "Printful: Home & Living (#PF-77)" }];
+    const listings = [
+      { title: "Coffee mug", shipping_profile_id: 1 },
+      { title: "Wooden Ornaments", shipping_profile_id: 7 },
+    ];
+    expect(profileFromListings(productType("ornament-wood")!, listings as never, profiles)?.shipping_profile_id).toBe(7);
+    expect(profileFromListings(productType("poster")!, listings as never, profiles)).toBeUndefined();
+  });
+});
