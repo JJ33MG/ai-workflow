@@ -31,14 +31,14 @@ const partner = (...ids: string[]) => (s: RoutifySetup) => ids.some((id) => s.se
 export const LAUNCH: LaunchItem[] = [
   // Soft launch: real people can use it and pay, with a small group of testers (target mid-December).
   { id: "j-maps", stage: "soft", owner: "jarne", status: "todo", title: "Maps Static API aanzetten", detail: "Google Cloud → APIs & Services → Library → \"Maps Static API\" → Enable (zelfde project als de sleutel). Dan toont elke trip een echte Google-kaart.", doneWhen: (s) => s.setup?.mapsStatic === "ok" },
-  { id: "j-stripe", stage: "soft", owner: "jarne", status: "todo", title: "Stripe-verificatie afronden", detail: "Zet daarna STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET en STRIPE_PRICE_ID in Railway. Zonder Stripe kan niemand betalen.", doneWhen: (s) => s.setup?.stripe === true },
+  { id: "j-stripe", stage: "soft", owner: "jarne", status: "todo", title: "Stripe-verificatie afronden", detail: "Maak in Stripe twee prijzen voor Plus (€9 per maand en €59 per jaar) en een webhook naar /api/stripe/webhook. Zet STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_ID en STRIPE_PRICE_ID_YEARLY in Railway. De Trip pass (€4.99) heeft geen prijs nodig.", doneWhen: (s) => s.setup?.stripe === true },
   { id: "j-domain", stage: "soft", owner: "jarne", status: "todo", title: "Domeinnaam kopen", detail: "Bijvoorbeeld routify.eu of routify.app (check of hij vrij is). Claude koppelt hem aan Railway." },
   { id: "j-booking", stage: "soft", owner: "jarne", status: "todo", title: "Aanmelden bij Booking.com Affiliate Partner", detail: "Zet je ID als BOOKING_AFFILIATE_ID op routify-preview. Hotels en campings betalen dan commissie.", doneWhen: partner("booking") },
   { id: "j-gyg", stage: "soft", owner: "jarne", status: "todo", title: "Aanmelden bij GetYourGuide Partner", detail: "ID als GETYOURGUIDE_AFFILIATE_ID. Voor \"Things to do in …\" op elke dag.", doneWhen: partner("getyourguide") },
   { id: "j-awin", stage: "soft", owner: "jarne", status: "todo", title: "Awin (of CJ) voor Pitchup, Vrbo, Roadsurfer, Indie Campers", detail: "Per partner de deep link met {url} als PITCHUP_DEEPLINK, VRBO_DEEPLINK, ROADSURFER_DEEPLINK of INDIECAMPERS_DEEPLINK.", doneWhen: partner("pitchup", "vrbo", "roadsurfer", "indiecampers") },
   { id: "j-admin", stage: "soft", owner: "jarne", status: "todo", title: "ADMIN_EMAILS zetten op routify-preview", detail: "Jouw e-mailadres, zodat jij community-foto's kunt goedkeuren.", doneWhen: (s) => s.setup?.adminEmails === true },
   { id: "j-seed", stage: "soft", owner: "jarne", status: "todo", title: "Gem-bibliotheek vullen (ongeveer €150)", detail: "Zeg \"start de seed\" tegen Claude: zo'n 5.000 Google-zoekopdrachten langs Europa's wegen, eenmalig.", doneWhen: (s) => (s.gems?.seedBudget ?? 0) > 0 },
-  { id: "j-legal", stage: "soft", owner: "jarne", status: "todo", title: "Privacybeleid en voorwaarden nalezen", detail: "Claude schrijft ze; jij checkt bedrijfsnaam en contactadres." },
+  { id: "j-legal", stage: "soft", owner: "jarne", status: "todo", title: "Privacybeleid en voorwaarden nalezen", detail: "Ze staan op /privacy en /terms. Geef Claude je bedrijfsnaam, adres, contact-e-mail en land: die staan er nu als [tussen haakjes]." },
   { id: "j-testers", stage: "soft", owner: "jarne", status: "todo", title: "10 tot 20 testers zoeken", detail: "Vrienden, campergroepen op Facebook, forums. Hun feedback is de testronde." },
   { id: "j-oldservice", stage: "soft", owner: "jarne", status: "todo", title: "Oude roadgem-deployment verwijderen in Railway", detail: "De oude service crasht en slaapt; verwijderen voorkomt verwarring en kosten." },
 
@@ -48,10 +48,12 @@ export const LAUNCH: LaunchItem[] = [
   { id: "c-library", stage: "soft", owner: "claude", status: "done", title: "Gem-bibliotheek en dichtere gems (elke 50 km)", detail: "" },
   { id: "c-partners", stage: "soft", owner: "claude", status: "done", title: "Alle boekingslinks via de server (affiliate-ID, geteld)", detail: "Pitchup, Vrbo, Roadsurfer, Indie Campers, GetYourGuide erbij." },
   { id: "c-pricing", stage: "soft", owner: "claude", status: "done", title: "Homepagina met één knop, prijspagina met Free, Trip pass en Plus", detail: "" },
-  { id: "c-prod", stage: "soft", owner: "claude", status: "todo", title: "Productie-omgeving", detail: "Eigen domein, aparte live-omgeving naast de preview, dagelijkse back-ups van de database, foutmeldingen naar Telegram." },
-  { id: "c-speed", stage: "soft", owner: "claude", status: "todo", title: "Sneller plannen", detail: "De eerste dag na ongeveer 10 seconden tonen in plaats van na 50." },
-  { id: "c-pay", stage: "soft", owner: "claude", status: "todo", title: "Betalen live: Plus, Trip pass, jaarpas", detail: "Via Stripe, zodra jouw verificatie rond is; de Trip pass ontgrendelt één trip." },
-  { id: "c-legal", stage: "soft", owner: "claude", status: "todo", title: "Privacybeleid, voorwaarden en cookiemelding", detail: "Verplicht in de EU." },
+  { id: "c-prod", stage: "soft", owner: "claude", status: "doing", title: "Productie-omgeving", detail: "Eigen domein, aparte live-omgeving naast de preview, dagelijkse back-ups van de database, foutmeldingen naar Telegram." },
+  { id: "c-speed", stage: "soft", owner: "claude", status: "doing", title: "Sneller plannen", detail: "Van ~50 naar ~34 seconden; Claude schrijft 32 daarvan. Verder sneller vraagt een keuze van jou (sneller model of de dagen één voor één tonen)." },
+  { id: "c-pay", stage: "soft", owner: "claude", status: "done", title: "Betalen klaar: Plus per maand of jaar, Trip pass", detail: "Werkt zodra jouw Stripe-sleutels in Railway staan. Plus stopt vanzelf na de betaalde periode." },
+  { id: "c-legal", stage: "soft", owner: "claude", status: "done", title: "Privacybeleid en voorwaarden", detail: "Op /privacy en /terms. Geen cookiebanner nodig: Routify gebruikt geen tracking-cookies." },
+  { id: "c-security", stage: "soft", owner: "claude", status: "done", title: "Geldlekken dicht", detail: "Limieten op alles wat geld kost (3 trips per uur zonder account), Plus niet meer gratis te krijgen, de oude open agents-route weg." },
+  { id: "c-cleanup", stage: "soft", owner: "claude", status: "done", title: "Oude RoadGem-pagina's weg", detail: "Templates, agents, oude dag- en hotelpagina's; een eigen titel per pagina en een nieuwe 404." },
   { id: "c-feedback", stage: "soft", owner: "claude", status: "todo", title: "Testronde verwerken", detail: "Alles wat testers tegenkomen oplossen." },
 
   // Hard launch: everything a traveller expects, with marketing (target end of January / February).

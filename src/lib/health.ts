@@ -207,13 +207,11 @@ export async function runHealthChecks(now = new Date()): Promise<HealthCheck[]> 
       fix: "Zet ROUTIFY_URL (adres van de Routify-site) en ROUTIFY_STATS_TOKEN (gelijk aan STATS_TOKEN van Routify) in Railway.",
     });
   } else {
-    const last = await getSetting<{ generatedAt: string }>("routify.stats");
-    checks.push({
-      id: "routify",
-      label: "Routify",
-      status: "ok",
-      detail: last ? `Cijfers van ${new Date(last.generatedAt).toLocaleString("nl-BE", { timeZone: config.timezone })}` : "Gekoppeld; de eerste cijfers komen om 08:10",
-    });
+    const last = await getSetting<RoutifyHealthStats>("routify.stats");
+    const up = await fetch(`${config.routify.url.replace(/\/+$/, "")}/api/health`, { signal: AbortSignal.timeout(5000) })
+      .then((r) => r.ok)
+      .catch(() => false);
+    checks.push(routifyCheck(last, up));
   }
 
   if (!isEbayConfigured()) {
@@ -308,4 +306,25 @@ export async function runHealthChecks(now = new Date()): Promise<HealthCheck[]> 
   }
 
   return checks;
+}
+
+type RoutifyHealthStats = { generatedAt: string; health?: { errors24h: number; lastError: { at: string; message: string } | null } };
+
+/** Routify on the health list: down is an error, server errors in the last day a warning. */
+export function routifyCheck(last: RoutifyHealthStats | null, up: boolean): HealthCheck {
+  const when = last ? `Cijfers van ${new Date(last.generatedAt).toLocaleString("nl-BE", { timeZone: config.timezone })}` : "Gekoppeld; de eerste cijfers komen om 08:10";
+  if (!up) {
+    return { id: "routify", label: "Routify", status: "error", detail: "De Routify-site antwoordt niet (of de database is onbereikbaar)", fix: "Kijk in Railway bij de Routify-service naar de logs en de laatste deploy." };
+  }
+  const h = last?.health;
+  if (h && h.errors24h > 0) {
+    return {
+      id: "routify",
+      label: "Routify",
+      status: "warn",
+      detail: `${h.errors24h} serverfout(en) in de laatste 24 uur${h.lastError ? `; laatste: ${h.lastError.message}` : ""}. ${when}`,
+      fix: "Vraag Claude de Routify-logs in Railway te bekijken.",
+    };
+  }
+  return { id: "routify", label: "Routify", status: "ok", detail: `Online. ${when}` };
 }
