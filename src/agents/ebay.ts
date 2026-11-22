@@ -334,6 +334,8 @@ async function list(_payload: Record<string, unknown>, { log, taskId }: TaskCont
       taskId,
     );
   }
+  // Refresh what the dashboard shows about eBay.
+  await enqueueOnce(ID, "ebay_check");
   return { added: added.length, ended, total: Object.keys(refs).length };
 }
 
@@ -344,6 +346,13 @@ async function check(_payload: Record<string, unknown>, { log, taskId }: TaskCon
   const offers: ebay.OfferInfo[] = [];
   for (const sku of await ebay.allInventorySkus()) offers.push(...(await ebay.offersForSku(sku)));
   const summary = summarizeOffers(offers);
+  // Kept for the dashboard: what is live, and eBay's limit.
+  await setSetting("ebay.status", {
+    at: new Date().toISOString(),
+    live: summary.listings.ACTIVE?.length ?? 0,
+    offers: summary.offers,
+    limit: privileges?.sellingLimit ? { quantity: privileges.sellingLimit.quantity ?? null, amount: privileges.sellingLimit.amount ? `${privileges.sellingLimit.amount.value} ${privileges.sellingLimit.amount.currency}` : null } : null,
+  });
   const refs = (await getSetting<Record<string, EbayListingRef>>(LISTINGS_KEY)) ?? {};
   const states = Object.entries(summary.listings).map(([state, ids]) => `${ids.length} ${state}`).join(", ") || "geen";
   await log.info(

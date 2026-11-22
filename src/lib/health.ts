@@ -225,7 +225,7 @@ export async function runHealthChecks(now = new Date()): Promise<HealthCheck[]> 
   } else if (!(await isEbayConnected())) {
     checks.push({ id: "ebay", label: "eBay", status: "error", detail: "Sleutels ingesteld, maar het verkoopaccount is niet gekoppeld", fix: "Open /auth/ebay/start?token=ADMIN_TOKEN en geef toegang." });
   } else {
-    checks.push({ id: "ebay", label: "eBay", status: "ok", detail: "Gekoppeld (ebay.com)" });
+    checks.push(ebayCheck(await getSetting<EbayStatus>("ebay.status"), await getSetting<string>("ebay.limitUntil")));
   }
 
   const catalog = getCatalog();
@@ -327,4 +327,22 @@ export function routifyCheck(last: RoutifyHealthStats | null, up: boolean): Heal
     };
   }
   return { id: "routify", label: "Routify", status: "ok", detail: `Online. ${when}` };
+}
+
+export type EbayStatus = { at: string; live: number; offers: number; limit: { quantity: number | null; amount: string | null } | null };
+
+/** eBay on the health list: listings live, eBay's monthly limit, and whether new listings wait. */
+export function ebayCheck(st: EbayStatus | null, limitUntil: string | null, now = new Date()): HealthCheck {
+  if (!st) return { id: "ebay", label: "eBay", status: "ok", detail: "Gekoppeld · nog geen controle bij eBay (elke ochtend om 07:30)" };
+  const parts = [`Gekoppeld · ${st.live} listings live${st.offers > st.live ? ` (${st.offers} klaargezet bij eBay)` : ""}`];
+  if (st.limit?.quantity != null) parts.push(`limiet ${st.limit.quantity} stuks${st.limit.amount ? ` of ${st.limit.amount}` : ""} per maand`);
+  const waiting = limitUntil && new Date(limitUntil) > now;
+  if (waiting) parts.push(`nieuwe listings wachten tot ${new Date(limitUntil).toLocaleDateString("nl-BE", { day: "numeric", month: "long", timeZone: "UTC" })} (maandlimiet)`);
+  return {
+    id: "ebay",
+    label: "eBay",
+    status: st.live === 0 ? "warn" : "ok",
+    detail: parts.join(" · "),
+    ...(st.live === 0 ? { fix: "Nog niets live op eBay. De bot probeert opnieuw zodra de maandlimiet vrij is; vraag Claude om de laatste eBay-check als het dan nog niet lukt." } : {}),
+  };
 }

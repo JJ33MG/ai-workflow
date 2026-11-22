@@ -22,6 +22,7 @@ export const SCHEDULE: ScheduleEntry[] = [
   { cron: "15 * * * *", agentId: "etsy-pod", type: "sync_sales", label: "Elk uur om :15", staleAfterMin: 130 },
   { cron: "30 * * * *", agentId: "etsy-pod", type: "sync_shipments", label: "Elk uur om :30", staleAfterMin: 130 },
   { cron: "45 * * * *", agentId: "etsy-pod", type: "sync_listings", label: "Elk uur om :45", staleAfterMin: 130 },
+  { cron: "30 7 * * *", agentId: "ebay", type: "ebay_check", label: "Dagelijks om 07:30", staleAfterMin: 26 * 60 },
   { cron: "0 13 * * *", agentId: "ebay", type: "ebay_list", label: "Dagelijks om 13:00", staleAfterMin: 26 * 60 },
   { cron: "20 * * * *", agentId: "ebay", type: "ebay_orders", label: "Elk uur om :20", staleAfterMin: 130 },
   { cron: "40 * * * *", agentId: "ebay", type: "ebay_shipments", label: "Elk uur om :40", staleAfterMin: 130 },
