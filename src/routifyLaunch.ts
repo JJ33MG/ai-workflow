@@ -80,6 +80,7 @@ export const IDEAS: { title: string; detail: string }[] = [
   { title: "Nieuwsbrief: route van de week", detail: "Een mooie route met gems en kosten, met links die commissie opleveren." },
   { title: "Samenwerking met camperverhuurders", detail: "Routify als routeplanner bij een verhuurder (white label), met een vaste vergoeding." },
   { title: "Weer onderweg", detail: "Het weer per dag op de plek waar je die dag rijdt, met een seintje bij slecht weer." },
+  { title: "Eventtrips (Tour de France en meer)", detail: "Kant-en-klare trips rond evenementen: met de camper de etappes van de Tour de France volgen, met campings en mooie kijkpunten langs het parcours; daarna andere evenementen (festivals, kerstmarkten, F1, skiwedstrijden)." },
   { title: "App in de stores", detail: "Later een iOS- en Android-app; tot dan werkt Routify als app vanaf het beginscherm." },
 ];
 
