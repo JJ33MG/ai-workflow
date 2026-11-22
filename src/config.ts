@@ -69,6 +69,8 @@ export const config = {
     verificationToken: str("EBAY_VERIFICATION_TOKEN"),
     // New eBay sellers start with a limit (often about 10 items): list at most this many products.
     maxListings: num("EBAY_MAX_LISTINGS", 10),
+    /** New listings per run: a slow start lets a problem show before it uses up the month's limit. */
+    maxNewPerRun: num("EBAY_MAX_NEW_PER_RUN", 3),
     // Printful needs 2-5 working days to make an item; promising less earns late-shipment marks.
     handlingDays: num("EBAY_HANDLING_DAYS", 5),
     shippingCarrier: str("EBAY_SHIPPING_CARRIER", "USPS"),

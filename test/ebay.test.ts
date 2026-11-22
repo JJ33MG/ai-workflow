@@ -160,3 +160,14 @@ describe("fitting eBay's monthly item limit", () => {
     expect(order).toEqual(["mug2", "mug", "poster", "hoodie"]);
   });
 });
+
+import { isLive } from "../src/agents/ebay.js";
+
+describe("careful eBay start", () => {
+  it("counts a listing as live only when eBay reports it ACTIVE", () => {
+    expect(isLive([{ sku: "a", status: "PUBLISHED", listing: { listingId: "1", listingStatus: "ACTIVE" } }])).toBe(true);
+    expect(isLive([{ sku: "a", status: "PUBLISHED", listing: { listingId: "1", listingStatus: "ENDED" } }])).toBe(false);
+    expect(isLive([{ sku: "a", status: "UNPUBLISHED" }])).toBe(false);
+    expect(isLive([])).toBe(false);
+  });
+});

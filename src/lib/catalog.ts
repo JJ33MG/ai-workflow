@@ -7,7 +7,7 @@
 // here, then run reprice_listings to update the live listings.
 
 export type Ink = "dark" | "light";
-export type Layout = "mug-wrap" | "chest" | "center";
+export type Layout = "mug-wrap" | "chest" | "center" | "round";
 
 export interface ProductType {
   id: string;
@@ -187,6 +187,20 @@ export const PRODUCT_TYPES: ProductType[] = [
     // Only a real poster profile: "All over prints" in Printful's bags profile is clothing, not posters.
     shippingProfile: /poster/i,
     facts: "Museum-quality enhanced matte paper poster, frame not included, sizes 12x16, 18x24 or 24x36 inches.",
+    mockupColors: 1,
+  },
+  {
+    id: "ornament",
+    label: "Kerstbal (keramiek, rond)",
+    noun: "Christmas Ornament",
+    printfulProductId: 881,
+    printfulTitle: /ceramic ornament/i,
+    placements: ["default"],
+    layout: "round",
+    sizes: [{ printful: "Circle", label: "Round", priceCents: 1799 }],
+    etsyTaxonomy: ["Ornaments", "Christmas Ornaments", "Christmas Decorations"],
+    shippingProfile: /ornament/i,
+    facts: "Round glossy ceramic Christmas ornament, 2.76 inches (7 cm) across, printed on the front with a white back, gold-colored string included for hanging.",
     mockupColors: 1,
   },
 ];

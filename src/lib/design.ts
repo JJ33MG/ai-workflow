@@ -206,7 +206,7 @@ export function lightInk(svg: string): string {
 /** One print file for a product: the design laid out for its print area, in dark or light ink. */
 export async function renderPrintFile(
   svg: string,
-  layout: "mug-wrap" | "chest" | "center",
+  layout: "mug-wrap" | "chest" | "center" | "round",
   width: number,
   height: number,
   ink: "dark" | "light",
@@ -225,6 +225,8 @@ export async function renderPrintFile(
     }
     return placeContent(art, width, height, width * 0.85, height * 0.58, height * 0.06);
   }
+  // A round ornament: a square inside the circle is 71% of its width; keep a margin inside that.
+  if (layout === "round") return placeContent(art, width, height, width * 0.64, height * 0.64, "center");
   return placeContent(art, width, height, width * 0.8, height * 0.7, "center");
 }
 

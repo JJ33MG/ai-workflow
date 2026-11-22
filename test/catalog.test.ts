@@ -241,3 +241,41 @@ describe("short titles", () => {
     expect(acceptableTitle(old, "Personalized Woodturner Hoodie with Name – Handmade Gifts Turned by Name")).toBe(false);
   });
 });
+
+import sharp from "sharp";
+import { renderPrintFile } from "../src/lib/design.js";
+
+describe("round ornament", () => {
+  it("keeps the whole design inside the circle of a round ornament", async () => {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="0" y="0" width="100" height="100" fill="#000"/></svg>';
+    const png = await renderPrintFile(svg, "round", 1000, 1000, "dark");
+    const { data, info } = await sharp(png).raw().toBuffer({ resolveWithObject: true });
+    let outside = 0;
+    for (let y = 0; y < info.height; y++) {
+      for (let x = 0; x < info.width; x++) {
+        const a = data[(y * info.width + x) * info.channels + 3];
+        if (a > 0 && Math.hypot(x - 500, y - 500) > 470) outside++;
+      }
+    }
+    expect(outside).toBe(0);
+  });
+
+  it("offers the ceramic ornament (circle) at a price that leaves a profit", () => {
+    const t = productType("ornament")!;
+    expect(t.printfulProductId).toBe(881);
+    expect(t.layout).toBe("round");
+    expect(t.sizes).toEqual([{ printful: "Circle", label: "Round", priceCents: 1799 }]);
+  });
+});
+
+import { chooseProducts } from "../src/agents/etsyPod.js";
+
+describe("Christmas ornaments in season", () => {
+  const offers = ["mug", "tshirt", "hoodie", "ornament", "poster"].map((product) => ({ product }));
+  it("puts an ornament first in November and December", () => {
+    expect(chooseProducts(offers, 3, undefined, new Date("2026-11-22")).map((x) => x.product)).toEqual(["ornament", "hoodie", "tshirt"]);
+  });
+  it("keeps ornaments behind clothing the rest of the year", () => {
+    expect(chooseProducts(offers, 3, undefined, new Date("2027-03-01")).map((x) => x.product)).toEqual(["hoodie", "tshirt", "ornament"]);
+  });
+});

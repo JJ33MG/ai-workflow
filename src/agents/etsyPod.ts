@@ -180,9 +180,12 @@ const APPAREL = ["hoodie", "sweatshirt", "tshirt"];
  * Which proposed products of one design are made: apparel first, then the rest, at most one mug, and no mug
  * at all while the shop already has far more mugs than apparel (the mix buyers browse should not be all mugs).
  */
-export function chooseProducts<T extends { product: string }>(listings: T[], perDesign: number, mix?: { mugs: number; apparel: number }): T[] {
+export function chooseProducts<T extends { product: string }>(listings: T[], perDesign: number, mix?: { mugs: number; apparel: number }, now = new Date()): T[] {
   const tooManyMugs = mix ? mix.mugs > 2 * Math.max(1, mix.apparel) : false;
-  const rank = (p: string) => (APPAREL.includes(p) ? APPAREL.indexOf(p) : MUGS.has(p) ? 100 : 50);
+  // November and December: a Christmas ornament sells before anything else.
+  const ornamentSeason = now.getUTCMonth() >= 10;
+  const rank = (p: string) =>
+    p === "ornament" && ornamentSeason ? -1 : APPAREL.includes(p) ? APPAREL.indexOf(p) : MUGS.has(p) ? 100 : 50;
   const out: T[] = [];
   let mug = false;
   for (const x of [...listings].sort((a, b) => rank(a.product) - rank(b.product))) {

@@ -40,6 +40,9 @@ export const isSellingLimit = (err: unknown) => err instanceof ebay.EbayError &&
 /** Midnight UTC on the first day of the next month (eBay's limits are per calendar month). */
 export const nextMonthStart = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1));
 
+/** True when eBay shows the listing as ACTIVE (published offers can still be held back). */
+export const isLive = (offers: ebay.OfferInfo[]) => offers.some((o) => o.status === "PUBLISHED" && o.listing?.listingStatus === "ACTIVE");
+
 /** What eBay holds for the account: offers per status, and listing ids per listing state. */
 export function summarizeOffers(offers: ebay.OfferInfo[]) {
   const byStatus: Record<string, number> = {};
@@ -250,7 +253,7 @@ async function list(_payload: Record<string, unknown>, { log, taskId }: TaskCont
         orderBy: [{ favorites: "desc" }, { createdAt: "desc" }],
       })
     : [];
-  const candidates = byFewestItems(pool).slice(0, Math.max(0, room));
+  const candidates = byFewestItems(pool).slice(0, Math.max(0, Math.min(room, config.ebay.maxNewPerRun)));
 
   const added: string[] = [];
   for (const listing of candidates) {
@@ -299,6 +302,13 @@ async function list(_payload: Record<string, unknown>, { log, taskId }: TaskCont
         ebayListingId = await ebay.publishGroup(groupKey);
       } else {
         ebayListingId = await ebay.publishOffer(offerIds[0]);
+      }
+      // eBay can accept a publish and still hold the listing back: check it is really live before going on.
+      if (!isLive(await ebay.offersForSku(Object.keys(skus)[0]).catch(() => []))) {
+        const until = nextMonthStart(new Date()).toISOString();
+        await setSetting(LIMIT_KEY, until);
+        await log.warn(`eBay nam ${title} aan maar zet hem niet live (listing ${ebayListingId}): nieuwe listings stoppen tot ${until.slice(0, 10)}. Kijk in Seller Hub bij Inactive waarom.`, undefined, taskId);
+        break;
       }
       refs[listing.id] = { groupKey, offerIds, ebayListingId, skus };
       await setSetting(LISTINGS_KEY, refs);
