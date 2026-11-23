@@ -9,7 +9,9 @@ import * as etsy from "../integrations/etsy.js";
 import * as meta from "../integrations/meta.js";
 import * as pinterest from "../integrations/pinterest.js";
 import { registerApprovalExecutor, requestApproval } from "../lib/approvals.js";
+import { BudgetExceededError } from "../lib/budget.js";
 import { askJson } from "../lib/claude.js";
+import { SEARCH_PATTERNS, cleanSeo, seoBatches } from "../lib/seo.js";
 import {
   MEASURE_AFTER_DAYS,
   addCampaign,
@@ -232,7 +234,8 @@ async function runPlay(payload: Record<string, unknown>, { log, taskId }: TaskCo
         "You improve Etsy search visibility for print-on-demand gift mugs. For each listing write a new title and exactly 13 tags. " +
         "Title: at most 140 characters, the main search phrase a buyer types first, then gift occasion and recipient, natural and readable, " +
         "no keyword lists, no repeated words, no ALL CAPS, no trademarks. Tags: 13, each at most 20 characters, multi-word phrases buyers search, " +
-        "no repeats of each other, no trademarks. Keep it truthful to the product. Write in the language of the current title.",
+        "no repeats of each other, no trademarks. Keep it truthful to the product. Write in the language of the current title. " +
+        `How buyers search on Etsy:\n- ${SEARCH_PATTERNS.join("\n- ")}`,
       prompt: `${await campaignBrief(play.businessId)}\nIf a campaign runs, work its seasonal search terms into titles and tags where they fit.\n\nListings with the weakest signal (current title, tags, niche):\n${JSON.stringify(
         targets.map((t) => ({ etsyListingId: t.etsyListingId, title: t.title, tags: t.tags, niche: t.niche })),
       )}`,
@@ -278,6 +281,95 @@ async function runPlay(payload: Record<string, unknown>, { log, taskId }: TaskCo
 // ---------- measuring ----------
 
 /** Measures SEO plays after MEASURE_AFTER_DAYS. Worse than the control: the old titles and tags go back. */
+const SEO_DONE = "seo.v2.done";
+const SEO_PREVIOUS = "seo.v2.previous";
+const SEO_BATCH = 10;
+const SEO_BATCHES_PER_RUN = 4;
+
+/**
+ * Rewrites the title and 13 tags of every live Etsy listing around what buyers actually type
+ * (SEARCH_PATTERNS). Runs in rounds of 40 listings, remembers what is done (safe to re-run) and
+ * keeps the old title and tags so they can be put back.
+ */
+async function seoRewriteAll(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
+  if (config.dryRun || !etsy.isEtsyConfigured() || !(await etsy.isEtsyConnected())) return { skipped: "dry run of Etsy niet gekoppeld" };
+  const rows = await db.listing.findMany({ where: { status: "active", etsyListingId: { not: null } }, orderBy: { createdAt: "desc" } });
+  const done = new Set((await getSetting<string[]>(SEO_DONE)) ?? []);
+  const previous = (await getSetting<Record<string, { title: string; tags: string[] }>>(SEO_PREVIOUS)) ?? {};
+  const batches = seoBatches(rows.map((r) => r.id), done, SEO_BATCH, SEO_BATCHES_PER_RUN);
+  if (!batches.length) return { done: done.size };
+
+  // Running A/B SEO plays would put their old titles back over this rewrite: end them first.
+  await db.marketingPlay.updateMany({
+    where: { tactic: "etsy_seo_refresh", status: "running" },
+    data: { status: "skipped", note: "Vervangen door de volledige SEO-herschrijving" },
+  });
+
+  let changed = 0;
+  for (const batch of batches) {
+    const items = batch.map((id) => rows.find((r) => r.id === id)!);
+    let result;
+    try {
+      result = await askJson({
+        agentId: ID,
+        purpose: "marketing_seo_rewrite",
+        effort: "medium",
+        schema: SeoSchema,
+        system:
+          "You rewrite Etsy titles and tags so print-on-demand gifts show up in Etsy search. The shop sells funny and personalized " +
+          "gifts for specific jobs and hobbies (mugs, t-shirts, hoodies, sweatshirts, tote bags, posters, Christmas ornaments, printable downloads).\n" +
+          `How buyers search on Etsy:\n- ${SEARCH_PATTERNS.join("\n- ")}\n\n` +
+          "Title (at most 140 characters, aim for 70-110): start with the phrase a buyer types, '<Job> Gift' or '<Job> Christmas Gift', " +
+          "then the product type, then who it is for (for men, for her, for coworker) or 'Personalized with Name' when the listing is personalized. " +
+          "Put the slogan last and short, or leave it out. Natural and readable, comma-separated phrases, no keyword stuffing, no word more than twice, " +
+          "no ALL CAPS, no trademarks, no claims that are not true. English.\n" +
+          "Tags: exactly 13, each at most 20 characters including spaces, multi-word phrases buyers type, all different: the job + gift, " +
+          "job + product type, job + christmas, gift for + job, recipient phrases (for men / for her / coworker), the product type + funny, " +
+          "personalized phrases only for personalized listings, retirement or graduation only when the design is about it. No single generic words, no trademarks.",
+        prompt: `Rewrite these listings (keep each etsyListingId):\n${JSON.stringify(
+          items.map((r) => ({
+            etsyListingId: r.etsyListingId,
+            title: r.title,
+            tags: r.tags,
+            niche: r.niche,
+            product: r.productType,
+            personalized: r.personalized,
+            about: r.description.slice(0, 300),
+          })),
+        )}`,
+      });
+    } catch (err) {
+      if (err instanceof BudgetExceededError) {
+        await enqueue(ID, "seo_rewrite_all", {}, { runAfter: new Date(Date.now() + 6 * 60 * 60 * 1000) });
+        await log.info(`SEO-herschrijving gepauzeerd: dagbudget op. ${done.size} van ${rows.length} klaar; gaat later verder.`, undefined, taskId);
+        return { paused: "budget", done: done.size };
+      }
+      throw err;
+    }
+    for (const r of items) {
+      const next = result.listings.find((l) => l.etsyListingId === r.etsyListingId);
+      const clean = next && cleanSeo(next.title, next.tags);
+      if (!clean) continue;
+      await etsy.updateListingSeo(r.etsyListingId!, clean.title, clean.tags);
+      previous[r.id] ??= { title: r.title, tags: r.tags };
+      await db.listing.update({ where: { id: r.id }, data: { title: clean.title, tags: clean.tags } });
+      done.add(r.id);
+      changed++;
+    }
+    await setSetting(SEO_PREVIOUS, previous);
+    await setSetting(SEO_DONE, [...done]);
+  }
+
+  const left = rows.filter((r) => !done.has(r.id)).length;
+  if (left > 0 && changed > 0) await enqueue(ID, "seo_rewrite_all", {}, { runAfter: new Date(Date.now() + 10 * 60 * 1000) });
+  await log.info(
+    `SEO herschreven: ${changed} listing(s) deze ronde, ${done.size} van ${rows.length} klaar${left ? `, nog ${left} te gaan` : ", alles klaar"}.`,
+    undefined,
+    taskId,
+  );
+  return { changed, done: done.size, left };
+}
+
 async function measurePlays(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
   const due = await db.marketingPlay.findMany({
     where: { tactic: "etsy_seo_refresh", status: "running", startedAt: { lt: new Date(Date.now() - MEASURE_AFTER_DAYS * DAY) } },
@@ -524,6 +616,7 @@ export const marketingAgent: AgentDefinition = {
     measure_plays: "Marketingacties na 14 dagen meten tegen de rest; wat slechter doet wordt teruggedraaid",
     pinterest_pins: "Elke dag een paar live Etsy-listings pinnen op Pinterest, met een link naar de listing (gratis)",
     meta_posts: "Elke dag een post op Facebook en Instagram over een live Etsy-listing (gratis)",
+    seo_rewrite_all: "Alle Etsy-titels en tags herschrijven naar hoe kopers zoeken ('<beroep> gifts', 'for men', 'christmas sweatshirt'), in rondes van 40",
   },
-  handlers: { marketing_review: marketingReview, run_play: runPlay, measure_plays: measurePlays, pinterest_pins: pinterestPins, meta_posts: metaPosts },
+  handlers: { marketing_review: marketingReview, run_play: runPlay, measure_plays: measurePlays, pinterest_pins: pinterestPins, meta_posts: metaPosts, seo_rewrite_all: seoRewriteAll },
 };
