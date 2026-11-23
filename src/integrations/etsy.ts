@@ -410,8 +410,14 @@ export interface ShippingProfileFull {
 export const getShippingProfileFull = async (profileId: number) =>
   etsy<ShippingProfileFull>("GET", `/shops/${await shopId()}/shipping-profiles/${profileId}`);
 
+/** Riga (Printful's Latvian facility) and Charlotte NC (its US one): Etsy wants a postal code that fits the country. */
+const ORIGIN_POSTAL: Record<string, string> = { LV: "LV-1045", US: "28273" };
+
 export async function setShippingOrigin(profileId: number, originCountryIso: string): Promise<void> {
-  await etsy("PUT", `/shops/${await shopId()}/shipping-profiles/${profileId}`, { origin_country_iso: originCountryIso });
+  await etsy("PUT", `/shops/${await shopId()}/shipping-profiles/${profileId}`, {
+    origin_country_iso: originCountryIso,
+    origin_postal_code: ORIGIN_POSTAL[originCountryIso] ?? "",
+  });
 }
 
 /** Delivery days of one destination; the prices stay as they are. */
