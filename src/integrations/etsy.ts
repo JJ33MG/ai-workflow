@@ -8,7 +8,7 @@ const API = "https://openapi.etsy.com/v3/application";
 const TOKEN_URL = "https://api.etsy.com/v3/public/oauth/token";
 // shops_r: /users/me, the shop, its shipping profiles, return policies and production partners.
 // transactions_w: marking orders shipped with Printful's tracking number.
-const SCOPES = ["shops_r", "listings_r", "listings_w", "transactions_r", "transactions_w"];
+const SCOPES = ["shops_r", "shops_w", "listings_r", "listings_w", "transactions_r", "transactions_w"];
 const TOKEN_KEY = "etsy.oauth.token";
 const PENDING_KEY = "etsy.oauth.pending";
 
