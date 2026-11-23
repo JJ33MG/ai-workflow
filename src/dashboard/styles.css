@@ -1836,3 +1836,9 @@ svg.map .dim {
 .launch-steps li {
   margin: 2px 0;
 }
+
+/* Scout's ideas */
+.idea-card p { margin: 0.35rem 0; }
+.idea-sources { margin: 0.35rem 0; padding-left: 1.1rem; font-size: 0.9em; }
+.idea-sources a { overflow-wrap: anywhere; }
+.idea-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.6rem; }

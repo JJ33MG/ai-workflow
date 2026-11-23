@@ -119,6 +119,25 @@ app.post("/api/routify/launch/:id", requireAdmin, async (req, res) => {
   res.json({ message: status === "done" ? `Afgevinkt: ${item.title}` : `Bijgewerkt: ${item.title}` });
 });
 
+app.post("/api/ideas/:id/:vote", requireAdmin, async (req, res) => {
+  const { id, vote } = req.params as { id: string; vote: string };
+  if (!["build", "later", "no", "done", "new"].includes(vote)) {
+    res.status(400).json({ error: "stem moet build, later, no, done of new zijn" });
+    return;
+  }
+  const feedback = String((req.body as { feedback?: string }).feedback ?? "").trim().slice(0, 300);
+  const idea = await db.idea.findUnique({ where: { id } });
+  if (!idea) {
+    res.status(404).json({ error: "Idee niet gevonden" });
+    return;
+  }
+  await db.idea.update({
+    where: { id },
+    data: { status: vote, decidedAt: vote === "new" ? null : new Date(), ...(feedback ? { feedback } : {}) },
+  });
+  res.json({ message: `Bijgewerkt: ${idea.title}` });
+});
+
 app.post("/api/plan/:id", requireAdmin, async (req, res) => {
   const status = String((req.body as { status?: string }).status ?? "");
   if (!["done", "doing", "todo"].includes(status)) {

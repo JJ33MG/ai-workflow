@@ -293,6 +293,7 @@ export async function buildDashboard(now = new Date()) {
     getSetting<Record<string, LaunchStatus>>(LAUNCH_KEY),
   ]);
   const routify = { stats: routifyStats, ...launchView(routifyStats, launchTicks ?? {}) };
+  const ideas = await db.idea.findMany({ orderBy: { createdAt: "desc" }, take: 60 });
 
   return {
     generatedAt: now,
@@ -300,6 +301,7 @@ export async function buildDashboard(now = new Date()) {
     brain,
     plan,
     routify,
+    ideas,
     timezone: config.timezone,
     serverStartedAt: schedulerState.startedAt,
     overall,

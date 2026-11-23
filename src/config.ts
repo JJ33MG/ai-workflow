@@ -124,6 +124,9 @@ export const config = {
     reviewModel: str("KDP_REVIEW_MODEL", "claude-sonnet-5-5"),
   },
 
+  scout: {
+    ideasPerDay: num("SCOUT_IDEAS_PER_DAY", 3),
+  },
   pod: {
     priceCents: Math.round(num("POD_PRICE", 21.99) * 100), // 11 oz mug
     currency: str("POD_CURRENCY", "EUR"),

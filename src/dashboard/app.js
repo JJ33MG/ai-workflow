@@ -6,6 +6,7 @@ import { renderBusinesses } from "./js/businesses.js";
 import { initChat, renderChat } from "./js/chat.js";
 import { $, api, openSection, state, toast } from "./js/core.js";
 import { renderHandbook } from "./js/handbook.js";
+import { renderIdeas } from "./js/ideas.js";
 import { renderOverview } from "./js/overview.js";
 import { renderPlan } from "./js/plan.js";
 import { renderRoutify } from "./js/routify.js";
@@ -50,6 +51,7 @@ function render() {
   renderOverview(d);
   renderPlan(d);
   renderRoutify(d);
+  renderIdeas(d);
   renderHandbook(d);
   renderAgents(d);
   renderProblems(d);

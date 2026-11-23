@@ -182,3 +182,52 @@ export async function chatWithTools(opts: {
 }
 
 export const isClaudeConfigured = () => Boolean(process.env.ANTHROPIC_API_KEY);
+
+export interface ResearchResult {
+  text: string;
+  sources: { url: string; title: string }[];
+}
+
+/** Web search costs USD 10 per 1,000 searches on top of tokens. */
+const SEARCH_USD_CENTS = 1;
+
+/**
+ * Lets Claude search the web (server-side tool) and write research notes, keeping the sources it found.
+ * Enforces the daily budget and records the cost (tokens plus searches).
+ */
+export async function askResearch(opts: AskOptions & { maxSearches?: number }): Promise<ResearchResult> {
+  await assertApiBudget();
+  const messages: Anthropic.MessageParam[] = [{ role: "user", content: userContent(opts) }];
+  const sources = new Map<string, string>();
+  let text = "";
+  // A long search turn can pause; continue it a few times at most.
+  for (let round = 0; round < 3; round++) {
+    const response = await getClient().messages.create({
+      model: opts.model ?? config.claude.model,
+      max_tokens: opts.maxTokens ?? 16000,
+      system: opts.system,
+      output_config: { effort: opts.effort ?? "medium" },
+      tools: [{ type: "web_search_20260209", name: "web_search", max_uses: opts.maxSearches ?? 6 }],
+      messages,
+    });
+    const searches = response.usage.server_tool_use?.web_search_requests ?? 0;
+    await recordCost({
+      agentId: opts.agentId,
+      category: "claude_api",
+      amountCents: usageCostUsdCents(response.model, response.usage) + searches * SEARCH_USD_CENTS,
+      currency: "USD",
+      note: opts.purpose,
+      data: { model: response.model, usage: response.usage, searches },
+    });
+    for (const block of response.content) {
+      if (block.type === "text") text += block.text;
+      if (block.type === "web_search_tool_result" && Array.isArray(block.content)) {
+        for (const r of block.content) if (r.type === "web_search_result") sources.set(r.url, r.title);
+      }
+    }
+    if (response.stop_reason === "refusal") throw new Error(`Claude declined the request (${opts.purpose})`);
+    if (response.stop_reason !== "pause_turn") break;
+    messages.push({ role: "assistant", content: response.content });
+  }
+  return { text: text.trim(), sources: [...sources].map(([url, title]) => ({ url, title })) };
+}

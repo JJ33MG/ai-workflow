@@ -3,6 +3,7 @@ import { agents } from "./agents/index.js";
 import { db } from "./db.js";
 import { decide, decideAll } from "./lib/approvals.js";
 import { approvalButtons, notify } from "./lib/telegram.js";
+import { decideIdea, ideaFeedback } from "./lib/ideaVotes.js";
 import { enqueue } from "./lib/tasks.js";
 
 const HELP = [
@@ -14,6 +15,8 @@ const HELP = [
   "/brief — stuur de ochtendbriefing nu",
   "/run <agent> <taak> — start een taak, bv. /run etsy-pod create_listings",
   "/pause <agent> · /resume <agent> — agent pauzeren of hervatten",
+  "/idee <onderwerp> — Scout denkt erover na en geeft 3 ideeën",
+  "/waarom <reden> — vertel Scout waarom je je laatste idee koos of afwees",
 ].join("\n");
 
 /** Telegram commands. Replies are plain text. */
@@ -45,6 +48,18 @@ export async function handleCommand(command: string, args: string[]): Promise<st
       // Only listings in bulk: money decisions like Printful orders stay one by one.
       if (command === "approve" && ["alles", "all"].includes(args[0].toLowerCase())) return decideAll("etsy_publish");
       return decide(args[0], command === "approve");
+    case "idea_build":
+    case "idea_later":
+    case "idea_no":
+      return decideIdea(args[0], command.slice(5) as "build" | "later" | "no");
+    case "waarom":
+      return ideaFeedback(args.join(" "));
+    case "idee": {
+      const topic = args.join(" ").trim();
+      if (!topic) return "Gebruik: /idee <onderwerp>, bv. /idee iets voor januari";
+      await enqueue("scout", "think_about", { topic }, { maxAttempts: 2 });
+      return "Scout zoekt het uit; je krijgt 3 ideeën binnen een paar minuten.";
+    }
     case "run": {
       const [agentId, type] = args;
       if (!agents.get(agentId)?.handlers[type]) return `Onbekende taak.\n${HELP}`;

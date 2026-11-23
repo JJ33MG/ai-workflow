@@ -247,3 +247,28 @@ model SocialPost {
   @@unique([platform, refId])
   @@index([businessId, createdAt])
 }
+
+/// Scout's ideas: new businesses, ways to earn more, Brain improvements and trends, with Jarne's vote.
+model Idea {
+  id         String    @id @default(cuid())
+  kind       String // new_business | grow | brain | trend
+  title      String
+  summary    String
+  whyNow     String
+  money      String
+  cost       String
+  effort     String
+  firstStep  String
+  risks      String
+  outsideBox Boolean   @default(false)
+  sources    Json      @default("[]")
+  /// daily | weekly | topic
+  origin     String    @default("daily")
+  /// new | build | later | no | done
+  status     String    @default("new")
+  feedback   String?
+  decidedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([status, createdAt])
+}

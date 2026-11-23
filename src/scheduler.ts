@@ -26,6 +26,8 @@ export const SCHEDULE: ScheduleEntry[] = [
   { cron: "0 13 * * *", agentId: "ebay", type: "ebay_list", label: "Dagelijks om 13:00", staleAfterMin: 26 * 60 },
   { cron: "20 * * * *", agentId: "ebay", type: "ebay_orders", label: "Elk uur om :20", staleAfterMin: 130 },
   { cron: "40 * * * *", agentId: "ebay", type: "ebay_shipments", label: "Elk uur om :40", staleAfterMin: 130 },
+  { cron: "0 8 * * *", agentId: "scout", type: "daily_ideas", label: "Dagelijks om 08:00", staleAfterMin: 26 * 60 },
+  { cron: "0 9 * * 0", agentId: "scout", type: "weekly_review", label: "Elke zondag om 09:00", staleAfterMin: 8 * 24 * 60 },
   { cron: "10 8 * * *", agentId: "routify", type: "sync_stats", label: "Dagelijks om 08:10", staleAfterMin: 26 * 60 },
   { cron: "0 9 * * 1", agentId: "marketing", type: "marketing_review", label: "Elke maandag om 09:00", staleAfterMin: 8 * 24 * 60 },
   { cron: "0 18 * * *", agentId: "marketing", type: "pinterest_pins", label: "Dagelijks om 18:00", staleAfterMin: 26 * 60 },

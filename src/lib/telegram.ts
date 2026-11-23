@@ -24,10 +24,12 @@ export function approvalButtons(id: string, kind: string): Button[][] {
   return rows;
 }
 
-/** A tapped button back into a command; only approve and reject are buttons. */
-export function parseButton(data: string | undefined): { command: "approve" | "reject"; args: string[] } | null {
-  const m = /^(approve|reject):([A-Za-z0-9_-]{1,64})$/.exec(data ?? "");
-  return m ? { command: m[1] as "approve" | "reject", args: [m[2]] } : null;
+type ButtonCommand = "approve" | "reject" | "idea_build" | "idea_later" | "idea_no";
+
+/** A tapped button back into a command: approvals and Scout's idea votes. */
+export function parseButton(data: string | undefined): { command: ButtonCommand; args: string[] } | null {
+  const m = /^(approve|reject|idea_build|idea_later|idea_no):([A-Za-z0-9_-]{1,64})$/.exec(data ?? "");
+  return m ? { command: m[1] as ButtonCommand, args: [m[2]] } : null;
 }
 
 /** Sends to Jarne's chat, optionally with buttons under the (last) message. Without a bot token it prints to stdout. */
