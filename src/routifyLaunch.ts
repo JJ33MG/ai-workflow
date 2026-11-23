@@ -66,6 +66,8 @@ export const LAUNCH: LaunchItem[] = [
     doneWhen: (s) => s.setup?.adminEmails === true },
   { id: "j-legal", stage: "soft", owner: "jarne", status: "todo", title: "Bedrijfsgegevens voor /privacy en /terms", detail: "Stuur Claude: bedrijfsnaam, adres, contact-e-mail, land, ondernemingsnummer, btw-nummer (als je dat hebt).",
     link: "https://routify-preview-production.up.railway.app/privacy" },
+  { id: "j-tax", stage: "soft", owner: "jarne", status: "todo", title: "Bedrijfsvorm en belasting met een boekhouder", detail: "Je bent Belg en woont in Praag: vraag een boekhouder waar je Routify registreert (Tsjechische živnost of Belgische zaak), hoe btw werkt op Plus en Trip pass in de EU (OSS) en hoe affiliate-inkomsten belast worden. Daarna krijg je een ondernemingsnummer voor /terms en Stripe.",
+    steps: ["Zoek een boekhouder in Praag die Engels spreekt en met freelancers/online verkoop werkt.", "Vraag: welke vorm (živnost of Belgische eenmanszaak), btw-registratie en OSS, en wat je per maand moet bijhouden.", "Stuur Claude daarna het ondernemingsnummer en adres; dat komt in /privacy, /terms en Stripe."] },
   { id: "j-domain", stage: "soft", owner: "jarne", status: "todo", title: "Domeinnaam kopen", detail: "Bijvoorbeeld routify.eu of routify.app (kijk of hij vrij is). Claude koppelt hem aan Railway.",
     link: "https://www.namecheap.com/" },
   { id: "j-stripe", stage: "soft", owner: "jarne", status: "todo", title: "Stripe-verificatie afronden", detail: "Maak in Stripe twee prijzen voor Plus (€9 per maand en €59 per jaar) en een webhook naar /api/stripe/webhook. Zet STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_ID en STRIPE_PRICE_ID_YEARLY in Railway.",

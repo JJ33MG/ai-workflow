@@ -385,6 +385,7 @@ export const PLAN: PlanItem[] = [
   { id: "etsy-shop", phase: "Etsy-winkel", title: "Etsy-winkel geopend en goedgekeurd", detail: "Etsy controleert je identiteit; dat loopt.", owner: "jarne", status: "doing", node: "svc:etsy" },
   { id: "printful-etsy", phase: "Etsy-winkel", title: "Printful gekoppeld aan Etsy", detail: "Printful → Stores → Connect → Etsy.", owner: "jarne", status: "todo" },
   { id: "etsy-live", phase: "Etsy-winkel", title: "Mokken live op Etsy", detail: "Sjablonen naar je winkel zetten met de teksten uit listings.md.", owner: "jarne", status: "todo", node: "biz:etsy-pod" },
+  { id: "ebay-bank", phase: "Etsy-winkel", title: "eBay-bankrekening bevestigen (penny test)", detail: "eBay stortte 0,01 EUR met omschrijving EBAY-PENNY-TEST. Open eBay zelf (niet via een mail) → Seller Hub → Payments; vraagt eBay om te bevestigen, vul het bedrag of de code in. Zie je niets, dan is het al gebeurd. Nooit geld terugstorten.", owner: "jarne", status: "todo" },
   { id: "sample", phase: "Etsy-winkel", title: "Proefmok bestellen (aanrader)", detail: "Echte printkwaliteit zien en eigen foto's maken.", owner: "jarne", status: "todo" },
   { id: "telegram", phase: "Fundament", title: "Telegram-bot aanmaken", detail: "Voor de ochtendbriefing en meldingen op je telefoon.", owner: "jarne", status: "todo", node: "svc:telegram" },
   { id: "online", phase: "Fundament", title: "Systeem online zetten (Railway)", detail: "Agents werken 24/7 en het dashboard is altijd bereikbaar, ook op je telefoon.", owner: "jarne", status: "todo", node: "svc:server" },
