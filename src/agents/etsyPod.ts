@@ -10,7 +10,7 @@ import { registerApprovalExecutor, requestApproval } from "../lib/approvals.js";
 import { recordCost } from "../lib/budget.js";
 import { askJson, askText } from "../lib/claude.js";
 import { PRINTABLE, buildInventory, productType, skuFor, variantFromSku } from "../lib/catalog.js";
-import { catalogEntry, enabledTypes, findCatalog, type CatalogEntry, type CatalogVariant } from "../lib/catalogSetup.js";
+import { catalogEntry, enabledTypes, findCatalog, getCatalog, type CatalogEntry, type CatalogVariant } from "../lib/catalogSetup.js";
 import { DesignLayoutError, designUrl, designsDir, getPrintSize, prepareDesign, renderPrintFile, renderPrintable, sanitizeSvg, saveDesign, sideSize } from "../lib/design.js";
 import { startOfDay, toEurCents } from "../lib/money.js";
 import { findEtsySetup, mostUsedId, saveReturnPolicy } from "../lib/etsySetup.js";
@@ -32,6 +32,7 @@ import {
   personalizationCard,
   templateProblems,
 } from "../lib/personalize.js";
+import { deliveryDays, profileOrigin } from "../lib/euShipping.js";
 import { STYLE_BRIEFS, STYLES, batchStyles, designRulesFor, type DesignStyle } from "../lib/designStyles.js";
 import { enqueue, enqueueOnce } from "../lib/tasks.js";
 import type { AgentDefinition, TaskContext } from "./types.js";
@@ -1323,6 +1324,39 @@ async function addAiDisclosure(_payload: Record<string, unknown>, { log, taskId 
   return { added, checked: listings.length };
 }
 
+const EU_SHIPPING_BEFORE = "etsy.shipping.before";
+
+/**
+ * Ships from Europe where Printful prints every product of a shipping profile in Europe (Latvia/Spain):
+ * origin Latvia and honest delivery days per destination, so European buyers no longer see
+ * "ships from United States, Dec 7-30". Prices stay the same. The old state is kept for undo.
+ */
+async function euShipping(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
+  if (config.dryRun) return { skipped: "dry run" };
+  const byProfile = new Map<number, string[]>();
+  for (const c of getCatalog()) {
+    if (!c.shippingProfileId) continue;
+    byProfile.set(c.shippingProfileId, [...(byProfile.get(c.shippingProfileId) ?? []), c.typeId]);
+  }
+  const before = (await getSetting<Record<string, unknown>>(EU_SHIPPING_BEFORE)) ?? {};
+  const lines: string[] = [];
+  for (const [profileId, types] of byProfile) {
+    const origin = profileOrigin(types);
+    if (!origin) continue;
+    const p = await etsy.getShippingProfileFull(profileId);
+    before[String(profileId)] ??= { origin: p.origin_country_iso, destinations: p.shipping_profile_destinations.map((d) => ({ id: d.shipping_profile_destination_id, min: d.min_delivery_days, max: d.max_delivery_days })) };
+    await setSetting(EU_SHIPPING_BEFORE, before);
+    if (p.origin_country_iso !== origin) await etsy.setShippingOrigin(profileId, origin);
+    for (const d of p.shipping_profile_destinations) {
+      const [min, max] = deliveryDays(d, origin);
+      if (d.min_delivery_days !== min || d.max_delivery_days !== max) await etsy.setDestinationDays(profileId, d, min, max);
+    }
+    lines.push(`${p.title} (${types.join(", ")}): verzendt vanuit ${origin === "LV" ? "Europa (Letland)" : "de VS"}`);
+  }
+  await log.info(`Verzendprofielen bijgewerkt:\n${lines.join("\n")}`, undefined, taskId);
+  return { profiles: lines.length };
+}
+
 async function etsySetup(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
   if (!etsy.isEtsyConfigured() || !(await etsy.isEtsyConnected())) return { skipped: "etsy not connected" };
   const s = await findEtsySetup();
@@ -1612,6 +1646,7 @@ export const etsyPodAgent: AgentDefinition = {
     sync_sales: "Nieuwe betaalde Etsy-bestellingen ophalen als verkopen",
     sync_listings: "Alle actieve listings van je Etsy-winkel ophalen, ook die je met de hand plaatste",
     printful_setup: "Bij Printful de API-winkel, de 11 oz mok en de exacte printmaat opzoeken en opslaan",
+    eu_shipping: "Verzendprofielen naar Europa (Letland) zetten waar Printful alles in Europa drukt, met eerlijke levertijden per land (prijzen blijven gelijk)",
     etsy_setup: "Bij Etsy de munt, het verzendprofiel, het retourbeleid, de categorie Mokken en de productiepartner opzoeken",
     add_photos: "Listings op Etsy met te weinig mokfoto's aanvullen met Printful-foto's",
     retitle_listings: "Lange titels van alle live listings inkorten tot korte, directe titels (oude titels worden bewaard)",
@@ -1634,6 +1669,7 @@ export const etsyPodAgent: AgentDefinition = {
     sync_listings: syncListings,
     printful_setup: printfulSetup,
     etsy_setup: etsySetup,
+    eu_shipping: euShipping,
     fulfil_receipt: fulfilReceipt,
     add_photos: addPhotos,
     fix_return_policy: fixReturnPolicy,

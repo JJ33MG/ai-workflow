@@ -395,6 +395,40 @@ export function shippingCostFor(destinations: ShippingDestination[], country: st
   return pick ? moneyToCents(pick.primary_cost) : null;
 }
 
+/** A shipping profile with its origin and each destination's id and delivery days. */
+export interface ShippingProfileFull {
+  shipping_profile_id: number;
+  title: string;
+  origin_country_iso: string;
+  shipping_profile_destinations: (ShippingDestination & {
+    shipping_profile_destination_id: number;
+    min_delivery_days: number | null;
+    max_delivery_days: number | null;
+  })[];
+}
+
+export const getShippingProfileFull = async (profileId: number) =>
+  etsy<ShippingProfileFull>("GET", `/shops/${await shopId()}/shipping-profiles/${profileId}`);
+
+export async function setShippingOrigin(profileId: number, originCountryIso: string): Promise<void> {
+  await etsy("PUT", `/shops/${await shopId()}/shipping-profiles/${profileId}`, { origin_country_iso: originCountryIso });
+}
+
+/** Delivery days of one destination; the prices stay as they are. */
+export async function setDestinationDays(
+  profileId: number,
+  d: ShippingProfileFull["shipping_profile_destinations"][number],
+  minDays: number,
+  maxDays: number,
+): Promise<void> {
+  await etsy("PUT", `/shops/${await shopId()}/shipping-profiles/${profileId}/destinations/${d.shipping_profile_destination_id}`, {
+    primary_cost: d.primary_cost.amount / d.primary_cost.divisor,
+    secondary_cost: d.secondary_cost.amount / d.secondary_cost.divisor,
+    min_delivery_days: minDays,
+    max_delivery_days: maxDays,
+  });
+}
+
 export const getReturnPolicies = async () =>
   (await etsy<{ results: { return_policy_id: number; accepts_returns: boolean; accepts_exchanges: boolean }[] }>(
     "GET",
