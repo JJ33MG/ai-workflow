@@ -32,6 +32,7 @@ import {
   personalizationCard,
   templateProblems,
 } from "../lib/personalize.js";
+import { STYLE_BRIEFS, STYLES, batchStyles, designRulesFor, type DesignStyle } from "../lib/designStyles.js";
 import { enqueue, enqueueOnce } from "../lib/tasks.js";
 import type { AgentDefinition, TaskContext } from "./types.js";
 
@@ -54,6 +55,8 @@ const IdeasSchema = z.object({
   ideas: z.array(
     z.object({
       niche: z.string(),
+      /** niche | quote | cartoon | print | seasonal (see designStyles.ts). */
+      style: z.string(),
       /** One listing per product, each with the text that suits that product. */
       listings: z.array(
         z.object({
@@ -71,7 +74,7 @@ const IdeasSchema = z.object({
 type Idea = z.infer<typeof IdeasSchema>["ideas"][number];
 type ListingText = Idea["listings"][number];
 /** What one design is drawn from. */
-type DesignInput = { slogan: string; niche: string; designBrief: string; personalized?: boolean };
+type DesignInput = { slogan: string; niche: string; designBrief: string; personalized?: boolean; style?: DesignStyle };
 
 /** Same text (ignoring case, spaces and punctuation) = same design, so it is drawn once. */
 export const sloganKey = (slogan: string) => slogan.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -235,6 +238,8 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
   const instructions = typeof payload.instructions === "string" ? payload.instructions.slice(0, 500) : "";
   // Personalized: the buyer's name is printed in the design (no printables: a download can't wait for a name).
   const personalized = payload.personalized === true;
+  // A mix every day: job gifts, broad quotes, cartoons, art prints and seasonal designs (personalized stays job/hobby gifts).
+  const styles: DesignStyle[] = personalized ? Array(count).fill("niche") : batchStyles(count, Math.floor(Date.now() / 86_400_000));
   const digest = await knowledgeDigest();
   const types = availableTypes().filter((t) => t.variants.length || t.digital);
   if (!types.length) throw new Error("No product type is ready: run printful_setup and catalog_setup first.");
@@ -264,8 +269,8 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
     schema: IdeasSchema,
     effort: "medium",
     system:
-      "You run a print-on-demand Etsy shop, 'All you can wish': typography designs on mugs, apparel, totes and posters. " +
-      "You pick specific, under-served gift niches (professions, hobbies, life events) where buyers search for funny or heartfelt gifts. " +
+      "You run a print-on-demand Etsy shop, 'All you can wish': typography, cartoon and graphic-print designs on mugs, apparel, totes and posters, " +
+      "so that every visitor finds something they like: gifts for specific jobs and hobbies, but also quotes, cute cartoons and good-looking prints for anyone. " +
       "Never use trademarks, brand names, celebrities, song lyrics, film quotes or copyrighted characters. " +
       "Write titles and descriptions for real buyers, not keyword lists. Each description must state the product facts given, " +
       "that the item is printed on demand by a production partner, and that sizes/colours are chosen from the menu.",
@@ -275,18 +280,19 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
       (personalized ? PERSONALIZED_BRIEF : "") +
       (favoured.length
         ? `Niches buyers already favour in this shop (more designs here sell better than a new niche): ${favoured.join("; ")}. ` +
-          "At least half of this batch goes to these niches, with new slogans and other products than they already have.\n"
+          "Use these for the 'niche' ideas, with new slogans and other products than they already have.\n"
         : "") +
-      "Choose mid-sized gift groups with many buyers (nurses, teachers, dental hygienists, vets, mechanics, firefighters, " +
+      "For 'niche' ideas choose mid-sized gift groups with many buyers (nurses, teachers, dental hygienists, vets, mechanics, firefighters, " +
       "dog and cat owners, gardeners, gamers, new parents, grandparents) over tiny professions only a handful of people search for.\n" +
-      `Propose ${count} gift niches. For each give: niche, and listings for ${perDesign} products from the list that suit its buyer ` +
+      `Propose ${count} ideas, in this order and style:\n${styles.map((st, i) => `${i + 1}. ${STYLE_BRIEFS[st]}`).join("\n")}\n` +
+      `For each give: style (exactly the style word above), niche (the audience or theme, e.g. 'coffee lovers', 'cat lovers', 'mountain lovers'), and listings for ${perDesign} products from the list that suit its buyer ` +
       `(the shop already has ${mix.mugs} mugs and only ${mix.apparel} apparel items: lead with apparel people want to wear, ` +
       "hoodies, sweatshirts and T-shirts, for men and women, young and older, and add a tote or poster when it fits; a mug only if " +
       "the idea is clearly a desk or coffee gift). " +
       "Every product gets its OWN text, written for how that product is used: a mug for coffee, mornings and the desk; a T-shirt or hoodie " +
       "as something the buyer proudly wears and says about themselves; a tote for carrying, shopping and the commute; a poster or print " +
       "as a wall piece worth looking at every day. Use the same text on two products only when it genuinely works on both. " +
-      "Each listing: product (its id), slogan (the exact printed text for that product: 3 to 6 words, one punchline people get in a second), designBrief (layout and typographic style), " +
+      "Each listing: product (its id), slogan (the exact printed text for that product: 3 to 6 words, one punchline people get in a second; for a cartoon or print the short caption, 1 to 4 words), designBrief (layout and style; for a cartoon or print describe the drawing), " +
       `title (${TITLE_RULE}), description (3 short paragraphs with the product facts) ` +
       "and 13 Etsy tags (each ≤20 chars)." +
       (printable
@@ -311,7 +317,7 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
         const key = sloganKey(raw.slogan);
         let svg = drawn.get(key);
         if (!svg) {
-          svg = (await designWithRetry({ slogan: raw.slogan, niche: idea.niche, designBrief: raw.designBrief, personalized }, log, taskId)).svg;
+          svg = (await designWithRetry({ slogan: raw.slogan, niche: idea.niche, designBrief: raw.designBrief, personalized, style: styleOf(idea.style) }, log, taskId)).svg;
           drawn.set(key, svg);
         }
         if (entry.digital) {
@@ -372,6 +378,9 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
   return { created: created.length, personalized };
 }
 
+/** The idea writer's style word, or "niche" when it wrote something else. */
+const styleOf = (s: string): DesignStyle => ((STYLES as readonly string[]).includes(s) ? (s as DesignStyle) : "niche");
+
 /** What the idea writer is told when the batch is personalized. */
 const PERSONALIZED_BRIEF =
   "THIS BATCH IS PERSONALIZED: the buyer types a name at checkout and it is printed in the design. Pick niches where a name makes " +
@@ -392,22 +401,13 @@ const DesignReviewSchema = z.object({
 });
 
 /** Rules every design must follow; the reviewer checks the rendered result against the same list. */
-const DESIGN_RULES =
-  "Typography only, set straight and level: never put text on a curve or path, never rotate or tilt words or single letters, " +
-  "never use textLength, lengthAdjust or letter squeezing. Every word separated by a real space. " +
-  "Nothing smaller than one tenth of the canvas height: tiny captions, coordinates, call signs or fake small print are unreadable on a mug, leave them out. " +
-  "Big and bold: the main words fill most of the width and must still read when the whole design is shown as a 150-pixel thumbnail " +
-  "in Etsy search; at most 6 words in total. " +
-  "At most 3 text sizes and 2 colours; one simple icon at most, beside the text, never behind or touching it. " +
-  "Frames, banners and boxes only when every letter stays well inside them with clear space around it; when in doubt, no frame. " +
-  "No brand names, logos, characters, celebrities, song lyrics, film or TV quotes, sports teams or trademarked phrases.";
 
 /**
  * A second pair of eyes on the rendered design, as a buyer and a print shop would see it: exact
  * spelling and spacing of the slogan, nothing colliding or cut off, readable on a mug, and no
  * trademark risk. Uses the review model (cheaper than the designer).
  */
-export async function reviewDesign(png: Buffer, slogan: string) {
+export async function reviewDesign(png: Buffer, slogan: string, style?: DesignStyle) {
   const small = await sharp(png).flatten({ background: "#ffffff" }).resize(1000, 800, { fit: "inside" }).png().toBuffer();
   return askJson({
     agentId: ID,
@@ -427,10 +427,10 @@ export async function reviewDesign(png: Buffer, slogan: string) {
       "- any letter touches or crosses a frame, banner, box, icon, line or other text, or sits outside its frame;\n" +
       "- text is on a curve, rotated, tilted, uneven or squashed;\n" +
       "- any text is too small to read on a mug (tiny captions or small print);\n" +
-      "- an icon or ornament is unclear, broken, overlapping, or looks like clip-art gone wrong;\n" +
+      "- an icon, drawing or ornament is unclear, broken, overlapping, or looks like clip-art gone wrong;\n" +
       "- the layout looks unbalanced or amateurish;\n" +
       "- it names or imitates a brand, character, celebrity, film/TV/song quote or trademarked phrase, or could offend.\n" +
-      `Design rules it should follow: ${DESIGN_RULES}`,
+      `Design rules it should follow: ${designRulesFor(style)}`,
   });
 }
 
@@ -450,16 +450,17 @@ async function designWithRetry(idea: DesignInput, log?: TaskContext["log"], task
         purpose: "pod_design_svg",
         effort: "medium",
         system:
-          "You are a typography designer for gift products. Output one standalone SVG document and nothing else. " +
+          (idea.style === "cartoon" || idea.style === "print" ? "You are an illustrator for gift products. " : "You are a typography designer for gift products. ") +
+          "Output one standalone SVG document and nothing else. " +
           `It is one side of a mug: use viewBox="0 0 ${side.width} ${side.height}" and a transparent background; ` +
           "the same design is printed on the other side automatically, so draw it once. " +
           "Use only <text>, <tspan>, <path>, <rect>, <circle>, <line>, <polygon>, <g>, <defs>, <use href=\"#id\"> and gradients. " +
           "Use only generic font families (serif, sans-serif, monospace). No images, links, scripts or external references. " +
-          "Dark ink colours that print well on a white mug. " +
+          "Colours that print well on a white mug (dark ink for text, no very pale colours). " +
           `Keep every element inside x ${mx}–${side.width - mx} and y ${my}–${side.height - my}. ` +
           "You cannot measure text, so size it conservatively: a line of N characters needs a font-size of at most " +
           `${Math.round(((side.width - 2 * mx) / 0.62) / 10)}0/N for sans-serif capitals; split long slogans over more lines. ` +
-          DESIGN_RULES +
+          designRulesFor(idea.style) +
           (idea.personalized
             ? ` PERSONALIZED: the word NAME in the slogan is the buyer's name. Draw it as exactly one <text id="personal-name"> element on its own line, ` +
               `with x at the horizontal centre, text-anchor="middle", a numeric font-size attribute and no <tspan> inside. Put a fitting sample ` +
@@ -468,7 +469,7 @@ async function designWithRetry(idea: DesignInput, log?: TaskContext["log"], task
               `${Math.round((side.width - 2 * mx) / 0.62 / 10)} for 10 capitals (smaller names are fine, long ones are shrunk automatically). ` +
               `Add data-case="upper" to print the name in capitals when that suits the style. Nothing else may depend on the name's length.`
             : ""),
-        prompt: `Slogan (print exactly this text${idea.personalized ? ", with NAME replaced by your sample name" : ""}): "${idea.slogan}"\nNiche: ${idea.niche}\nBrief: ${idea.designBrief}${feedback}`,
+        prompt: `Slogan (print exactly this text${idea.personalized ? ", with NAME replaced by your sample name" : ""}): "${idea.slogan}"\nNiche: ${idea.niche}\nStyle: ${idea.style ?? "niche"}\nBrief: ${idea.designBrief}${feedback}`,
       }),
     );
     if (idea.personalized) svg = normalizeTemplate(svg);
@@ -501,7 +502,7 @@ async function designWithRetry(idea: DesignInput, log?: TaskContext["log"], task
       continue;
     }
     const intended = idea.personalized ? intendedText(idea.slogan, svg) : idea.slogan;
-    const verdict = await reviewDesign(await sharp(Buffer.from(svg), { density: 150 }).png().toBuffer(), intended);
+    const verdict = await reviewDesign(await sharp(Buffer.from(svg), { density: 150 }).png().toBuffer(), intended, idea.style);
     if (verdict.ok) return { svg, png };
     await log?.info(`Ontwerp afgekeurd (${idea.slogan}): ${verdict.problems.join("; ")}`, { attempt }, taskId);
     if (attempt >= DESIGN_ATTEMPTS) throw new Error(`Design failed the quality check: ${verdict.problems.join("; ")}`);
