@@ -289,6 +289,40 @@ async function topUpPhotos(r: { etsyListingId: string | null; designFile: string
     await etsy.uploadListingImage(r.etsyListingId, await sharp(Buffer.from(img)).png().toBuffer(), ++have);
     added++;
   }
+  // Still short (Printify made few mockups): close-ups of the print, a colour collage and a size card.
+  if (have < 8) {
+    const shots = (
+      await Promise.all(
+        product.images.slice(0, 4).map((i) => fetch(i.src).then((res) => (res.ok ? res.arrayBuffer() : null)).catch(() => null)),
+      )
+    ).filter((b): b is ArrayBuffer => b !== null).map((b) => Buffer.from(b));
+    for (const shot of shots.slice(0, 2)) {
+      if (have >= 10) break;
+      const meta = await sharp(shot).metadata();
+      const w = meta.width ?? 1000;
+      const h = meta.height ?? 1000;
+      const crop = await sharp(shot)
+        .extract({ left: Math.round(w * 0.25), top: Math.round(h * 0.22), width: Math.round(w * 0.5), height: Math.round(h * 0.5) })
+        .resize(2000, 2000)
+        .png()
+        .toBuffer();
+      await etsy.uploadListingImage(r.etsyListingId, crop, ++have);
+      added++;
+    }
+    if (shots.length >= 2 && have < 10) {
+      const tiles = await Promise.all(shots.slice(0, 4).map((b) => sharp(b).resize(1000, 1000, { fit: "cover" }).png().toBuffer()));
+      const collage = await sharp({ create: { width: 2000, height: 2000, channels: 3, background: "#ffffff" } })
+        .composite(tiles.map((input, k) => ({ input, left: (k % 2) * 1000, top: Math.floor(k / 2) * 1000 })))
+        .png()
+        .toBuffer();
+      await etsy.uploadListingImage(r.etsyListingId, collage, ++have);
+      added++;
+    }
+    if (have < 10) {
+      await etsy.uploadListingImage(r.etsyListingId, await sizeCard(), ++have);
+      added++;
+    }
+  }
   if (have < 10 && r.designFile) {
     const art = await readFile(path.join(designsDir(), r.designFile)).catch(() => null);
     if (art) {
@@ -318,4 +352,15 @@ export async function printifyPhotos(_payload: Record<string, unknown>, { log, t
   }
   await log.info(`Printify-listings: ${added} foto('s) toegevoegd aan ${rows.length} listing(s), tot 10 per listing\n${counts.join("\n")}`, undefined, taskId);
   return { added, listings: rows.length };
+}
+
+/** A simple, honest size note (no measurements we cannot guarantee). */
+async function sizeCard(): Promise<Buffer> {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2000 2000"><rect width="2000" height="2000" fill="#F6F1E7"/>
+  <text x="1000" y="620" text-anchor="middle" font-family="League Spartan" font-weight="900" font-size="150" fill="#2B3A67">UNISEX FIT</text>
+  <text x="1000" y="880" text-anchor="middle" font-family="League Spartan" font-weight="900" font-size="230" fill="#C8472B">S · M · L · XL · 2XL · 3XL</text>
+  <text x="1000" y="1130" text-anchor="middle" font-family="sans-serif" font-size="80" fill="#2B3A67">True to size for a classic fit.</text>
+  <text x="1000" y="1250" text-anchor="middle" font-family="sans-serif" font-size="80" fill="#2B3A67">Size up one for a relaxed, oversized look.</text>
+  <text x="1000" y="1480" text-anchor="middle" font-family="sans-serif" font-size="64" fill="#6B6B6B">Printed on demand in Europe · see the size chart in the menu</text></svg>`;
+  return sharp(Buffer.from(svg)).png().toBuffer();
 }
