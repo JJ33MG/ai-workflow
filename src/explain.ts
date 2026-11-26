@@ -402,7 +402,7 @@ export const PLAN: PlanItem[] = [
   { id: "sample", phase: "Etsy-winkel", title: "Proefmok bestellen (aanrader)", detail: "Echte printkwaliteit zien en eigen foto's maken.", owner: "jarne", status: "todo" },
   { id: "telegram", phase: "Fundament", title: "Telegram-bot aanmaken", detail: "Voor de ochtendbriefing en meldingen op je telefoon.", owner: "jarne", status: "todo", node: "svc:telegram" },
   { id: "online", phase: "Fundament", title: "Systeem online zetten (Railway)", detail: "Agents werken 24/7 en het dashboard is altijd bereikbaar, ook op je telefoon.", owner: "jarne", status: "todo", node: "svc:server" },
-  { id: "kdp-account", phase: "Kleurboeken", title: "Amazon KDP-account", detail: "kdp.amazon.com, met belasting- en bankgegevens.", owner: "jarne", status: "todo", node: "svc:kdp" },
+  { id: "kdp-account", phase: "Kleurboeken", title: "Amazon KDP-account", detail: "kdp.amazon.com als particulier: geen btw-nummer nodig. Bij de belastingvragen (W-8BEN) vul je je persoonlijke fiscaal nummer in (Tsjechisch rodné číslo of Belgisch rijksregisternummer) en je bankrekening. De inkomsten moet je wel aangeven: neem het mee in het gesprek met de boekhouder.", owner: "jarne", status: "todo", node: "svc:kdp" },
   { id: "first-book", phase: "Kleurboeken", title: "Eerste kleurboek maken, nakijken en uploaden", detail: "Op jouw sein; ongeveer €0,50 aan Claude.", owner: "jarne", status: "todo", node: "biz:kdp-coloring" },
   { id: "etsy-dev", phase: "Etsy-winkel", title: "Etsy developer-app aanvragen", detail: "Nodig om automatisch te uploaden en verkopen op te halen; goedkeuring duurt vaak enkele dagen.", owner: "jarne", status: "todo" },
 
