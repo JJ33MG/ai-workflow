@@ -1485,8 +1485,10 @@ async function mugCloseups(_payload: Record<string, unknown>, { log, taskId }: T
  * moves; the favourites at the start are kept so the test can be judged later.
  */
 async function abFirstPhoto(payload: Record<string, unknown>, { log, taskId }: TaskContext) {
-  const listingId = String(payload.listingId ?? "");
-  const use = payload.use === "mockup" ? "mockup" : "closeup";
+  // From chat the agent passes only free text ("4621610858 mockup"): read the id and the choice from it.
+  const text = typeof payload.instructions === "string" ? payload.instructions : "";
+  const listingId = String(payload.listingId ?? text.match(/\b(\d{8,12}|c[a-z0-9]{20,})\b/)?.[1] ?? "");
+  const use = payload.use === "mockup" || (!payload.use && /mockup/i.test(text)) ? "mockup" : "closeup";
   const r = await db.listing.findFirst({ where: { OR: [{ id: listingId }, { etsyListingId: listingId }] } });
   if (!r?.etsyListingId || !MUGS.has(r.productType) || !r.designSvg) throw new Error("Geef een live mok-listing (listingId)");
   const etsyId = r.etsyListingId;
@@ -1893,7 +1895,7 @@ export const etsyPodAgent: AgentDefinition = {
   name: "Etsy-agent",
   phase: 1,
   businessId: "etsy-pod",
-  chatTasks: ["create_listings", "upload_listings", "sync_sales", "sync_listings", "printful_setup", "etsy_setup", "add_photos", "fix_return_policy", "catalog_setup", "maintenance", "add_ai_disclosure", "add_videos", "pricing_report", "reprice_listings", "sync_shipments", "refresh_listings", "retitle_listings"],
+  chatTasks: ["create_listings", "upload_listings", "sync_sales", "sync_listings", "printful_setup", "etsy_setup", "add_photos", "fix_return_policy", "catalog_setup", "maintenance", "add_ai_disclosure", "add_videos", "pricing_report", "reprice_listings", "sync_shipments", "refresh_listings", "retitle_listings", "mug_closeups", "ab_first_photo", "undo_title_test"],
   description: "Zoekt cadeau-niches, ontwerpt mokken, zet ze op Etsy en maakt van Etsy-verkopen Printful-bestellingen.",
   dependsOn: ["database", "claude", "etsy", "printful"],
   taskInfo: {
