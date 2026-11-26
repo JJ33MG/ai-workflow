@@ -49,3 +49,12 @@ describe("chest print on a T-shirt or sweater (tall print area)", () => {
     expect(a.w * 1800).toBeGreaterThan(10.5 * IN); // a wide slogan prints big
   });
 });
+
+describe("Printify print files are 300 dpi", () => {
+  it("prints a wide slogan just as large in inches as on a 150 dpi Printful file", async () => {
+    const wide = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 200"><text x="500" y="150" text-anchor="middle" font-family="sans-serif" font-weight="900" font-size="120">COZY SEASON</text></svg>`;
+    const box = await inkBox(await renderPrintFile(wide, "chest", 3402, 4273, "dark", 300));
+    expect(box.w * 3402).toBeGreaterThan(10 * 300); // over 10 inches wide
+    expect(Math.abs(box.top * 4273 - 2.5 * 300)).toBeLessThan(0.15 * 300); // same chest line
+  });
+});

@@ -210,13 +210,15 @@ export async function renderPrintFile(
   width: number,
   height: number,
   ink: "dark" | "light",
+  /** Pixels per inch of the print file: Printful uses 150, Printify 300. */
+  dpi = 150,
 ): Promise<Buffer> {
   const art = ink === "light" ? lightInk(svg) : svg;
   if (layout === "mug-wrap") return mirrorSides(await fitToSide(art, { width: Math.round(width / 2), height }));
   // On a garment every design hangs from the same line on the chest, whatever its shape (Jarne: some sat
   // under the collar, others on the pocket). Printful print files are 150 dpi.
   if (layout === "chest") {
-    const IN = 150;
+    const IN = dpi;
     if (width >= height * 0.9) {
       // Hoodie: the area is wider than tall and the pouch pocket sits below it. Top 1 in below the area's
       // top edge, at most 11 in wide and 7.5 in tall, so it ends well above the pocket.

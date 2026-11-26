@@ -14,6 +14,8 @@ import type { TaskContext } from "./types.js";
 const CATALOG_KEY = "printify.catalog";
 const SETUP_KEY = "printify.setup";
 const EU_PRICE_COUNTRY = "DE";
+/** Printify print areas are 300 dpi (a T-shirt front is 3402 × 4273 px, about 11 × 14 in). */
+const PRINTIFY_DPI = 300;
 
 export interface PrintifyCatalogEntry {
   typeId: string;
@@ -147,7 +149,7 @@ export async function createPrintifyListing(i: {
   const imageIds: Record<"light" | "dark", string> = { light: "", dark: "" };
   for (const ink of ["light", "dark"] as const) {
     if (!c.variants.some((v) => inkFor(v.color) === ink)) continue;
-    files[ink] = await saveDesign(await renderPrintFile(i.svg, "chest", c.placeholder.width, c.placeholder.height, ink), `${listing.id}-printify-${ink}`);
+    files[ink] = await saveDesign(await renderPrintFile(i.svg, "chest", c.placeholder.width, c.placeholder.height, ink, PRINTIFY_DPI), `${listing.id}-printify-${ink}`);
     imageIds[ink] = (await printify.uploadImage(files[ink], designUrl(files[ink]))).id;
   }
   // A first price to create the product with; the real one follows from Printify's cost.
