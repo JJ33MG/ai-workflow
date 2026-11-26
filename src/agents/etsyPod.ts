@@ -1259,6 +1259,41 @@ export function acceptableTitle(oldTitle: string, title: string): boolean {
  */
 const TITLE_TEST_KEY = "etsy.titleTest.before";
 
+/**
+ * The test ran on every long title once (26 Nov, 114 listings) before it was limited to 8: put the old title
+ * back on all but the 8 oldest, and keep those 8 as the test (with their old title and tags saved for undo).
+ */
+async function narrowTitleTest(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
+  const old = (await getSetting<Record<string, string>>(OLD_TITLES_KEY)) ?? {};
+  const rows = await db.listing.findMany({ where: { etsyListingId: { in: Object.keys(old) } }, select: { etsyListingId: true, createdAt: true, tags: true } });
+  const keep = new Set(
+    pickTitleTest(rows.map((r) => ({ id: r.etsyListingId!, title: old[r.etsyListingId!], createdAt: r.createdAt })), undefined).map((r) => r.id),
+  );
+  const test = (await getSetting<Record<string, { title: string; tags: string[] }>>(TITLE_TEST_KEY)) ?? {};
+  let restored = 0;
+  for (const r of rows) {
+    const id = r.etsyListingId!;
+    if (keep.has(id)) {
+      test[id] ??= { title: old[id], tags: r.tags };
+      continue;
+    }
+    try {
+      await etsy.updateListingSeo(id, old[id], r.tags);
+      await db.listing.updateMany({ where: { etsyListingId: id }, data: { title: old[id] } });
+      delete old[id];
+      restored++;
+    } catch (err) {
+      await log.warn(`Oude titel terugzetten mislukt (${old[id]}): ${(err as Error).message}`, undefined, taskId);
+    }
+    if (taskId) await db.task.update({ where: { id: taskId }, data: { status: "running" } });
+  }
+  for (const id of keep) delete old[id];
+  await setSetting(OLD_TITLES_KEY, old);
+  await setSetting(TITLE_TEST_KEY, test);
+  await log.info(`Korte-titeltest teruggebracht tot ${keep.size} listings; ${restored} listing(s) hebben hun oude titel terug`, undefined, taskId);
+  return { restored, test: keep.size };
+}
+
 /** Puts the old titles and tags back on the short-title test listings. */
 async function undoTitleTest(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
   const before = (await getSetting<Record<string, { title: string; tags: string[] }>>(TITLE_TEST_KEY)) ?? {};
@@ -1870,6 +1905,7 @@ export const etsyPodAgent: AgentDefinition = {
     printful_setup: "Bij Printful de API-winkel, de 11 oz mok en de exacte printmaat opzoeken en opslaan",
     retire_printful: "Alle Printful-kleding (hoodies, sweaters, T-shirts) en gepersonaliseerde posters offline halen (inactive op Etsy, niets gewist)",
     printify_setup: "Printify-aanbod klaarzetten: kleuren, maten, printzone en verzending per kledingstuk bij de Europese drukker",
+    narrow_title_test: "De korte-titeltest die op alle lange titels liep terugbrengen tot 8 listings (de rest krijgt zijn oude titel terug)",
     undo_title_test: "De korte-titeltest terugdraaien: oude titels en tags terug op de 8 testlistings",
     mug_closeups: "Op alle live mokken een close-up als eerste foto zetten (de grap leesbaar op een telefoon); voegt alleen toe",
     ab_first_photo: "A/B-test op één mok: close-up of mockup als eerste foto (payload: listingId, use: closeup|mockup)",
@@ -1906,6 +1942,7 @@ export const etsyPodAgent: AgentDefinition = {
     printify_photos: printifyPhotos,
     mug_closeups: mugCloseups,
     undo_title_test: undoTitleTest,
+    narrow_title_test: narrowTitleTest,
     ab_first_photo: abFirstPhoto,
     retire_printful: retirePrintful,
     fulfil_receipt: fulfilReceipt,
