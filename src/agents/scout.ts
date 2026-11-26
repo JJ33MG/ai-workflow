@@ -7,6 +7,7 @@ import { planWithStatus } from "../brain.js";
 import { config } from "../config.js";
 import { db } from "../db.js";
 import { askJson, askResearch } from "../lib/claude.js";
+import { askGrok, isGrokConfigured } from "../lib/grok.js";
 import { IDEA_KINDS, formatIdea, ideaButtons, tasteDigest } from "../lib/ideas.js";
 import { notify } from "../lib/telegram.js";
 import { collectBriefingData, formatBriefing } from "./ceo.js";
@@ -71,6 +72,30 @@ async function scout(mode: Mode, { log, taskId }: TaskContext) {
   const [snapshot, taste] = await Promise.all([brainSnapshot(), decidedTaste()]);
   const today = new Date().toISOString().slice(0, 10);
 
+  // Grok first: what people on X say right now (Claude cannot search X). Optional: Scout works without it.
+  let xPulse = "";
+  let xSources: string[] = [];
+  if (isGrokConfigured()) {
+    try {
+      const g = await askGrok({
+        agentId: ID,
+        purpose: `scout_x_${mode.origin}`,
+        xDays: 7,
+        system: "You scan X (Twitter) for a small online company's owner. Report concrete posts, numbers and dates; say what is rising now. Be brief.",
+        prompt:
+          `Today: ${today}. The company: print-on-demand gifts on Etsy (shirts, hoodies, mugs, ornaments, printables), a road-trip planner app ` +
+          `(Routify, Europe), eBay, and maybe coloring books on Amazon KDP. Look at X posts from the last 7 days and report: ` +
+          `(1) gift and design trends, sayings and memes people want on shirts and mugs right now; (2) what Etsy and print-on-demand sellers ` +
+          `say works (marketing, Etsy Ads, SEO, prices); (3) new tools, platforms or ways to earn money solo founders talk about; ` +
+          `(4) one surprising opportunity. Focus on: ${mode.focus}`,
+      });
+      xPulse = g.text;
+      xSources = g.sources;
+    } catch (err) {
+      await log.warn(`Grok (X) niet gelukt, Scout gaat verder zonder: ${(err as Error).message.slice(0, 200)}`, undefined, taskId);
+    }
+  }
+
   const research = await askResearch({
     agentId: ID,
     purpose: `scout_research_${mode.origin}`,
@@ -81,6 +106,7 @@ async function scout(mode: Mode, { log, taskId }: TaskContext) {
       "Research on the live web and write concise notes with facts, numbers and dates. Prefer recent sources (last 3 months).",
     prompt:
       `Today: ${today}.\n\n${snapshot}\n\nJarne's earlier votes (learn his taste from them):\n${taste}\n\n` +
+      (xPulse ? `What Grok found on X this week (check it, build on it):\n${xPulse}\n\n` : "") +
       `Research task: ${mode.focus}`,
   });
 
@@ -102,6 +128,7 @@ async function scout(mode: Mode, { log, taskId }: TaskContext) {
       `\nJarne's votes so far:\n${taste}`,
   });
 
+  for (const url of xSources) if (!research.sources.some((s) => s.url === url)) research.sources.push({ url, title: "X / Grok" });
   const known = new Set(research.sources.map((s) => s.url));
   const created = [];
   for (const i of ideas.slice(0, mode.count)) {

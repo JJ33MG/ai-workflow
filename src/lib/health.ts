@@ -11,6 +11,7 @@ import { schedulerState } from "../scheduler.js";
 import { apiSpendTodayCents } from "./budget.js";
 import { currentTask } from "./tasks.js";
 import { isClaudeConfigured } from "./claude.js";
+import { isGrokConfigured } from "./grok.js";
 import { isTelegramConfigured } from "./telegram.js";
 
 // ok: working · warn: works but needs attention · error: broken · off: not set up yet
@@ -128,6 +129,17 @@ export async function runHealthChecks(now = new Date()): Promise<HealthCheck[]> 
     );
   }
 
+  checks.push(
+    isGrokConfigured()
+      ? { id: "grok", label: "Grok (xAI)", status: "ok", detail: `Gekoppeld (${config.grok.model}): zoekt live op X voor Scout en in de chat` }
+      : {
+          id: "grok",
+          label: "Grok (xAI)",
+          status: "off",
+          detail: "Niet gekoppeld: Scout en de chat zien X (Twitter) nog niet",
+          fix: "Maak een sleutel op console.x.ai (API Keys), zet er tegoed op en zet hem in Railway als XAI_API_KEY.",
+        },
+  );
   checks.push(
     isTelegramConfigured()
       ? { id: "telegram", label: "Telegram", status: "ok", detail: "Briefings en meldingen gaan naar je chat" }

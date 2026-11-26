@@ -11,7 +11,7 @@ export class BudgetExceededError extends Error {
 
 export async function apiSpendTodayCents(now = new Date()): Promise<number> {
   const rows = await db.cost.findMany({
-    where: { category: "claude_api", occurredAt: { gte: startOfDay(now, config.timezone) } },
+    where: { category: { in: ["claude_api", "grok_api"] }, occurredAt: { gte: startOfDay(now, config.timezone) } },
     select: { amountCents: true, currency: true },
   });
   return rows.reduce((sum, r) => sum + toEurCents(r.amountCents, r.currency), 0);

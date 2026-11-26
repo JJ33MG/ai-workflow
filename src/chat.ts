@@ -6,6 +6,7 @@ import { buildDashboard } from "./dashboard.js";
 import { db } from "./db.js";
 import { chatWithTools, isClaudeConfigured, type ChatTool } from "./lib/claude.js";
 import { agentLogger } from "./lib/logger.js";
+import { askGrok, isGrokConfigured } from "./lib/grok.js";
 import { TACTICS, getStrategy, liveListingStats } from "./lib/marketing.js";
 import { enqueue } from "./lib/tasks.js";
 
@@ -34,7 +35,35 @@ export function toolsFor(agentId: string): ChatTool[] {
   const reachable = [...agents.values()].filter((a) => canActFor(agentId, a.id));
   const startable = reachable.flatMap((a) => a.chatTasks.map((t) => `${a.id}:${t}`));
 
+  // Grok (xAI) as a helper: live X posts and a second opinion. Claude stays the one who answers Jarne.
+  const grokTool: ChatTool[] = isGrokConfigured()
+    ? [
+        {
+          definition: {
+            name: "ask_grok",
+            description:
+              "Ask Grok (xAI), which can search X (Twitter) posts in real time and the web. Use it for what people say right now on X, " +
+              "trending topics, memes and sayings, competitors' posts, or a second opinion on marketing or money. Give it a precise question; " +
+              "weigh its answer yourself and say to Jarne what came from Grok.",
+            input_schema: {
+              type: "object",
+              properties: {
+                question: { type: "string" },
+                days: { type: "integer", description: "How many days of X posts to search (default 7)" },
+              },
+              required: ["question"],
+            },
+          },
+          run: async (input) => {
+            const r = await askGrok({ agentId, purpose: "chat_grok", prompt: String(input.question ?? ""), xDays: Number(input.days) || 7, web: true });
+            return `${r.text}\n\nBronnen: ${r.sources.slice(0, 8).join(" ") || "geen"}`;
+          },
+        },
+      ]
+    : [];
+
   return [
+    ...grokTool,
     {
       definition: {
         name: "start_task",

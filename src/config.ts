@@ -30,6 +30,12 @@ export const config = {
     model: str("CLAUDE_MODEL", "claude-opus-5-5"),
   },
 
+  /** Grok (xAI): searches X in real time; a helper next to Claude. */
+  grok: {
+    apiKey: str("XAI_API_KEY"),
+    model: str("XAI_MODEL", "grok-4.7"),
+  },
+
   budget: {
     currency: "EUR",
     // Hard cap on API spend per day; agents stop calling Claude above it.
