@@ -6,6 +6,7 @@ import { collectBriefingData, formatBriefing } from "./agents/ceo.js";
 import { agents, syncAgents } from "./agents/index.js";
 import { handleCommand } from "./commands.js";
 import { type Attachment, AttachmentError } from "./lib/attachments.js";
+import { importEtsyStats } from "./lib/etsyStats.js";
 import { loadPrintifyCatalog } from "./agents/printifyFlow.js";
 import { isPrintifyConfigured } from "./integrations/printify.js";
 import { config } from "./config.js";
@@ -145,6 +146,23 @@ app.post("/api/ideas/:id/:vote", requireAdmin, async (req, res) => {
     data: { status: vote, decidedAt: vote === "new" ? null : new Date(), ...(feedback ? { feedback } : {}) },
   });
   res.json({ message: `Bijgewerkt: ${idea.title}` });
+});
+
+// Jarne uploads Etsy Stats / Etsy Ads exports (CSV, Excel, screenshots, PDF) and/or a note.
+app.post("/api/marketing/etsy-stats", requireAdmin, async (req, res) => {
+  const body = req.body as { attachments?: Attachment[]; note?: string };
+  const files = Array.isArray(body.attachments) ? body.attachments : [];
+  const note = String(body.note ?? "").trim().slice(0, 1000);
+  if (!files.length && !note) {
+    res.status(400).json({ error: "Kies een bestand of schrijf een notitie" });
+    return;
+  }
+  try {
+    const stats = await importEtsyStats(files, note);
+    res.json({ message: `Verwerkt (${stats.period}). De marketing-agent past de strategie nu aan.`, stats });
+  } catch (err) {
+    res.status(err instanceof AttachmentError ? 400 : 500).json({ error: (err as Error).message });
+  }
 });
 
 app.post("/api/plan/:id", requireAdmin, async (req, res) => {

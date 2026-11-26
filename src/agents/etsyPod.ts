@@ -35,6 +35,8 @@ import {
 import { deliveryDays, profileOrigin } from "../lib/euShipping.js";
 import { PRINTFUL_RETIRED, retireSelection } from "../lib/catalogRetire.js";
 import { PRINTIFY_TYPES } from "../lib/printifyCatalog.js";
+import { frozenUntil, isFrozen, mugCloseUp, pickTitleTest } from "../lib/shopGuards.js";
+import { createHash } from "node:crypto";
 import * as printify from "../integrations/printify.js";
 import { createPrintifyListing, loadPrintifyCatalog, printifyEntries, printifyLink, printifyOwn, printifyPhotos, printifySetup, publishPrintify, requestPrintifyPublish } from "./printifyFlow.js";
 import { FONT_GUIDE, SHOP_LOOK, STYLE_BRIEFS, STYLES, batchStyles, designRulesFor, personalizedDay, type DesignStyle } from "../lib/designStyles.js";
@@ -740,8 +742,18 @@ async function uploadListings(payload: Record<string, unknown>, { log, taskId }:
     if (variants.length) await etsy.updateListingInventory(etsyId, buildInventory(variants, etsy.es.readinessStateId));
     if (listing.personalized) await etsy.setListingPersonalization(etsyId, [PERSONALIZATION_QUESTION]);
 
-    // Printful product photos first, then (personalized) the "add any name" photo; the flat design always goes last.
-    let rank = 1 + (await addMockups(listing, etsyId, 1, log, taskId));
+    // A mug opens with a close-up where the joke fills the frame (readable on a phone), then Printful's
+    // product photos, then (personalized) the "add any name" photo; the flat design always goes last.
+    let start = 1;
+    if (MUGS.has(listing.productType) && listing.designSvg) {
+      try {
+        await etsy.uploadListingImage(etsyId, await mugCloseUp(listing.designSvg, mugColour(listing.productType)), 1);
+        start = 2;
+      } catch (err) {
+        await log.warn(`Close-up mislukt voor ${listing.title}: ${(err as Error).message}`, { etsyId }, taskId);
+      }
+    }
+    let rank = start + (await addMockups(listing, etsyId, start, log, taskId));
     if (listing.personalized) {
       try {
         await etsy.uploadListingImage(etsyId, await personalizationCard(listing.designSvg), rank);
@@ -1188,6 +1200,9 @@ async function refreshListings(payload: Record<string, unknown>, { log, taskId }
       ...(ids ? { id: { in: ids } } : { productType: { in: types } }),
     },
   });
+  if (await needsFreezeApproval("refresh_listings", payload, listings.filter((l) => l.status === "active").length, "Printbestanden en foto's vervangen")) {
+    return { waiting: "Jarnes akkoord (tot 15 december)" };
+  }
   const done: string[] = [];
   for (const listing of listings) {
     const entry = catalogEntry(listing.productType);
@@ -1242,11 +1257,42 @@ export function acceptableTitle(oldTitle: string, title: string): boolean {
  * ones (TITLE_RULE). Tags stay as they are and keep carrying the extra search words. The old titles
  * are kept in the database so this can be undone. Payload: apply=false only proposes.
  */
+const TITLE_TEST_KEY = "etsy.titleTest.before";
+
+/** Puts the old titles and tags back on the short-title test listings. */
+async function undoTitleTest(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
+  const before = (await getSetting<Record<string, { title: string; tags: string[] }>>(TITLE_TEST_KEY)) ?? {};
+  let restored = 0;
+  for (const [id, old] of Object.entries(before)) {
+    try {
+      await etsy.updateListingSeo(id, old.title, old.tags);
+      await db.listing.updateMany({ where: { etsyListingId: id }, data: { title: old.title, tags: old.tags } });
+      delete before[id];
+      restored++;
+    } catch (err) {
+      await log.warn(`Terugzetten mislukt voor ${old.title}: ${(err as Error).message}`, undefined, taskId);
+    }
+  }
+  await setSetting(TITLE_TEST_KEY, before);
+  await log.info(`Korte-titeltest teruggedraaid: ${restored} listing(s) hebben hun oude titel en tags terug`, undefined, taskId);
+  return { restored };
+}
+
 async function retitleListings(payload: Record<string, unknown>, { log, taskId }: TaskContext) {
   if (config.dryRun || !etsy.isEtsyConfigured() || !(await etsy.isEtsyConnected())) return { skipped: "dry run or Etsy not connected" };
   const apply = payload.apply !== false;
-  const live = (await etsy.getListingsByState("active")).filter((l) => decodeEntities(l.title).length > 70);
-  const before = (await getSetting<Record<string, string>>(OLD_TITLES_KEY)) ?? {};
+  // A test on 8 listings only (Jarne): the given ids, else the 8 oldest live listings with a long title.
+  const all = await etsy.getListingsByState("active");
+  const known = new Map((await db.listing.findMany({ where: { etsyListingId: { not: null } }, select: { etsyListingId: true, createdAt: true } })).map((r) => [r.etsyListingId!, r.createdAt]));
+  const ids = Array.isArray(payload.listingIds) ? (payload.listingIds as unknown[]).map(String) : undefined;
+  const picked = new Set(
+    pickTitleTest(
+      all.map((l) => ({ id: String(l.listing_id), title: decodeEntities(l.title), createdAt: known.get(String(l.listing_id)) ?? new Date() })),
+      ids,
+    ).map((r) => r.id),
+  );
+  const live = all.filter((l) => picked.has(String(l.listing_id)));
+  const before = (await getSetting<Record<string, { title: string; tags: string[] }>>(TITLE_TEST_KEY)) ?? {};
   const changes: { id: string; from: string; to: string; tags: string[] }[] = [];
   for (let i = 0; i < live.length; i += 20) {
     const batch = live.slice(i, i + 20);
@@ -1272,8 +1318,9 @@ async function retitleListings(payload: Record<string, unknown>, { log, taskId }
   if (apply) {
     for (const c of changes) {
       try {
+        before[c.id] ??= { title: c.from, tags: c.tags };
+        await setSetting(TITLE_TEST_KEY, before);
         await etsy.updateListingSeo(c.id, c.to, c.tags);
-        before[c.id] ??= c.from;
         await db.listing.updateMany({ where: { etsyListingId: c.id }, data: { title: c.to } });
         changed++;
       } catch (err) {
@@ -1281,7 +1328,6 @@ async function retitleListings(payload: Record<string, unknown>, { log, taskId }
       }
       if (taskId) await db.task.update({ where: { id: taskId }, data: { status: "running" } });
     }
-    await setSetting(OLD_TITLES_KEY, before);
   }
   const examples = changes.slice(0, 8).map((c) => `• ${c.from}\n  → ${c.to}`).join("\n");
   await log.info(`${apply ? `Titels ingekort op ${changed}` : `Voorstel voor ${changes.length}`} van ${live.length} lange listings:\n${examples}`, { changes }, taskId);
@@ -1351,6 +1397,9 @@ async function retirePrintful(_payload: Record<string, unknown>, { log, taskId }
   if (config.dryRun || !etsy.isEtsyConfigured() || !(await etsy.isEtsyConnected())) return { skipped: "dry run of Etsy niet gekoppeld" };
   const rows = await db.listing.findMany({ where: { etsyListingId: { not: null } }, select: { id: true, productType: true, personalized: true, source: true, status: true, supplier: true, etsyListingId: true, title: true } });
   const ids = new Set(retireSelection(rows));
+  if (await needsFreezeApproval("retire_printful", _payload, rows.filter((r) => ids.has(r.id) && r.status === "active").length, "Listings offline halen")) {
+    return { waiting: "Jarnes akkoord (tot 15 december)" };
+  }
   let done = 0;
   const failed: string[] = [];
   for (const r of rows.filter((x) => ids.has(x.id))) {
@@ -1371,6 +1420,70 @@ async function retirePrintful(_payload: Record<string, unknown>, { log, taskId }
   }
   await log.info(`Offline gehaald: ${done} Printful-kledingstuk(ken) en gepersonaliseerde posters${failed.length ? `; mislukt: ${failed.length}` : ""}`, failed.length ? { failed } : undefined, taskId);
   return { done, failed: failed.length };
+}
+
+const mugColour = (productType: string): "white" | "black" => (productType === "mug-black" ? "black" : "white");
+const closeUpHash = (png: Buffer) => createHash("sha256").update(png).digest("hex");
+const AB_KEY = "abtest.firstPhoto";
+
+/** Puts the close-up first on every live mug (Jarne: the joke must be readable on a phone). Adds, never removes. */
+async function mugCloseups(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
+  if (config.dryRun || !etsy.isEtsyConfigured() || !(await etsy.isEtsyConnected())) return { skipped: "dry run of Etsy niet gekoppeld" };
+  const tested = new Set(Object.keys((await getSetting<Record<string, unknown>>(AB_KEY)) ?? {}));
+  const rows = await db.listing.findMany({ where: { status: "active", supplier: "printful", productType: { in: [...MUGS] }, etsyListingId: { not: null } } });
+  let done = 0;
+  for (const r of rows) {
+    if (!r.designSvg || tested.has(r.etsyListingId!)) continue; // a listing in the A/B test keeps what the test set
+    try {
+      if (await etsy.uploadListingImage(r.etsyListingId!, await mugCloseUp(r.designSvg, mugColour(r.productType)), 1)) done++;
+    } catch (err) {
+      await log.warn(`Close-up mislukt voor ${r.title}: ${(err as Error).message}`, undefined, taskId);
+    }
+    if (taskId) await db.task.update({ where: { id: taskId }, data: { status: "running" } });
+  }
+  await log.info(`Close-up als eerste foto op ${done} mok(ken) gezet`, undefined, taskId);
+  return { done };
+}
+
+/**
+ * A/B test of the main photo on ONE listing: use "closeup" or "mockup" as its first photo. Only that photo
+ * moves; the favourites at the start are kept so the test can be judged later.
+ */
+async function abFirstPhoto(payload: Record<string, unknown>, { log, taskId }: TaskContext) {
+  const listingId = String(payload.listingId ?? "");
+  const use = payload.use === "mockup" ? "mockup" : "closeup";
+  const r = await db.listing.findFirst({ where: { OR: [{ id: listingId }, { etsyListingId: listingId }] } });
+  if (!r?.etsyListingId || !MUGS.has(r.productType) || !r.designSvg) throw new Error("Geef een live mok-listing (listingId)");
+  const etsyId = r.etsyListingId;
+  const png = await mugCloseUp(r.designSvg, mugColour(r.productType));
+  await etsy.uploadListingImage(etsyId, png, 1);
+  const hashes = await etsy.uploadedImageHashes(etsyId);
+  const closeUpId = Number(Object.entries(hashes).find(([, h]) => h === closeUpHash(png))?.[0]);
+  const ids = await etsy.getListingImageIds(etsyId);
+  const first = use === "closeup" ? closeUpId : ids.find((id) => id !== closeUpId);
+  if (!first) throw new Error("Geen foto gevonden om vooraan te zetten");
+  await etsy.setImageRank(etsyId, first, 1);
+  const tests = (await getSetting<Record<string, unknown>>(AB_KEY)) ?? {};
+  tests[etsyId] = { listing: r.title, use, since: new Date().toISOString(), favoritesAtStart: r.favorites };
+  await setSetting(AB_KEY, tests);
+  await log.info(`A/B-test eerste foto: ${r.title} toont nu de ${use === "closeup" ? "close-up" : "mockup"} vooraan (start: ${r.favorites} favorieten)`, undefined, taskId);
+  return { listing: etsyId, use };
+}
+
+/**
+ * Before 15 December a job that takes live listings down or replaces their photos waits for Jarne:
+ * it becomes an approval, and his OK runs it again with approved: true.
+ */
+async function needsFreezeApproval(type: string, payload: Record<string, unknown>, liveCount: number, what: string): Promise<boolean> {
+  if (!isFrozen() || payload.approved === true || liveCount === 0) return false;
+  await requestApproval({
+    agentId: ID,
+    kind: "frozen_job",
+    title: `${what} (${liveCount} live listing(s))`,
+    details: `Tot ${frozenUntil} blijven live listings zoals ze zijn, behalve als jij dit goedkeurt.`,
+    payload: { type, payload: { ...payload, approved: true } },
+  });
+  return true;
 }
 
 const PRINTIFY_PRODUCTS: [string, RegExp][] = [
@@ -1731,6 +1844,10 @@ registerApprovalExecutor("etsy_publish", async (p) => {
 });
 registerApprovalExecutor("printful_order_confirm", confirmPrintfulOrder);
 registerApprovalExecutor("printify_publish", publishPrintify);
+registerApprovalExecutor("frozen_job", async (p) => {
+  await enqueue(ID, String(p.type), (p.payload as Record<string, unknown>) ?? { approved: true });
+  return "In de wachtrij gezet.";
+});
 registerApprovalExecutor("personal_text", async (p) => {
   await enqueue(ID, "fulfil_receipt", { receiptId: p.receiptId, approvedTexts: p.approvedTexts });
   return "Bestelling wordt nu bij Printful geplaatst";
@@ -1753,13 +1870,16 @@ export const etsyPodAgent: AgentDefinition = {
     printful_setup: "Bij Printful de API-winkel, de 11 oz mok en de exacte printmaat opzoeken en opslaan",
     retire_printful: "Alle Printful-kleding (hoodies, sweaters, T-shirts) en gepersonaliseerde posters offline halen (inactive op Etsy, niets gewist)",
     printify_setup: "Printify-aanbod klaarzetten: kleuren, maten, printzone en verzending per kledingstuk bij de Europese drukker",
+    undo_title_test: "De korte-titeltest terugdraaien: oude titels en tags terug op de 8 testlistings",
+    mug_closeups: "Op alle live mokken een close-up als eerste foto zetten (de grap leesbaar op een telefoon); voegt alleen toe",
+    ab_first_photo: "A/B-test op één mok: close-up of mockup als eerste foto (payload: listingId, use: closeup|mockup)",
     printify_photos: "Printify-listings op Etsy aanvullen tot 10 foto's (andere mockups van Printify en het ontwerp zelf)",
     printify_own: "Jarnes eigen Printify-producten prijzen (minstens €5 winst met 20% korting) en ter goedkeuring voorleggen",
     printify_check: "Printify-sleutel controleren: welke winkel, en welke Europese drukkers onze hoodies, sweaters en T-shirts maken",
     eu_shipping: "Verzendprofielen naar Europa (Letland) zetten waar Printful alles in Europa drukt, met eerlijke levertijden per land (prijzen blijven gelijk)",
     etsy_setup: "Bij Etsy de munt, het verzendprofiel, het retourbeleid, de categorie Mokken en de productiepartner opzoeken",
     add_photos: "Listings op Etsy met te weinig mokfoto's aanvullen met Printful-foto's",
-    retitle_listings: "Lange titels van alle live listings inkorten tot korte, directe titels (oude titels worden bewaard)",
+    retitle_listings: "Korte-titeltest: titels van 8 listings inkorten (of de opgegeven listingIds); oude titel en tags worden bewaard, terugdraaien met undo_title_test",
     refresh_listings: "Printbestanden opnieuw tekenen met de huidige opmaak en de foto's en video op Etsy vervangen (listingIds of productTypes)",
     sync_shipments: "Verzonden Printful-bestellingen met hun track & trace op Etsy als verzonden markeren",
     reprice_listings: "De prijzen uit de catalogus op alle listings van de bot zetten (live en concept); gepersonaliseerde houden hun meerprijs",
@@ -1784,6 +1904,9 @@ export const etsyPodAgent: AgentDefinition = {
     printify_setup: printifySetup,
     printify_own: printifyOwn,
     printify_photos: printifyPhotos,
+    mug_closeups: mugCloseups,
+    undo_title_test: undoTitleTest,
+    ab_first_photo: abFirstPhoto,
     retire_printful: retirePrintful,
     fulfil_receipt: fulfilReceipt,
     add_photos: addPhotos,

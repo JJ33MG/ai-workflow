@@ -39,12 +39,15 @@ interface AskOptions {
   maxTokens?: number;
   /** PNG images shown to Claude before the prompt (e.g. a rendered page to review). */
   images?: Buffer[];
+  /** Other content shown before the prompt: files Jarne uploaded (screenshots, PDFs, CSV as text). */
+  blocks?: Anthropic.ContentBlockParam[];
 }
 
 function userContent(opts: AskOptions): Anthropic.MessageParam["content"] {
-  if (!opts.images?.length) return opts.prompt;
+  if (!opts.images?.length && !opts.blocks?.length) return opts.prompt;
   return [
-    ...opts.images.map(
+    ...(opts.blocks ?? []),
+    ...(opts.images ?? []).map(
       (png): Anthropic.ImageBlockParam => ({
         type: "image",
         source: { type: "base64", media_type: "image/png", data: png.toString("base64") },

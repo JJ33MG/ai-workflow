@@ -11,6 +11,7 @@ import * as pinterest from "../integrations/pinterest.js";
 import { registerApprovalExecutor, requestApproval } from "../lib/approvals.js";
 import { BudgetExceededError } from "../lib/budget.js";
 import { askJson } from "../lib/claude.js";
+import { latestStatsBrief } from "../lib/etsyStats.js";
 import { SEARCH_PATTERNS, cleanSeo, seoBatches } from "../lib/seo.js";
 import {
   MEASURE_AFTER_DAYS,
@@ -118,6 +119,7 @@ async function marketingReview(payload: Record<string, unknown>, ctx: TaskContex
         `Today: ${todayIso()}. Business: ${b.name} (${b.kind}). ${b.description} Sells on: ${b.channels.join(", ")}.`,
         await campaignBrief(b.id),
         `Current strategy: ${strategy ? JSON.stringify(strategy) : "none yet: write the first one."}`,
+        b.channels.some((c) => /etsy/i.test(c)) ? `${await latestStatsBrief()} These numbers beat anything older in the strategy.` : "",
         `Numbers: ${JSON.stringify(metrics)}`,
         `Tactics you can use here: ${JSON.stringify(tactics.map((t) => ({ id: t.id, auto: t.auto, description: t.description })))}`,
         `Plays so far (newest first): ${JSON.stringify(

@@ -58,6 +58,18 @@
         <section id="section-overview" class="section" hidden>
           <div id="banner" class="banner"></div>
           <div id="kpis" class="kpis"></div>
+          <div class="panel" id="stats-upload">
+            <h2>Etsy-cijfers uploaden</h2>
+            <p class="muted flush">Etsy geeft geen bezoeken of Ads-cijfers via de koppeling. Sleep hier je export uit Etsy Stats of Etsy Ads (CSV, Excel, screenshot of PDF), of schrijf een korte notitie. De marketing-agent zet de cijfers in het gedeelde geheugen en past de strategie meteen aan.</p>
+            <div class="stats-drop" id="stats-drop">
+              <input id="stats-file" type="file" multiple accept="image/*,.pdf,.csv,.tsv,.txt,.json,.xlsx" hidden />
+              <button type="button" class="btn" id="stats-pick">📎 Bestand kiezen</button>
+              <span id="stats-files" class="muted">of sleep bestanden hierheen</span>
+            </div>
+            <textarea id="stats-note" rows="2" placeholder="Notitie, bv. 'Etsy Ads staan aan sinds 17 november, €2 per dag'"></textarea>
+            <button type="button" class="btn btn-primary" id="stats-send">Verwerken</button>
+            <div id="stats-last" class="muted"></div>
+          </div>
           <div class="panel">
             <h2>Bedrijven</h2>
             <div id="overview-businesses" class="biz-grid"></div>

@@ -1,3 +1,4 @@
+import { STATS_KEY, type EtsyStats } from "./lib/etsyStats.js";
 import { agents as registry } from "./agents/index.js";
 import { BUSINESSES, businessById } from "./businesses.js";
 import { MONTHLY_GOAL_CENTS } from "./agents/ceo.js";
@@ -294,6 +295,7 @@ export async function buildDashboard(now = new Date()) {
   ]);
   const routify = { stats: routifyStats, ...launchView(routifyStats, launchTicks ?? {}) };
   const ideas = await db.idea.findMany({ orderBy: { createdAt: "desc" }, take: 60 });
+  const etsyStats = await getSetting<EtsyStats>(STATS_KEY);
 
   return {
     generatedAt: now,
@@ -302,6 +304,7 @@ export async function buildDashboard(now = new Date()) {
     plan,
     routify,
     ideas,
+    etsyStats,
     timezone: config.timezone,
     serverStartedAt: schedulerState.startedAt,
     overall,

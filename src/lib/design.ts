@@ -124,7 +124,7 @@ export function withViewBox(svg: string, [x, y, w, h]: number[], width: number, 
 }
 
 /** The drawn part of an SVG, in its own viewBox units (left copy only for old two-copy designs). */
-async function contentBox(svg: string): Promise<[number, number, number, number]> {
+export async function contentBox(svg: string): Promise<[number, number, number, number]> {
   const [vx, vy, vw, vh] = viewBoxOf(svg);
   const scale = 2; // render the original at 2 px per unit to measure it precisely
   // Default density: one SVG pixel per output pixel, so the width/height set here is the real size.

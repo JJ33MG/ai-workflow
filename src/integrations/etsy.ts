@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { config } from "../config.js";
 import { getSetting, setSetting } from "../db.js";
+import { alreadyUploaded } from "../lib/shopGuards.js";
 
 // Etsy Open API v3. OAuth 2.0 with PKCE; access tokens last 1 hour and are
 // refreshed with the stored refresh token.
@@ -225,12 +226,33 @@ export async function createDraftListing(input: DraftListingInput): Promise<{ li
   return etsy("POST", `/shops/${await shopId()}/listings`, body);
 }
 
-export async function uploadListingImage(listingId: string, png: Buffer, rank = 1): Promise<void> {
+/**
+ * Uploads a photo to a listing, unless the very same photo is still on it (Jarne saw photos twice).
+ * Returns false when it was skipped as a duplicate.
+ */
+export async function uploadListingImage(listingId: string, png: Buffer, rank = 1): Promise<boolean> {
+  const hash = createHash("sha256").update(png).digest("hex");
+  const key = `etsy.images.${listingId}`;
+  const seen = (await getSetting<Record<string, string>>(key)) ?? {};
+  if (Object.values(seen).includes(hash) && alreadyUploaded(seen, hash, await getListingImageIds(listingId))) return false;
   const form = new FormData();
   form.append("image", new Blob([new Uint8Array(png)], { type: "image/png" }), `image-${rank}.png`);
   form.append("rank", String(rank));
+  const res = await etsy<{ listing_image_id?: number }>("POST", `/shops/${await shopId()}/listings/${listingId}/images`, form);
+  if (res?.listing_image_id) await setSetting(key, { ...seen, [String(res.listing_image_id)]: hash });
+  return true;
+}
+
+/** Moves a photo that is already on the listing to another place (rank 1 is the main photo). */
+export async function setImageRank(listingId: string, imageId: number, rank: number): Promise<void> {
+  const form = new FormData();
+  form.append("listing_image_id", String(imageId));
+  form.append("rank", String(rank));
   await etsy("POST", `/shops/${await shopId()}/listings/${listingId}/images`, form);
 }
+
+/** The hash of each photo the Brain uploaded to this listing (to find the close-up again). */
+export const uploadedImageHashes = async (listingId: string) => (await getSetting<Record<string, string>>(`etsy.images.${listingId}`)) ?? {};
 
 /** Listings in one state ("active", "draft", "inactive"), all pages. */
 export async function getListingsByState(state: "active" | "draft" | "inactive"): Promise<EtsyListing[]> {

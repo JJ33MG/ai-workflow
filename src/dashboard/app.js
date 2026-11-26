@@ -7,6 +7,7 @@ import { initChat, renderChat } from "./js/chat.js";
 import { $, api, openSection, state, toast } from "./js/core.js";
 import { renderHandbook } from "./js/handbook.js";
 import { renderIdeas } from "./js/ideas.js";
+import { initStatsUpload, renderStatsUpload } from "./js/stats.js";
 import { renderOverview } from "./js/overview.js";
 import { renderPlan } from "./js/plan.js";
 import { renderRoutify } from "./js/routify.js";
@@ -52,6 +53,7 @@ function render() {
   renderPlan(d);
   renderRoutify(d);
   renderIdeas(d);
+  renderStatsUpload(d);
   renderHandbook(d);
   renderAgents(d);
   renderProblems(d);
@@ -116,6 +118,7 @@ $("plan-mine").addEventListener("change", () => state.data && renderPlan(state.d
 $("routify-mine").addEventListener("change", () => state.data && renderRoutify(state.data));
 document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && state.data && load());
 initChat();
+initStatsUpload();
 
 try {
   const saved = sessionStorage.getItem("agency-brain-section");
