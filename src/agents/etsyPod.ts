@@ -1341,8 +1341,9 @@ async function retirePrintful(_payload: Record<string, unknown>, { log, taskId }
   for (const r of rows.filter((x) => ids.has(x.id))) {
     try {
       if (r.status === "uploaded") {
-        // Still a draft waiting for Jarne's review: it never went live, so it is removed instead.
-        await etsy.deleteDraftListing(r.etsyListingId!);
+        // Still a draft waiting for Jarne's review: it never went live. Deleting needs Etsy's listings_d
+        // permission; without it the draft just stays invisible and is never published.
+        await etsy.deleteDraftListing(r.etsyListingId!).catch(() => undefined);
         await db.listing.update({ where: { id: r.id }, data: { status: "removed" } });
       } else {
         await etsy.deactivateListing(r.etsyListingId!);
