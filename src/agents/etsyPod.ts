@@ -1378,7 +1378,16 @@ async function printifyCheck(_payload: Record<string, unknown>, { log, taskId }:
     lines.push(`${typeId}: ${bp.title} (#${bp.id}), ${providers.length} drukkers, in Europa: ${eu.map((p) => `${p.title} (${p.location?.country})`).join(", ") || "geen"}`);
   }
   const products = etsyShop ? await printify.listProducts(etsyShop.id) : [];
+  // Jarne's own Printify products are the style to follow: keep a copy of each main photo on our server.
+  const refs = new Map<string, string>();
+  for (const p of products) {
+    const src = p.images.find((i) => i.is_default)?.src ?? p.images[0]?.src;
+    if (!src) continue;
+    const img = await fetch(src).then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null);
+    if (img) refs.set(p.id, designUrl(await saveDesign(Buffer.from(img), `printify-ref-${p.id}`, "jpg")));
+  }
   const own = products.map((p) => ({
+    ref: refs.get(p.id) ?? null,
     id: p.id,
     title: p.title,
     blueprintId: p.blueprint_id,
