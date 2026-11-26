@@ -167,9 +167,12 @@ async function scout(mode: Mode, { log, taskId }: TaskContext) {
 }
 
 const DAILY_FOCUS =
-  "Find today's best opportunities: (1) trends and seasons 4-8 weeks ahead that fit Jarne's businesses (Etsy print-on-demand, " +
-  "Routify road trips, eBay), (2) new platforms, tools or earning models a solo founder with AI agents could add, (3) what successful " +
-  "sellers or apps in these spaces do now that Jarne doesn't, (4) one surprising, outside-the-box opportunity from a field he has not considered.";
+  "Three ideas, one of each (Jarne, 26 Nov): " +
+  "(A) OPTIMIZE something already live (Etsy shop, Printify garments, eBay, Routify): a concrete change that should bring sales or visitors soon. " +
+  "(B) VIRAL OR RISING NOW: something going viral or clearly rising this week on X or the web (a saying, meme, event, product type, niche) " +
+  "that the agents can turn into money within days, e.g. trend merch, a printable, a quick digital product. Say how fast the window closes. " +
+  "(C) WILD NEW BUSINESS: an up-and-coming niche or money-making model a solo founder with AI agents could start; far-fetched is fine, " +
+  "unusual is welcome, as long as it is legal, honest and does not risk an account ban. Mark (C) outsideBox=true.";
 
 const WEEKLY_FOCUS =
   "Review the Brain itself. From the numbers, agents, failures and open steps above: what is slow, what keeps failing, what does " +
