@@ -104,6 +104,9 @@ export const config = {
     postsPerDay: num("META_POSTS_PER_DAY", 1),
   },
 
+  printify: {
+    token: str("PRINTIFY_API_TOKEN"),
+  },
   printful: {
     token: str("PRINTFUL_TOKEN"),
     storeId: str("PRINTFUL_STORE_ID"),

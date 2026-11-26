@@ -33,6 +33,7 @@ import {
   templateProblems,
 } from "../lib/personalize.js";
 import { deliveryDays, profileOrigin } from "../lib/euShipping.js";
+import * as printify from "../integrations/printify.js";
 import { STYLE_BRIEFS, STYLES, batchStyles, designRulesFor, personalizedDay, type DesignStyle } from "../lib/designStyles.js";
 import { enqueue, enqueueOnce } from "../lib/tasks.js";
 import type { AgentDefinition, TaskContext } from "./types.js";
@@ -1328,6 +1329,39 @@ async function addAiDisclosure(_payload: Record<string, unknown>, { log, taskId 
   return { added, checked: listings.length };
 }
 
+const PRINTIFY_PRODUCTS: [string, RegExp][] = [
+  ["hoodie", /gildan 18500|heavy blend.*hooded/i],
+  ["sweatshirt", /gildan 18000|heavy blend.*crewneck/i],
+  ["tshirt", /bella.*3001|canvas 3001/i],
+];
+
+/** Checks the Printify key: which shop it sees (the Etsy one) and which European print providers make our garments. */
+async function printifyCheck(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
+  if (!printify.isPrintifyConfigured()) throw new Error("PRINTIFY_API_TOKEN ontbreekt in Railway");
+  const shops = await printify.listShops();
+  const etsyShop = shops.find((s) => /etsy/i.test(s.sales_channel));
+  const blueprints = await printify.listBlueprints();
+  const lines: string[] = [`Winkels: ${shops.map((s) => `${s.title} (${s.sales_channel})`).join(", ") || "geen"}`];
+  const found: Record<string, unknown> = {};
+  for (const [typeId, re] of PRINTIFY_PRODUCTS) {
+    const bp = blueprints.find((b) => re.test(`${b.title} ${b.brand} ${b.model}`));
+    if (!bp) {
+      lines.push(`${typeId}: niet gevonden in de catalogus`);
+      continue;
+    }
+    const providers = await printify.providersFor(bp.id);
+    const eu = providers.filter((p) => euCountry(p.location?.country));
+    found[typeId] = { blueprintId: bp.id, title: bp.title, providers: providers.map((p) => ({ id: p.id, title: p.title, country: p.location?.country })) };
+    lines.push(`${typeId}: ${bp.title} (#${bp.id}), ${providers.length} drukkers, in Europa: ${eu.map((p) => `${p.title} (${p.location?.country})`).join(", ") || "geen"}`);
+  }
+  await setSetting("printify.setup", { shopId: etsyShop?.id ?? null, shops, found, checkedAt: new Date().toISOString() });
+  await log.info(`Printify gekoppeld${etsyShop ? `, Etsy-winkel #${etsyShop.id}` : " (nog geen Etsy-winkel gezien)"}:\n${lines.join("\n")}`, undefined, taskId);
+  return { shop: etsyShop?.id ?? null };
+}
+
+const EU_COUNTRIES = new Set(["AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE", "GB", "UK"]);
+const euCountry = (c: string | undefined) => Boolean(c && EU_COUNTRIES.has(c.toUpperCase()));
+
 const EU_SHIPPING_BEFORE = "etsy.shipping.before";
 
 /**
@@ -1650,6 +1684,7 @@ export const etsyPodAgent: AgentDefinition = {
     sync_sales: "Nieuwe betaalde Etsy-bestellingen ophalen als verkopen",
     sync_listings: "Alle actieve listings van je Etsy-winkel ophalen, ook die je met de hand plaatste",
     printful_setup: "Bij Printful de API-winkel, de 11 oz mok en de exacte printmaat opzoeken en opslaan",
+    printify_check: "Printify-sleutel controleren: welke winkel, en welke Europese drukkers onze hoodies, sweaters en T-shirts maken",
     eu_shipping: "Verzendprofielen naar Europa (Letland) zetten waar Printful alles in Europa drukt, met eerlijke levertijden per land (prijzen blijven gelijk)",
     etsy_setup: "Bij Etsy de munt, het verzendprofiel, het retourbeleid, de categorie Mokken en de productiepartner opzoeken",
     add_photos: "Listings op Etsy met te weinig mokfoto's aanvullen met Printful-foto's",
@@ -1674,6 +1709,7 @@ export const etsyPodAgent: AgentDefinition = {
     printful_setup: printfulSetup,
     etsy_setup: etsySetup,
     eu_shipping: euShipping,
+    printify_check: printifyCheck,
     fulfil_receipt: fulfilReceipt,
     add_photos: addPhotos,
     fix_return_policy: fixReturnPolicy,
