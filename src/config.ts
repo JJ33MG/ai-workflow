@@ -44,6 +44,8 @@ export const config = {
   grok: {
     apiKey: str("XAI_API_KEY"),
     model: str("XAI_MODEL", "grok-4.7"),
+    /** At most this many Grok questions a day (Scout's morning scan counts as one). */
+    dailyCalls: num("GROK_DAILY_CALLS", 4),
   },
 
   budget: {

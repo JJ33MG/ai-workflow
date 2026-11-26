@@ -47,7 +47,7 @@ import { grokBody } from "../src/lib/grok.js";
 
 describe("grokBody: Grok reads a capped amount of X per question (one question cost €0.88)", () => {
   it("limits the tool turns and searches only the recent days", () => {
-    const b = grokBody({ model: "grok-4.7", prompt: "q", xDays: 3, web: false }, new Date("2026-11-26T12:00:00Z"));
+    const b = grokBody({ model: "grok-4.7", prompt: "q", web: false }, new Date("2026-11-26T12:00:00Z"));
     expect(b.max_turns).toBe(2);
     expect(b.tools).toEqual([{ type: "x_search", from_date: "2026-11-23" }]);
   });

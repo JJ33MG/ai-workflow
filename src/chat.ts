@@ -45,18 +45,18 @@ export function toolsFor(agentId: string): ChatTool[] {
             description:
               "Ask Grok (xAI), which can search X (Twitter) posts in real time and the web. Use it for what people say right now on X, " +
               "trending topics, memes and sayings, competitors' posts, or a second opinion on marketing or money. Give it a precise question; " +
-              "weigh its answer yourself and say to Jarne what came from Grok.",
+              "weigh its answer yourself and say to Jarne what came from Grok. Each question costs about €0.50-0.75 and there are at most 4 a day: ask one well-aimed question, not several.",
             input_schema: {
               type: "object",
               properties: {
                 question: { type: "string" },
-                days: { type: "integer", description: "How many days of X posts to search (default 7)" },
+                days: { type: "integer", description: "How many days of X posts to search (default 3; more days cost more)" },
               },
               required: ["question"],
             },
           },
           run: async (input) => {
-            const r = await askGrok({ agentId, purpose: "chat_grok", prompt: String(input.question ?? ""), xDays: Number(input.days) || 7, web: true });
+            const r = await askGrok({ agentId, purpose: "chat_grok", prompt: String(input.question ?? ""), xDays: Number(input.days) || 3, web: true });
             return `${r.text}\n\nBronnen: ${r.sources.slice(0, 8).join(" ") || "geen"}`;
           },
         },
