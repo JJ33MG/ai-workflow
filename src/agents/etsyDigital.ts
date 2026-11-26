@@ -66,6 +66,8 @@ const KIND_BRIEF: Record<DigitalKind, string> = {
 /** Rules for typographic pages (activity packs and planners), US Letter at 300 dpi. */
 const DOC_RULES =
   "You design one page of a printable sold on Etsy. Output one standalone SVG document and nothing else. " +
+  "Keep the page simple and the SVG short: at most about 30 rows or boxes per page (a 50-book tracker becomes 25 per page), " +
+  "draw repeated rows with <use href> instead of writing each one out. " +
   'Use viewBox="0 0 2550 3300" (US Letter at 300 dpi) and a white background. Keep every element at least 150 units from every edge. ' +
   "Clean, modern and printer-friendly: mostly black or dark grey text and thin lines, with one accent colour (given) used sparingly for headings and small shapes. " +
   "No large filled areas (they waste ink), no photos, no clip-art scenes; one or two simple icons drawn with lines are fine. " +

@@ -10,12 +10,13 @@ interface Row {
   personalized: boolean;
   source: string;
   status: string;
+  supplier?: string;
 }
 
 /** The agent's live Printful listings to take offline: every garment, and every personalized poster. */
 export function retireSelection(rows: Row[]): string[] {
   return rows
-    .filter((r) => r.source === "agent" && ["active", "uploaded"].includes(r.status))
+    .filter((r) => r.source === "agent" && (r.supplier ?? "printful") === "printful" && ["active", "uploaded"].includes(r.status))
     .filter((r) => PRINTFUL_RETIRED.has(r.productType) || (r.productType === "poster" && r.personalized))
     .map((r) => r.id);
 }

@@ -79,3 +79,33 @@ export interface PrintifyProduct {
 
 export const listProducts = (shopId: number) =>
   printify<{ data: PrintifyProduct[] }>("GET", `/shops/${shopId}/products.json?limit=50`).then((r) => r.data);
+
+/** Variants of a garment at one provider, with the print area size per variant. */
+export const variantsWithPlaceholders = (blueprintId: number, providerId: number) =>
+  printify<{ variants: { id: number; title: string; options: Record<string, string>; placeholders: { position: string; width: number; height: number }[] }[] }>(
+    "GET",
+    `/catalog/blueprints/${blueprintId}/print_providers/${providerId}/variants.json`,
+  ).then((r) => r.variants);
+
+/** Uploads a print file Printify can fetch from our public URL. */
+export const uploadImage = (fileName: string, url: string) =>
+  printify<{ id: string; preview_url?: string }>("POST", "/uploads/images.json", { file_name: fileName, url });
+
+export const createProduct = (shopId: number, body: unknown) => printify<PrintifyProduct>("POST", `/shops/${shopId}/products.json`, body);
+
+export const getProduct = (shopId: number, productId: string) => printify<PrintifyProduct>("GET", `/shops/${shopId}/products/${productId}.json`);
+
+export const updateProduct = (shopId: number, productId: string, body: unknown) =>
+  printify<PrintifyProduct>("PUT", `/shops/${shopId}/products/${productId}.json`, body);
+
+/** Printify puts the product on Etsy through Jarne's connection (title, text, photos, prices, shipping). */
+export const publishProduct = (shopId: number, productId: string) =>
+  printify<unknown>("POST", `/shops/${shopId}/products/${productId}/publish.json`, {
+    title: true,
+    description: true,
+    images: true,
+    variants: true,
+    tags: true,
+    keyFeatures: true,
+    shipping_template: true,
+  });

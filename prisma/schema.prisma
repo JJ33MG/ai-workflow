@@ -154,6 +154,9 @@ model Listing {
   printfulVariant  Int?
   /// The buyer types a name that is printed in the design (the <text id="personal-name"> element).
   personalized     Boolean  @default(false)
+  /// printful | printify: who prints and ships it. Printify orders are fulfilled by Printify through its Etsy connection.
+  supplier         String   @default("printful")
+  printifyProductId String? @unique
   error            String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt

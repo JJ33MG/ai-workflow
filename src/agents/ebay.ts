@@ -244,6 +244,7 @@ async function list(_payload: Record<string, unknown>, { log, taskId }: TaskCont
     ? await db.listing.findMany({
         where: {
           source: "agent",
+          supplier: "printful", // eBay orders go to Printful; Printify garments are fulfilled by Printify on Etsy only
           status: "active",
           personalized: false,
           etsyListingId: { not: null },

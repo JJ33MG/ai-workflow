@@ -17,6 +17,10 @@ describe("retireSelection: which Printful listings go offline (Jarne, 26 Nov)", 
     expect(picked.sort()).toEqual(["h", "pp", "s", "t"]);
   });
 
+  it("never touches the new Printify garments", () => {
+    expect(retireSelection([{ ...row("p", "hoodie"), supplier: "printify" }])).toEqual([]);
+  });
+
   it("never touches listings Jarne placed himself, or ones already offline", () => {
     expect(retireSelection([row("a", "hoodie", false, "etsy"), row("b", "hoodie", false, "agent", "ended")])).toEqual([]);
   });

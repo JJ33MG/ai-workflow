@@ -34,7 +34,9 @@ import {
 } from "../lib/personalize.js";
 import { deliveryDays, profileOrigin } from "../lib/euShipping.js";
 import { PRINTFUL_RETIRED, retireSelection } from "../lib/catalogRetire.js";
+import { PRINTIFY_TYPES } from "../lib/printifyCatalog.js";
 import * as printify from "../integrations/printify.js";
+import { createPrintifyListing, loadPrintifyCatalog, printifyEntries, printifyLink, printifyOwn, printifySetup, publishPrintify, requestPrintifyPublish } from "./printifyFlow.js";
 import { FONT_GUIDE, SHOP_LOOK, STYLE_BRIEFS, STYLES, batchStyles, designRulesFor, personalizedDay, type DesignStyle } from "../lib/designStyles.js";
 import { enqueue, enqueueOnce } from "../lib/tasks.js";
 import type { AgentDefinition, TaskContext } from "./types.js";
@@ -244,7 +246,9 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
   // A mix every day: job gifts, broad quotes, cartoons, art prints and seasonal designs (personalized stays job/hobby gifts).
   const styles: DesignStyle[] = personalized ? Array(count).fill("niche") : batchStyles(count, Math.floor(Date.now() / 86_400_000));
   const digest = await knowledgeDigest();
-  const types = availableTypes().filter((t) => t.variants.length || t.digital);
+  // Garments come from Printify (when its catalogue is set up); the rest from Printful.
+  if (!printifyEntries().length) await loadPrintifyCatalog();
+  const types = [...availableTypes().filter((t) => t.variants.length || t.digital), ...(personalized ? [] : printifyEntries())];
   if (!types.length) throw new Error("No product type is ready: run printful_setup and catalog_setup first.");
   const physical = types.filter((t) => !t.digital);
   const printable = personalized ? undefined : types.find((t) => t.digital);
@@ -259,7 +263,8 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
     .map((t) => {
       const def = productType(t.typeId);
       const prices = t.variants.map((v) => v.priceCents + (personalized ? PERSONALIZATION_EXTRA_CENTS : 0));
-      return `- ${t.typeId}: ${def?.noun ?? t.label}. ${def?.facts ?? ""} Price ${Math.min(...prices) / 100}–${Math.max(...prices) / 100} ${etsy.es.currency}.`;
+      const facts = "printify" in t ? PRINTIFY_TYPES.find((x) => x.typeId === t.typeId)?.facts : def?.facts;
+      return `- ${t.typeId}: ${def?.noun ?? t.label}. ${facts ?? ""} Price ${Math.min(...prices) / 100}–${Math.max(...prices) / 100} ${etsy.es.currency}.`;
     })
     .join("\n");
   const printableLine = printable
@@ -305,6 +310,7 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
   });
 
   const created: string[] = [];
+  const viaPrintify: string[] = [];
   for (const idea of ideas.slice(0, count)) {
     // A text used on two products is drawn once.
     const drawn = new Map<string, string>();
@@ -322,6 +328,12 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
         if (!svg) {
           svg = (await designWithRetry({ slogan: raw.slogan, niche: idea.niche, designBrief: raw.designBrief, personalized, style: styleOf(idea.style) }, log, taskId)).svg;
           drawn.set(key, svg);
+        }
+        if ("printify" in entry) {
+          const id = await createPrintifyListing({ typeId: entry.typeId, niche: idea.niche, title: text.title, description: withAiDisclosure(text.description), tags: text.tags, svg });
+          viaPrintify.push(id);
+          await log.info(`Printify-product gemaakt: ${text.title}`, { listingId: id, niche: idea.niche, product: entry.typeId }, taskId);
+          continue;
         }
         if (entry.digital) {
           const listing = await db.listing.create({
@@ -374,11 +386,12 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
   }
 
   if (created.length > 0) await enqueue(ID, "upload_listings", { listingIds: created });
+  if (viaPrintify.length > 0) await requestPrintifyPublish(viaPrintify);
   // The daily batch is followed by a small personalized one.
   if (payload.personalized === undefined && config.pod.personalizedPerRun > 0 && personalizedDay(new Date())) {
     await enqueue(ID, "create_listings", { personalized: true, count: config.pod.personalizedPerRun });
   }
-  return { created: created.length, personalized };
+  return { created: created.length + viaPrintify.length, printify: viaPrintify.length, personalized };
 }
 
 /** The idea writer's style word, or "niche" when it wrote something else. */
@@ -858,6 +871,8 @@ export async function upsertEtsyListings(
 async function syncListings(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
   if (!etsy.isEtsyConfigured() || !(await etsy.isEtsyConnected())) return { skipped: "etsy not connected" };
   const result = await upsertEtsyListings(await etsy.getActiveListings(), etsy.getMainImageUrl);
+  // Products Printify published: link them to their Etsy listing.
+  if (printify.isPrintifyConfigured()) await printifyLink().catch((err: Error) => log.warn(`Printify koppelen mislukt: ${err.message}`, undefined, taskId));
   const drafts = await etsy.getListingsByState("draft");
   const reviewed = await settleReviewedDrafts(new Set(drafts.map((l) => String(l.listing_id))));
   if (result.added || result.ended || reviewed.removed || reviewed.closedApprovals) {
@@ -1334,7 +1349,7 @@ async function addAiDisclosure(_payload: Record<string, unknown>, { log, taskId 
 /** Takes the Printful garments and personalized posters offline (Jarne: they look unprofessional). */
 async function retirePrintful(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
   if (config.dryRun || !etsy.isEtsyConfigured() || !(await etsy.isEtsyConnected())) return { skipped: "dry run of Etsy niet gekoppeld" };
-  const rows = await db.listing.findMany({ where: { etsyListingId: { not: null } }, select: { id: true, productType: true, personalized: true, source: true, status: true, etsyListingId: true, title: true } });
+  const rows = await db.listing.findMany({ where: { etsyListingId: { not: null } }, select: { id: true, productType: true, personalized: true, source: true, status: true, supplier: true, etsyListingId: true, title: true } });
   const ids = new Set(retireSelection(rows));
   let done = 0;
   const failed: string[] = [];
@@ -1715,6 +1730,7 @@ registerApprovalExecutor("etsy_publish", async (p) => {
   return "Publishing queued";
 });
 registerApprovalExecutor("printful_order_confirm", confirmPrintfulOrder);
+registerApprovalExecutor("printify_publish", publishPrintify);
 registerApprovalExecutor("personal_text", async (p) => {
   await enqueue(ID, "fulfil_receipt", { receiptId: p.receiptId, approvedTexts: p.approvedTexts });
   return "Bestelling wordt nu bij Printful geplaatst";
@@ -1736,6 +1752,8 @@ export const etsyPodAgent: AgentDefinition = {
     sync_listings: "Alle actieve listings van je Etsy-winkel ophalen, ook die je met de hand plaatste",
     printful_setup: "Bij Printful de API-winkel, de 11 oz mok en de exacte printmaat opzoeken en opslaan",
     retire_printful: "Alle Printful-kleding (hoodies, sweaters, T-shirts) en gepersonaliseerde posters offline halen (inactive op Etsy, niets gewist)",
+    printify_setup: "Printify-aanbod klaarzetten: kleuren, maten, printzone en verzending per kledingstuk bij de Europese drukker",
+    printify_own: "Jarnes eigen Printify-producten prijzen (minstens €5 winst met 20% korting) en ter goedkeuring voorleggen",
     printify_check: "Printify-sleutel controleren: welke winkel, en welke Europese drukkers onze hoodies, sweaters en T-shirts maken",
     eu_shipping: "Verzendprofielen naar Europa (Letland) zetten waar Printful alles in Europa drukt, met eerlijke levertijden per land (prijzen blijven gelijk)",
     etsy_setup: "Bij Etsy de munt, het verzendprofiel, het retourbeleid, de categorie Mokken en de productiepartner opzoeken",
@@ -1762,6 +1780,8 @@ export const etsyPodAgent: AgentDefinition = {
     etsy_setup: etsySetup,
     eu_shipping: euShipping,
     printify_check: printifyCheck,
+    printify_setup: printifySetup,
+    printify_own: printifyOwn,
     retire_printful: retirePrintful,
     fulfil_receipt: fulfilReceipt,
     add_photos: addPhotos,

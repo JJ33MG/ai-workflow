@@ -5,6 +5,8 @@ import express, { type NextFunction, type Request, type Response } from "express
 import { collectBriefingData, formatBriefing } from "./agents/ceo.js";
 import { agents, syncAgents } from "./agents/index.js";
 import { handleCommand } from "./commands.js";
+import { loadPrintifyCatalog } from "./agents/printifyFlow.js";
+import { isPrintifyConfigured } from "./integrations/printify.js";
 import { config } from "./config.js";
 import { setPlanStatus } from "./brain.js";
 import { ChatUnavailableError, chatHistory, sendChat } from "./chat.js";
@@ -445,6 +447,7 @@ async function main() {
   if (!(await loadEtsySetup()) && (await etsy.isEtsyConnected())) await enqueueOnce("etsy-pod", "etsy_setup");
   // Product range (mugs, shirts, totes …): loaded if found before, otherwise looked up once both shops are known.
   if (!(await loadCatalog()) && hasPrintfulToken() && (await etsy.isEtsyConnected())) await enqueueOnce("etsy-pod", "catalog_setup");
+  if (!(await loadPrintifyCatalog()).length && isPrintifyConfigured()) await enqueueOnce("etsy-pod", "printify_setup");
   const stopScheduler = startScheduler();
   const stopPolling = startCommandPolling(handleCommand);
   const server = app.listen(config.port, () => {
