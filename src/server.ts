@@ -1,3 +1,4 @@
+import { toEurCents } from "./lib/money.js";
 import { timingSafeEqual } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -163,6 +164,32 @@ app.post("/api/marketing/etsy-stats", requireAdmin, async (req, res) => {
   } catch (err) {
     res.status(err instanceof AttachmentError ? 400 : 500).json({ error: (err as Error).message });
   }
+});
+
+// What the API money goes to: per purpose (task), per agent and per model, over the last N days.
+app.get("/api/costs/breakdown", requireAdmin, async (req, res) => {
+  const days = Math.min(30, Math.max(1, Number(req.query.days) || 3));
+  const rows = await db.cost.findMany({
+    where: { category: { in: ["claude_api", "grok_api"] }, occurredAt: { gte: new Date(Date.now() - days * 86_400_000) } },
+    select: { agentId: true, note: true, amountCents: true, currency: true, data: true, occurredAt: true },
+  });
+  const sum = new Map<string, { cents: number; calls: number; input: number; output: number }>();
+  for (const r of rows) {
+    const d = (r.data ?? {}) as { model?: string; usage?: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number } };
+    const key = `${r.agentId} | ${r.note ?? "?"} | ${d.model ?? "grok"}`;
+    const e = sum.get(key) ?? { cents: 0, calls: 0, input: 0, output: 0 };
+    e.cents += toEurCents(r.amountCents, r.currency);
+    e.calls++;
+    e.input += d.usage?.input_tokens ?? 0;
+    e.output += d.usage?.output_tokens ?? 0;
+    sum.set(key, e);
+  }
+  const total = [...sum.values()].reduce((n, e) => n + e.cents, 0);
+  res.json({
+    days,
+    totalEur: +(total / 100).toFixed(2),
+    rows: [...sum.entries()].map(([k, e]) => ({ key: k, eur: +(e.cents / 100).toFixed(2), calls: e.calls, avgIn: Math.round(e.input / e.calls), avgOut: Math.round(e.output / e.calls) })).sort((a, b) => b.eur - a.eur),
+  });
 });
 
 app.post("/api/plan/:id", requireAdmin, async (req, res) => {
