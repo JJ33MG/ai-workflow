@@ -1,10 +1,13 @@
 FROM node:22-bookworm-slim
 
+# Display fonts (retro script, block, bubbly) give designs a shop look; see FONT_GUIDE in designStyles.ts.
 # Fonts are required: designs are SVG text rendered to PNG, and without
 # system fonts every design comes out blank. OpenSSL is needed by Prisma,
 # ffmpeg makes the listing videos.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends fonts-dejavu fonts-liberation fonts-noto-core openssl ffmpeg \
+  && apt-get install -y --no-install-recommends fonts-dejavu fonts-liberation fonts-noto-core \
+     fonts-lobstertwo fonts-dancingscript fonts-bebas-neue fonts-league-spartan fonts-montserrat fonts-staypuft fonts-yanone-kaffeesatz \
+     openssl ffmpeg \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

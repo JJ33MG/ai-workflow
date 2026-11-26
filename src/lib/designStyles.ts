@@ -56,3 +56,17 @@ export function personalizedDay(d: Date): boolean {
   const day = d.getUTCDay();
   return day === 1 || day === 4;
 }
+
+/** Fonts installed on the server (Dockerfile). Only these and the generic families render. */
+export const FONT_GUIDE =
+  'Fonts you may use (exact font-family names): "Lobster Two" (font-weight bold, font-style italic: retro script), ' +
+  '"Dancing Script" (font-weight bold: handwritten script), "Bebas Neue" (font-weight bold: tall condensed block capitals), ' +
+  '"League Spartan" or "Montserrat" (font-weight 900: heavy block), "StayPuft" (bubbly cartoon letters), ' +
+  '"Yanone Kaffeesatz" (font-weight bold: narrow casual). Mix one script with one block font at most. Generic families also work.';
+
+/** The look Jarne liked on Printify: colourful retro and varsity badges. */
+export const SHOP_LOOK =
+  "House style (Jarne's favourites): colourful retro and varsity badge designs. A badge shape (circle with vertical stripes, " +
+  "shield, hexagon or arch) in 2 to 4 harmonious colours, a script word or two combined with heavy block capitals, small stars or " +
+  "sparkles, and one simple illustrated icon that fits the theme (a nail polish bottle, a lightning bolt, scissors, a coffee cup). " +
+  "Readable from across a room, pleasing on white and on black garments.";

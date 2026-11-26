@@ -106,7 +106,8 @@ async function drawDocPage(page: Plan["pages"][number], plan: Plan, kind: Digita
       await askText({
         agentId: ID,
         purpose: "digital_page_svg",
-        effort: "medium",
+        effort: "low", // pages kept getting cut off at the token limit (wasted budget): think less, draw more
+        maxTokens: 24000,
         system: DOC_RULES,
         prompt:
           `Product: ${plan.title} (${plan.theme}, for ${plan.audience}). Accent colour: ${plan.accent}.\n` +

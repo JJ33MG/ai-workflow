@@ -35,7 +35,7 @@ import {
 import { deliveryDays, profileOrigin } from "../lib/euShipping.js";
 import { PRINTFUL_RETIRED, retireSelection } from "../lib/catalogRetire.js";
 import * as printify from "../integrations/printify.js";
-import { STYLE_BRIEFS, STYLES, batchStyles, designRulesFor, personalizedDay, type DesignStyle } from "../lib/designStyles.js";
+import { FONT_GUIDE, SHOP_LOOK, STYLE_BRIEFS, STYLES, batchStyles, designRulesFor, personalizedDay, type DesignStyle } from "../lib/designStyles.js";
 import { enqueue, enqueueOnce } from "../lib/tasks.js";
 import type { AgentDefinition, TaskContext } from "./types.js";
 
@@ -458,7 +458,8 @@ async function designWithRetry(idea: DesignInput, log?: TaskContext["log"], task
           `It is one side of a mug: use viewBox="0 0 ${side.width} ${side.height}" and a transparent background; ` +
           "the same design is printed on the other side automatically, so draw it once. " +
           "Use only <text>, <tspan>, <path>, <rect>, <circle>, <line>, <polygon>, <g>, <defs>, <use href=\"#id\"> and gradients. " +
-          "Use only generic font families (serif, sans-serif, monospace). No images, links, scripts or external references. " +
+          `${FONT_GUIDE} ${SHOP_LOOK} ` +
+          "No images, links, scripts or external references. " +
           "Colours that print well on a white mug (dark ink for text, no very pale colours). " +
           `Keep every element inside x ${mx}–${side.width - mx} and y ${my}–${side.height - my}. ` +
           "You cannot measure text, so size it conservatively: a line of N characters needs a font-size of at most " +
@@ -1339,8 +1340,14 @@ async function retirePrintful(_payload: Record<string, unknown>, { log, taskId }
   const failed: string[] = [];
   for (const r of rows.filter((x) => ids.has(x.id))) {
     try {
-      await etsy.deactivateListing(r.etsyListingId!);
-      await db.listing.update({ where: { id: r.id }, data: { status: "ended" } });
+      if (r.status === "uploaded") {
+        // Still a draft waiting for Jarne's review: it never went live, so it is removed instead.
+        await etsy.deleteDraftListing(r.etsyListingId!);
+        await db.listing.update({ where: { id: r.id }, data: { status: "removed" } });
+      } else {
+        await etsy.deactivateListing(r.etsyListingId!);
+        await db.listing.update({ where: { id: r.id }, data: { status: "ended" } });
+      }
       done++;
     } catch (err) {
       failed.push(`${r.title}: ${(err as Error).message.slice(0, 120)}`);

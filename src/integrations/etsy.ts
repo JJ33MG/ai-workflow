@@ -255,6 +255,12 @@ export async function setListingReturnPolicy(listingId: string, returnPolicyId: 
   await etsy("PATCH", `/shops/${await shopId()}/listings/${listingId}`, { return_policy_id: returnPolicyId });
 }
 
+/** Deletes a listing that never went live (a draft waiting for review). */
+export async function deleteDraftListing(listingId: string): Promise<void> {
+  const res = await withRateLimitRetry(() => etsyRequest("DELETE", `/listings/${listingId}`));
+  if (!res.ok && res.status !== 404) throw new Error(`Etsy DELETE listing ${listingId} failed: ${res.status} ${await res.text()}`);
+}
+
 /** Takes a listing offline (Etsy keeps it as "inactive"; it can be renewed later). */
 export async function deactivateListing(listingId: string): Promise<void> {
   await etsy("PATCH", `/shops/${await shopId()}/listings/${listingId}`, { state: "inactive" });
