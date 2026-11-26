@@ -18,3 +18,19 @@ describe("eBay on the health list", () => {
     expect(ebayCheck(null, null, now).detail).toBe("Gekoppeld · nog geen controle bij eBay (elke ochtend om 07:30)");
   });
 });
+
+import { creditOut } from "../src/lib/health.js";
+
+describe("creditOut: the Anthropic credit ran out and nothing has worked since", () => {
+  const t = (h: number) => new Date(Date.UTC(2026, 10, 26, h));
+  it("is out when the last credit error came after the last successful call", () => {
+    expect(creditOut(t(9), t(7), t(10))).toBe(true);
+  });
+  it("is fine again once a call succeeded after the error", () => {
+    expect(creditOut(t(9), t(10), t(11))).toBe(false);
+  });
+  it("forgets an old error (over 6 hours) and is fine without one", () => {
+    expect(creditOut(t(1), null, t(10))).toBe(false);
+    expect(creditOut(null, null, t(10))).toBe(false);
+  });
+});

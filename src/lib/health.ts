@@ -88,7 +88,19 @@ export async function runHealthChecks(now = new Date()): Promise<HealthCheck[]> 
     ),
   );
 
-  if (!isClaudeConfigured()) {
+  const [creditError, lastCall] = await Promise.all([
+    db.log.findFirst({ where: { message: { contains: "credit balance is too low" } }, orderBy: { createdAt: "desc" }, select: { createdAt: true } }),
+    db.cost.findFirst({ where: { category: "claude_api" }, orderBy: { occurredAt: "desc" }, select: { occurredAt: true } }),
+  ]);
+  if (isClaudeConfigured() && creditOut(creditError?.createdAt ?? null, lastCall?.occurredAt ?? null, now)) {
+    checks.push({
+      id: "claude",
+      label: "Claude API",
+      status: "error",
+      detail: "Anthropic-tegoed is op: ontwerpen, teksten, Scout en de Debug-diagnose staan stil",
+      fix: "console.anthropic.com → Settings → Billing: tegoed kopen en automatisch bijvullen aanzetten. Daarna 'Opnieuw' bij de mislukte taken (of zeg het tegen Claude).",
+    });
+  } else if (!isClaudeConfigured()) {
     checks.push({
       id: "claude",
       label: "Claude API",
@@ -345,4 +357,10 @@ export function ebayCheck(st: EbayStatus | null, limitUntil: string | null, now 
     detail: parts.join(" · "),
     ...(st.live === 0 ? { fix: "Nog niets live op eBay. De bot probeert opnieuw zodra de maandlimiet vrij is; vraag Claude om de laatste eBay-check als het dan nog niet lukt." } : {}),
   };
+}
+
+/** The Anthropic credit ran out: a credit error in the last 6 hours and no successful Claude call since. */
+export function creditOut(lastCreditError: Date | null, lastSuccess: Date | null, now = new Date()): boolean {
+  if (!lastCreditError || now.getTime() - lastCreditError.getTime() > 6 * 60 * 60 * 1000) return false;
+  return !lastSuccess || lastSuccess < lastCreditError;
 }
