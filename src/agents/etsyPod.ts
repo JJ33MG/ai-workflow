@@ -33,6 +33,7 @@ import {
   templateProblems,
 } from "../lib/personalize.js";
 import { deliveryDays, profileOrigin } from "../lib/euShipping.js";
+import { PRINTFUL_RETIRED, retireSelection } from "../lib/catalogRetire.js";
 import * as printify from "../integrations/printify.js";
 import { STYLE_BRIEFS, STYLES, batchStyles, designRulesFor, personalizedDay, type DesignStyle } from "../lib/designStyles.js";
 import { enqueue, enqueueOnce } from "../lib/tasks.js";
@@ -1175,7 +1176,7 @@ async function refreshListings(payload: Record<string, unknown>, { log, taskId }
   for (const listing of listings) {
     const entry = catalogEntry(listing.productType);
     const old = (listing.variants as ListingVariant[] | null) ?? [];
-    if (!entry || !old.length || !listing.designSvg) continue;
+    if (!entry || !old.length || !listing.designSvg || PRINTFUL_RETIRED.has(listing.productType)) continue;
     const etsyId = listing.etsyListingId!;
     try {
       const price = new Map(old.map((v) => [v.variantId, v.priceCents]));
@@ -1327,6 +1328,26 @@ async function addAiDisclosure(_payload: Record<string, unknown>, { log, taskId 
   }
   await log.info(`AI-vermelding toegevoegd aan ${added} listing(s) (Etsy-regel)`, undefined, taskId);
   return { added, checked: listings.length };
+}
+
+/** Takes the Printful garments and personalized posters offline (Jarne: they look unprofessional). */
+async function retirePrintful(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
+  if (config.dryRun || !etsy.isEtsyConfigured() || !(await etsy.isEtsyConnected())) return { skipped: "dry run of Etsy niet gekoppeld" };
+  const rows = await db.listing.findMany({ where: { etsyListingId: { not: null } }, select: { id: true, productType: true, personalized: true, source: true, status: true, etsyListingId: true, title: true } });
+  const ids = new Set(retireSelection(rows));
+  let done = 0;
+  const failed: string[] = [];
+  for (const r of rows.filter((x) => ids.has(x.id))) {
+    try {
+      await etsy.deactivateListing(r.etsyListingId!);
+      await db.listing.update({ where: { id: r.id }, data: { status: "ended" } });
+      done++;
+    } catch (err) {
+      failed.push(`${r.title}: ${(err as Error).message.slice(0, 120)}`);
+    }
+  }
+  await log.info(`Offline gehaald: ${done} Printful-kledingstuk(ken) en gepersonaliseerde posters${failed.length ? `; mislukt: ${failed.length}` : ""}`, failed.length ? { failed } : undefined, taskId);
+  return { done, failed: failed.length };
 }
 
 const PRINTIFY_PRODUCTS: [string, RegExp][] = [
@@ -1684,6 +1705,7 @@ export const etsyPodAgent: AgentDefinition = {
     sync_sales: "Nieuwe betaalde Etsy-bestellingen ophalen als verkopen",
     sync_listings: "Alle actieve listings van je Etsy-winkel ophalen, ook die je met de hand plaatste",
     printful_setup: "Bij Printful de API-winkel, de 11 oz mok en de exacte printmaat opzoeken en opslaan",
+    retire_printful: "Alle Printful-kleding (hoodies, sweaters, T-shirts) en gepersonaliseerde posters offline halen (inactive op Etsy, niets gewist)",
     printify_check: "Printify-sleutel controleren: welke winkel, en welke Europese drukkers onze hoodies, sweaters en T-shirts maken",
     eu_shipping: "Verzendprofielen naar Europa (Letland) zetten waar Printful alles in Europa drukt, met eerlijke levertijden per land (prijzen blijven gelijk)",
     etsy_setup: "Bij Etsy de munt, het verzendprofiel, het retourbeleid, de categorie Mokken en de productiepartner opzoeken",
@@ -1710,6 +1732,7 @@ export const etsyPodAgent: AgentDefinition = {
     etsy_setup: etsySetup,
     eu_shipping: euShipping,
     printify_check: printifyCheck,
+    retire_printful: retirePrintful,
     fulfil_receipt: fulfilReceipt,
     add_photos: addPhotos,
     fix_return_policy: fixReturnPolicy,

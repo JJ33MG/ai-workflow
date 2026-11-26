@@ -255,6 +255,11 @@ export async function setListingReturnPolicy(listingId: string, returnPolicyId: 
   await etsy("PATCH", `/shops/${await shopId()}/listings/${listingId}`, { return_policy_id: returnPolicyId });
 }
 
+/** Takes a listing offline (Etsy keeps it as "inactive"; it can be renewed later). */
+export async function deactivateListing(listingId: string): Promise<void> {
+  await etsy("PATCH", `/shops/${await shopId()}/listings/${listingId}`, { state: "inactive" });
+}
+
 /** New title and tags for a listing (the marketing agent's SEO refresh). Free on Etsy. */
 export async function updateListingSeo(listingId: string, title: string, tags: string[]): Promise<void> {
   await etsy("PATCH", `/shops/${await shopId()}/listings/${listingId}`, { title, tags });

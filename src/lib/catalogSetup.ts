@@ -1,3 +1,4 @@
+import { PRINTFUL_RETIRED } from "./catalogRetire.js";
 // Looks up, for every product type in catalog.ts, what the shop needs to sell it: the Printful
 // variants (with their print-file size and placement) and the Etsy category and shipping profile.
 // A type without an Etsy shipping profile for its kind of product is switched off with the reason,
@@ -40,7 +41,7 @@ export interface CatalogEntry {
 
 let catalog: CatalogEntry[] = [];
 export const getCatalog = () => catalog;
-export const enabledTypes = () => catalog.filter((c) => c.enabled);
+export const enabledTypes = () => catalog.filter((c) => c.enabled && !PRINTFUL_RETIRED.has(c.typeId));
 export const catalogEntry = (typeId: string) => catalog.find((c) => c.typeId === typeId);
 
 /** The print placement and file size of one variant, preferring the type's placements. */
@@ -126,7 +127,8 @@ export async function findCatalog(): Promise<CatalogEntry[]> {
       const taxonomyId = taxonomyFor(type, tree);
       const entry: CatalogEntry = {
         ...base,
-        enabled: Boolean(profile && taxonomyId),
+        // Garments come from Printify now (catalogRetire.ts); Printful keeps mugs, ornaments, totes and posters.
+        enabled: Boolean(profile && taxonomyId) && !PRINTFUL_RETIRED.has(type.id),
         taxonomyId,
         shippingProfileId: profile?.shipping_profile_id ?? null,
         shippingProfileTitle: profile?.title ?? null,
