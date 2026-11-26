@@ -1664,6 +1664,9 @@ svg.map .dim {
 .status-doing .plan-mark {
   color: var(--accent);
 }
+.status-waiting .plan-mark {
+  color: var(--accent);
+}
 .plan-title {
   font-weight: 600;
 }

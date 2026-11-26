@@ -10,7 +10,7 @@ const OWNERS = [
   ["jarne", "Jij"],
   ["claude", "Claude"],
 ];
-const MARK = { done: "✓", doing: "≈", todo: "○" };
+const MARK = { done: "✓", doing: "≈", waiting: "⏳", todo: "○" };
 
 function line(item) {
   const done = item.status === "done";

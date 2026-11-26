@@ -3,7 +3,8 @@
 // daily numbers; the rest Jarne ticks on the dashboard (kept in the setting below).
 import type { RoutifyStats } from "./integrations/routify.js";
 
-export type LaunchStatus = "todo" | "doing" | "done";
+/** waiting: Jarne applied and waits for a partner or service to approve. */
+export type LaunchStatus = "todo" | "doing" | "waiting" | "done";
 export type LaunchStage = "soft" | "hard";
 export type LaunchOwner = "jarne" | "claude";
 
@@ -34,21 +35,23 @@ const partner = (...ids: string[]) => (s: RoutifySetup) => ids.some((id) => s.se
 
 export const LAUNCH: LaunchItem[] = [
   // Soft launch: real people can use it and pay, with a small group of testers (target mid-December).
-  { id: "j-travelpayouts", stage: "soft", owner: "jarne", status: "todo", title: "Aanmelden bij Travelpayouts (vanavond, 10 min)", detail: "Eén netwerk met 100+ reismerken (GetYourGuide, Viator, autoverhuur…). Gratis.",
-    link: "https://www.travelpayouts.com/en/",
-    steps: ["Klik Join / Sign up en maak een account (e-mail van Routify, niet je privé-adres).", "Maak een Project aan: type Website, URL https://routify-preview-production.up.railway.app, onderwerp Road trips in Europe.", "Ga naar Programs en vraag toegang tot GetYourGuide, Viator, DiscoverCars en andere autoverhuur-/campermerken.", "Zeg Claude welke merken goedgekeurd zijn; de links zet Claude erin."] },
+  { id: "j-travelpayouts", stage: "soft", owner: "jarne", status: "done", title: "Aanmelden bij Travelpayouts", detail: "Klaar (26 nov). Goedgekeurd: Tiqets, Klook, Localrent, GetRentacar, Airalo en meer. Op Routify staan nu: Tiqets (tickets per stad), Localrent (huurauto) en Airalo (eSIM buiten de EU). Je project wordt nog nagekeken; nieuwe merken komen vanzelf bij Programs.",
+    link: "https://app.travelpayouts.com/programs" },
+  { id: "j-tp-check", stage: "soft", owner: "jarne", status: "todo", title: "Travelpayouts: kijk of de testkliks binnenkomen", detail: "Open Statistics in Travelpayouts. Claude klikte op 26 nov één keer op Tiqets en Klook; staan die erbij, dan werkt het tellen.",
+    link: "https://app.travelpayouts.com/" },
   { id: "j-stay22", stage: "soft", owner: "jarne", status: "todo", title: "Aanmelden bij Stay22 (vanavond, 10 min)", detail: "Slaapplekken bij Booking.com, Expedia en meer via één partnerlink.",
     link: "https://www.stay22.com/",
     steps: ["Klik Sign up / Get started, kies 'Creator' of 'Publisher'.", "Vul de website in: https://routify-preview-production.up.railway.app.", "Zoek in het dashboard je 'Allez'-link of affiliate-ID en zet die in Railway (routify-preview, Variables) als STAY22_DEEPLINK; vraag Claude welk formaat met {url}."] },
-  { id: "j-booking", stage: "soft", owner: "jarne", status: "todo", title: "Aanmelden bij Booking.com (via CJ)", detail: "Hotels en campings betalen commissie. Goedkeuring kan een paar dagen duren.",
-    link: "https://partnerships.booking.com/",
-    steps: ["Klik 'Join' en kies je regio: je komt bij het netwerk CJ (cj.com).", "Maak een CJ-publisheraccount (website = de Routify-preview).", "Zoek in CJ het programma 'Booking.com' en vraag toegang.", "Na goedkeuring: maak in CJ een deep link en zet hem in Railway als BOOKING_DEEPLINK (met {url} waar de Booking-link komt). Claude helpt met het formaat."],
+  { id: "j-booking", stage: "soft", owner: "jarne", status: "waiting", title: "Booking.com (via CJ): wacht op goedkeuring", detail: "CJ-account gemaakt en aanvraag bij Booking.com BENELUX verstuurd (26 nov). Booking keurt met de hand goed: een paar dagen tot twee weken. Bij een nee: opnieuw na de lancering.",
+    link: "https://members.cj.com/",
+    steps: ["Rond in CJ de onboarding-checklist af (betaalgegevens, W-8BEN, website), anders blokkeert CJ elke aanvraag.", "Wacht op de mail van Booking.com BENELUX (status 'Pending Application').", "Na goedkeuring: Links → 'Evergreen Link for Booking.com BENELUX' → groene + → kopieer de link en stuur hem naar Claude."],
     doneWhen: partner("booking") },
-  { id: "j-discovercars", stage: "soft", owner: "jarne", status: "todo", title: "Aanmelden bij DiscoverCars (autoverhuur)", detail: "Hoge commissie op huurauto's. Je gebruikersnaam wordt je partner-ID.",
+  { id: "j-cj-more", stage: "soft", owner: "jarne", status: "todo", title: "In CJ ook aanvragen: Vrbo, Rentalcars.com, Roadsurfer, Indie Campers, Pitchup", detail: "Die knoppen staan al op Routify maar betalen nog niets. Zoek elk merk in CJ (Advertisers) en klik Apply to program. Na een goedkeuring: stuur Claude een link.",
+    link: "https://members.cj.com/" },
+  { id: "j-discovercars", stage: "soft", owner: "jarne", status: "done", title: "Aanmelden bij DiscoverCars (autoverhuur)", detail: "Klaar (26 nov): partner-ID routify33 staat in Railway. 'Compare cars' op elke trip gaat nu naar DiscoverCars met jouw ID.",
     link: "https://www.discovercars.com/affiliate",
-    steps: ["Vul het formulier in: gebruikersnaam (wordt je ID), website = de Routify-preview.", "Zet je gebruikersnaam in Railway (routify-preview, Variables) als DISCOVERCARS_AFFILIATE_ID.", "Zeg Claude welke link-parameters voor datum en plaats in je partnerpaneel staan; dan vult de knop die ook in."],
     doneWhen: partner("discovercars") },
-  { id: "j-gyg", stage: "soft", owner: "jarne", status: "todo", title: "Aanmelden bij GetYourGuide Partner", detail: "Voor 'Things to do in …' op elke dag. Kan ook via Travelpayouts.",
+  { id: "j-gyg", stage: "soft", owner: "jarne", status: "todo", title: "Aanmelden bij GetYourGuide Partner", detail: "Voor 'Things to do in …' op elke dag. Niet bij jouw Travelpayouts-programma's: meld je rechtstreeks aan.",
     link: "https://partner.getyourguide.com/en-us/signup",
     steps: ["Maak een partneraccount met de Routify-preview als website.", "Zet je partner-ID in Railway als GETYOURGUIDE_AFFILIATE_ID."],
     doneWhen: partner("getyourguide") },
@@ -74,16 +77,16 @@ export const LAUNCH: LaunchItem[] = [
     link: "https://dashboard.stripe.com/", doneWhen: (s) => s.setup?.stripe === true },
   { id: "j-seed", stage: "soft", owner: "jarne", status: "todo", title: "Gem-bibliotheek vullen (ongeveer €150)", detail: "Zeg 'start de seed' tegen Claude: zo'n 5.000 Google-zoekopdrachten langs Europa's wegen, eenmalig.", doneWhen: (s) => (s.gems?.seedBudget ?? 0) > 0 },
   { id: "j-testers", stage: "soft", owner: "jarne", status: "todo", title: "10 tot 20 testers zoeken", detail: "Vrienden, campergroepen op Facebook, forums. Hun feedback is de testronde." },
-  { id: "j-oldservice", stage: "soft", owner: "jarne", status: "todo", title: "Oude roadgem-deployment verwijderen in Railway", detail: "Project renewed-growth → service 'roadgem' → Settings → Delete service.", link: "https://railway.com/dashboard" },
+  { id: "j-oldservice", stage: "soft", owner: "jarne", status: "done", title: "Oude roadgem-deployment verwijderen in Railway", detail: "Klaar (26 nov). Routify leende nog zeven instellingen van die service; die staan nu in routify-preview zelf (jij zette de vier sleutels opnieuw). Wie eerder ingelogd was, moet één keer opnieuw inloggen."},
 
   { id: "c-map", stage: "soft", owner: "claude", status: "done", title: "Echte Google-kaart van de trip", detail: "De dag in donker bovenop de route; de globe als reserve. Wacht alleen op de Maps Static API." },
   { id: "c-tolls", stage: "soft", owner: "claude", status: "done", title: "Goedkoopste route (tolvrij) met besparing", detail: "Plus wisselt met één tik." },
   { id: "c-prices", stage: "soft", owner: "claude", status: "done", title: "Slaapplekken met prijs per nacht op elke dag", detail: "" },
   { id: "c-library", stage: "soft", owner: "claude", status: "done", title: "Gem-bibliotheek en dichtere gems (elke 50 km)", detail: "" },
-  { id: "c-partners", stage: "soft", owner: "claude", status: "done", title: "Alle boekingslinks via de server (affiliate-ID, geteld)", detail: "Pitchup, Vrbo, Roadsurfer, Indie Campers, GetYourGuide erbij." },
+  { id: "c-partners", stage: "soft", owner: "claude", status: "done", title: "Alle boekingslinks via de server (affiliate-ID, geteld)", detail: "Pitchup, Vrbo, Roadsurfer, Indie Campers, GetYourGuide; sinds 26 nov ook DiscoverCars (routify33), Tiqets per stad, Localrent en Airalo via Travelpayouts. Booking.com volgt na goedkeuring." },
   { id: "c-pricing", stage: "soft", owner: "claude", status: "done", title: "Homepagina met één knop, prijspagina met Free, Trip pass en Plus", detail: "" },
   { id: "c-prod", stage: "soft", owner: "claude", status: "doing", title: "Productie-omgeving", detail: "Eigen domein, aparte live-omgeving naast de preview, dagelijkse back-ups van de database, foutmeldingen naar Telegram." },
-  { id: "c-speed", stage: "soft", owner: "claude", status: "doing", title: "Sneller plannen", detail: "Van ~50 naar ~34 seconden; Claude schrijft 32 daarvan. Verder sneller vraagt een keuze van jou (sneller model of de dagen één voor één tonen)." },
+  { id: "c-speed", stage: "soft", owner: "claude", status: "done", title: "Sneller plannen", detail: "Klaar (26 nov): de trippagina opent na ~15 s met route, kaart en kosten; de dagen verschijnen één voor één (alles na ~25 s). Mislukt een dag, dan staat er een knop 'Try again'." },
   { id: "c-pay", stage: "soft", owner: "claude", status: "done", title: "Betalen klaar: Plus per maand of jaar, Trip pass", detail: "Werkt zodra jouw Stripe-sleutels in Railway staan. Plus stopt vanzelf na de betaalde periode." },
   { id: "c-legal", stage: "soft", owner: "claude", status: "done", title: "Privacybeleid en voorwaarden", detail: "Op /privacy en /terms. Geen cookiebanner nodig: Routify gebruikt geen tracking-cookies." },
   { id: "c-security", stage: "soft", owner: "claude", status: "done", title: "Geldlekken dicht", detail: "Limieten op alles wat geld kost (3 trips per uur zonder account), Plus niet meer gratis te krijgen, de oude open agents-route weg." },

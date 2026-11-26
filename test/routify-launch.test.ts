@@ -29,3 +29,10 @@ describe("Routify launch list", () => {
     expect(soft.total).toBe(LAUNCH.filter((i) => i.stage === "soft").length);
   });
 });
+
+describe("Routify launch list: waiting for approval", () => {
+  it("shows Booking.com as waiting until Routify reports the partner is set", () => {
+    expect(launchView(null, {}).items.find((i) => i.id === "j-booking")!.status).toBe("waiting");
+    expect(launchView({ setup: { partners: ["booking"] } } as never, {}).items.find((i) => i.id === "j-booking")!.status).toBe("done");
+  });
+});

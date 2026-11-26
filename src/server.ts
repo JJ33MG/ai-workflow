@@ -120,7 +120,7 @@ app.post("/api/agents/:id/chat", requireAdmin, async (req, res) => {
 app.post("/api/routify/launch/:id", requireAdmin, async (req, res) => {
   const status = String((req.body as { status?: string }).status ?? "");
   const item = LAUNCH.find((i) => i.id === req.params.id);
-  if (!item || !["done", "doing", "todo"].includes(status)) {
+  if (!item || !["done", "doing", "waiting", "todo"].includes(status)) {
     res.status(400).json({ error: "Onbekende stap of status" });
     return;
   }
