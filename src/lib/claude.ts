@@ -134,6 +134,8 @@ export async function chatWithTools(opts: {
   tools: ChatTool[];
   effort?: Effort;
   maxSteps?: number;
+  /** Defaults to the main model. */
+  model?: string;
 }): Promise<{ text: string; toolCalls: ToolCall[] }> {
   const messages = [...opts.messages];
   const byName = new Map(opts.tools.map((t) => [t.definition.name, t]));
@@ -142,8 +144,10 @@ export async function chatWithTools(opts: {
   for (let step = 0; step < (opts.maxSteps ?? 6); step++) {
     await assertApiBudget();
     const response = await getClient().messages.create({
-      model: config.claude.model,
+      model: opts.model ?? config.claude.model,
       max_tokens: 16000,
+      // Every tool step resends the same conversation: cached, it costs a tenth.
+      cache_control: { type: "ephemeral" },
       system: opts.system,
       output_config: { effort: opts.effort ?? "medium" },
       tools: opts.tools.map((t) => t.definition),

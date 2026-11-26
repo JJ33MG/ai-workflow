@@ -99,8 +99,8 @@ async function scout(mode: Mode, { log, taskId }: TaskContext) {
   const research = await askResearch({
     agentId: ID,
     purpose: `scout_research_${mode.origin}`,
-    effort: "medium",
-    maxSearches: 8,
+    effort: "low",
+    maxSearches: 4, // costs: 8 searches read ~170k tokens a run; Grok covers X now
     system:
       `You are Scout, the opportunity researcher of Jarne's AI Agency Brain. ${ABOUT_JARNE} ` +
       "Research on the live web and write concise notes with facts, numbers and dates. Prefer recent sources (last 3 months).",

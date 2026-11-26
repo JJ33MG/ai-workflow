@@ -110,6 +110,9 @@ async function drawDocPage(page: Plan["pages"][number], plan: Plan, kind: Digita
       raw = await askText({
         agentId: ID,
         purpose: "digital_page_svg",
+        // Costs (26 Nov): pages were 36% of all spend on the main model. The cheap model draws first,
+        // the mid model gets the retry; the review stays as strict.
+        model: attempt === 1 ? config.models.cheap : config.models.mid,
         effort: "low", // pages kept getting cut off at the token limit (wasted budget): think less, draw more
         maxTokens: 32000,
         system: DOC_RULES,

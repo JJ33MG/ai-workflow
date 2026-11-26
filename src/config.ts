@@ -30,6 +30,16 @@ export const config = {
     model: str("CLAUDE_MODEL", "claude-opus-5-5"),
   },
 
+  /**
+   * Cheaper models for high-volume work (26 Nov: €8 a day was too much). Designs, ideas and strategy keep the
+   * main model; long drawings (printable and coloring pages) start on the cheap one; chat uses the mid one.
+   */
+  models: {
+    cheap: str("CHEAP_MODEL", "claude-haiku-5-5"),
+    mid: str("MID_MODEL", "claude-sonnet-5-5"),
+    chat: str("CHAT_MODEL", "claude-sonnet-5-5"),
+  },
+
   /** Grok (xAI): searches X in real time; a helper next to Claude. */
   grok: {
     apiKey: str("XAI_API_KEY"),

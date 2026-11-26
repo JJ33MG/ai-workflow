@@ -34,21 +34,30 @@ export async function askGrok(opts: {
 }): Promise<{ text: string; sources: string[] }> {
   if (!isGrokConfigured()) throw new Error("Grok is niet gekoppeld: zet XAI_API_KEY in Railway");
   await assertApiBudget();
-  const days = opts.xDays ?? 7;
-  const tools: Record<string, unknown>[] = [];
-  if (days > 0) tools.push({ type: "x_search", from_date: new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10) });
-  if (opts.web) tools.push({ type: "web_search" });
   const res = await fetch(API, {
     method: "POST",
     headers: { authorization: `Bearer ${config.grok.apiKey}`, "content-type": "application/json" },
-    body: JSON.stringify({
-      model: config.grok.model,
-      input: [...(opts.system ? [{ role: "system", content: opts.system }] : []), { role: "user", content: opts.prompt }],
-      tools,
-    }),
+    body: JSON.stringify(grokBody({ model: config.grok.model, ...opts })),
   });
   if (!res.ok) throw new Error(`Grok ${res.status}: ${(await res.text()).slice(0, 300)}`);
   const body = (await res.json()) as GrokResponse;
   await recordCost({ agentId: opts.agentId, category: "grok_api", amountCents: grokCostCents(body.usage), currency: "USD", note: opts.purpose, data: { usage: body.usage } });
   return parseGrokResponse(body);
+}
+
+/**
+ * The request: at most 2 search rounds and only the recent days of X (one open-ended question read
+ * 200,000 tokens of posts and cost €0.88).
+ */
+export function grokBody(o: { model: string; prompt: string; system?: string; xDays?: number; web?: boolean }, now = new Date()) {
+  const days = o.xDays ?? 7;
+  const tools: Record<string, unknown>[] = [];
+  if (days > 0) tools.push({ type: "x_search", from_date: new Date(now.getTime() - days * 86_400_000).toISOString().slice(0, 10) });
+  if (o.web) tools.push({ type: "web_search" });
+  return {
+    model: o.model,
+    input: [...(o.system ? [{ role: "system", content: o.system }] : []), { role: "user", content: o.prompt }],
+    tools,
+    max_turns: 2,
+  };
 }

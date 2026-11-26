@@ -1,3 +1,4 @@
+import { config } from "./config.js";
 import { type Attachment, attachmentBlocks } from "./lib/attachments.js";
 import type Anthropic from "@anthropic-ai/sdk";
 import { agents } from "./agents/index.js";
@@ -162,7 +163,7 @@ async function snapshot(agentId: string) {
   const companyWide = agents.get(agentId)?.businessId === null;
   const me = d.agents.find((a) => a.id === agentId);
   const mine = <T extends { agentId: string }>(rows: T[]) => (companyWide ? rows : rows.filter((r) => r.agentId === agentId));
-  const knowledge = await db.knowledge.findMany({ orderBy: [{ score: "desc" }, { updatedAt: "desc" }], take: 25 });
+  const knowledge = await db.knowledge.findMany({ orderBy: [{ score: "desc" }, { updatedAt: "desc" }], take: 12 });
 
   return {
     now: d.generatedAt,
@@ -200,7 +201,7 @@ async function snapshot(agentId: string) {
           "(no mass auto-publishing: bot-made listings are banned). No trademarks, characters, lyrics or film quotes. " +
           "Printful orders below the approval limit are confirmed automatically; anything that costs money above it waits for Jarne."
         : undefined,
-    recentLog: mine(d.activity).slice(0, 40).map((l) => `${new Date(l.createdAt).toISOString()} ${l.agentId} ${l.level}: ${l.message}`),
+    recentLog: mine(d.activity).slice(0, 15).map((l) => `${new Date(l.createdAt).toISOString()} ${l.agentId} ${l.level}: ${l.message}`),
     sharedBrain: knowledge.map((k) => ({ kind: k.kind, title: k.title, body: k.body })),
   };
 }
@@ -292,6 +293,7 @@ export async function sendChat(agentId: string, text: string, opts: { voice?: bo
     const { text: answer, toolCalls } = await chatWithTools({
       agentId,
       purpose: "chat",
+      model: config.models.chat,
       system: systemPrompt(agentId, opts.voice),
       messages,
       tools: toolsFor(agentId),

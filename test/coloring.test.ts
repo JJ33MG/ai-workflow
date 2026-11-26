@@ -106,9 +106,10 @@ describe("normalisePlan", () => {
 });
 
 describe("drawModels", () => {
-  it("tries the cheap model twice, then the main model once", async () => {
+  it("tries the cheap model twice, then the mid model once", async () => {
     const { drawModels } = await import("../src/agents/kdpColoring.js");
     const { config } = await import("../src/config.js");
-    expect(drawModels()).toEqual([config.kdp.drawModel, config.kdp.drawModel, config.claude.model]);
+    // Costs (26 Nov): the last try is the mid model (Sonnet), never Opus.
+    expect(drawModels()).toEqual([config.kdp.drawModel, config.kdp.drawModel, config.models.mid]);
   });
 });

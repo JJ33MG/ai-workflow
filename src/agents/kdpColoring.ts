@@ -87,10 +87,11 @@ async function review(png: Buffer, subject: string, kind: "page" | "cover") {
   });
 }
 
-/** The cheap model gets DRAW_ATTEMPTS tries; a page it can't get right gets one last try on the main model. */
+/** The cheap model gets DRAW_ATTEMPTS tries; a page it can't get right gets one last try on the mid model. */
 export function drawModels(): string[] {
   const tries = Array<string>(DRAW_ATTEMPTS).fill(config.kdp.drawModel);
-  return config.kdp.drawModel === config.claude.model ? tries : [...tries, config.claude.model];
+  // The last try is the mid model, never the main one: Opus fallbacks were most of the coloring cost.
+  return config.kdp.drawModel === config.models.mid ? tries : [...tries, config.models.mid];
 }
 
 export interface DrawIO {
