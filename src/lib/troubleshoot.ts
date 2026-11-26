@@ -218,6 +218,17 @@ const RULES: Rule[] = [
     ],
   },
   {
+    id: "digital-pages",
+    match: /pages passed review; not enough/i,
+    area: "Downloads",
+    title: "Te weinig goede pagina's voor een download",
+    why: "De kwaliteitscontrole keurde te veel pagina's van een printable af (vaak lange lijsten of trackers). Het product is niet gemaakt; er is wel voor de pagina's betaald.",
+    fix: [
+      "Niets doen bij af en toe een mislukt product: morgen probeert de agent een nieuw idee.",
+      "Gebeurt het vaak, laat Claude dan de paginaregels nakijken (minder regels per pagina, eenvoudiger opmaak).",
+    ],
+  },
+  {
     id: "network",
     match: /(fetch failed|ENOTFOUND|ETIMEDOUT|ECONNRESET|socket hang up)/i,
     area: "Netwerk",

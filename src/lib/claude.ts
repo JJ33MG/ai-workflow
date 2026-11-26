@@ -74,13 +74,15 @@ async function track(agentId: string, purpose: string, response: Anthropic.Messa
 /** Plain text answer. Enforces the daily budget and records the cost. */
 export async function askText(opts: AskOptions): Promise<string> {
   await assertApiBudget();
-  const response = await getClient().messages.create({
+  const params = {
     model: opts.model ?? config.claude.model,
     max_tokens: opts.maxTokens ?? 16000,
     system: opts.system,
     output_config: { effort: opts.effort ?? "medium" },
-    messages: [{ role: "user", content: userContent(opts) }],
-  });
+    messages: [{ role: "user" as const, content: userContent(opts) }],
+  };
+  // Long answers (big SVG pages) must be streamed: the SDK refuses large non-streaming requests.
+  const response = params.max_tokens > 20000 ? await getClient().messages.stream(params).finalMessage() : await getClient().messages.create(params);
   await track(opts.agentId, opts.purpose, response);
   return response.content
     .map((b) => (b.type === "text" ? b.text : ""))

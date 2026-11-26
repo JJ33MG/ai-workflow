@@ -24,7 +24,8 @@ import type { AgentDefinition, TaskContext } from "./types.js";
 const ID = "etsy-digital";
 const KINDS = Object.keys(DIGITAL_KINDS) as DigitalKind[];
 /** Fail the product when fewer pages than this share pass review. */
-const MIN_SHARE_OF_PAGES = 0.75;
+/** A planner of 10 strong pages out of 14 still sells (Jarne, 26 Nov): two thirds is enough. */
+const MIN_SHARE_OF_PAGES = 0.65;
 const PARALLEL_PAGES = 3;
 /** What one product may cost in Claude calls at most; it only starts when that much budget is left today. */
 const PRODUCT_BUDGET_CENTS = 200;
@@ -66,7 +67,7 @@ const KIND_BRIEF: Record<DigitalKind, string> = {
 /** Rules for typographic pages (activity packs and planners), US Letter at 300 dpi. */
 const DOC_RULES =
   "You design one page of a printable sold on Etsy. Output one standalone SVG document and nothing else. " +
-  "Keep the page simple and the SVG short: at most about 30 rows or boxes per page (a 50-book tracker becomes 25 per page), " +
+  "Keep the page simple and the SVG short: at most 25 rows, lines or boxes per page; a longer list (a 50-book tracker) is split over two pages, " +
   "draw repeated rows with <use href> instead of writing each one out. " +
   'Use viewBox="0 0 2550 3300" (US Letter at 300 dpi) and a white background. Keep every element at least 150 units from every edge. ' +
   "Clean, modern and printer-friendly: mostly black or dark grey text and thin lines, with one accent colour (given) used sparingly for headings and small shapes. " +
@@ -104,20 +105,29 @@ const DOC_SIZE = { width: 2550, height: 3300 };
 async function drawDocPage(page: Plan["pages"][number], plan: Plan, kind: DigitalKind): Promise<Buffer | null> {
   let feedback = "";
   for (let attempt = 1; attempt <= 2; attempt++) {
-    const svg = sanitizeSvg(
-      await askText({
+    let raw: string;
+    try {
+      raw = await askText({
         agentId: ID,
         purpose: "digital_page_svg",
         effort: "low", // pages kept getting cut off at the token limit (wasted budget): think less, draw more
-        maxTokens: 24000,
+        maxTokens: 32000,
         system: DOC_RULES,
         prompt:
           `Product: ${plan.title} (${plan.theme}, for ${plan.audience}). Accent colour: ${plan.accent}.\n` +
           `The product contains exactly these pages, in this order: ${plan.pages.map((p, i) => `${i + 1}. ${p.title}`).join("; ")}. ` +
           "If this page refers to other pages (a contents list, a checklist, 'see page X'), name only these, never activities that are not in the list.\n" +
           `Page: "${page.title}". What it contains: ${page.brief}${feedback}`,
-      }),
-    );
+      });
+    } catch (err) {
+      // Too long even so: one more try as a simpler page instead of giving up on it.
+      if (attempt === 1 && /cut off at max_tokens/.test((err as Error).message)) {
+        feedback = "\n\nYour previous version was far too long and got cut off. Draw a much simpler page: at most 15 rows, repeat rows with <use href>, no decorations.";
+        continue;
+      }
+      throw err;
+    }
+    const svg = sanitizeSvg(raw);
     const png = await sharp(Buffer.from(svg), { density: 300 })
       .resize(DOC_SIZE.width, DOC_SIZE.height, { fit: "contain", background: "#ffffff" })
       .flatten({ background: "#ffffff" })
