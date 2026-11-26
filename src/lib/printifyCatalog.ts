@@ -103,3 +103,21 @@ export function productBody(i: {
       })),
   };
 }
+
+const PHOTO_TARGET = 10;
+
+/**
+ * Which of Printify's mockups to add to an Etsy listing so it has 10 photos (Jarne: too few photos).
+ * Printify generates many more than it sends: other views (back, worn, folded) go first, then the rest.
+ */
+export function extraPhotos(
+  images: { src: string; is_selected_for_publishing?: boolean; position: string }[],
+  have: number,
+  target = PHOTO_TARGET,
+): string[] {
+  const room = Math.max(0, target - have);
+  const seen = new Set<string>();
+  const unsent = images.filter((i) => !i.is_selected_for_publishing && !seen.has(i.src) && seen.add(i.src));
+  const ordered = [...unsent.filter((i) => i.position !== "front"), ...unsent.filter((i) => i.position === "front")];
+  return ordered.slice(0, room).map((i) => i.src);
+}

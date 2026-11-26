@@ -71,7 +71,7 @@ export interface PrintifyProduct {
   print_provider_id: number;
   visible: boolean;
   is_locked?: boolean;
-  images: { src: string; variant_ids: number[]; position: string; is_default: boolean }[];
+  images: { src: string; variant_ids: number[]; position: string; is_default: boolean; is_selected_for_publishing?: boolean }[];
   variants: { id: number; price: number; cost?: number; is_enabled: boolean; title: string }[];
   print_areas?: { placeholders: { position: string; images: { id: string; x: number; y: number; scale: number; angle: number }[] }[] }[];
   external?: { id: string; handle: string } | null;

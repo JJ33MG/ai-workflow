@@ -58,3 +58,18 @@ describe("productBody", () => {
     ]);
   });
 });
+
+import { extraPhotos } from "../src/lib/printifyCatalog.js";
+
+describe("extraPhotos: fill a Printify listing up to 10 photos", () => {
+  const img = (src: string, sel: boolean, position = "front") => ({ src, is_selected_for_publishing: sel, position, is_default: false, variant_ids: [] });
+  it("adds the mockups Printify did not send to Etsy, other views first, never twice", () => {
+    const picked = extraPhotos([img("a", true), img("b", false, "back"), img("c", false), img("c", false), img("d", false, "other")], 8);
+    expect(picked).toEqual(["b", "d"]);
+  });
+  it("stops at 10 photos in total and adds nothing when the listing already has 10", () => {
+    const many = Array.from({ length: 20 }, (_, i) => img(`x${i}`, false));
+    expect(extraPhotos(many, 6)).toHaveLength(4);
+    expect(extraPhotos(many, 10)).toEqual([]);
+  });
+});

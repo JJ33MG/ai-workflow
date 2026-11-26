@@ -36,7 +36,7 @@ import { deliveryDays, profileOrigin } from "../lib/euShipping.js";
 import { PRINTFUL_RETIRED, retireSelection } from "../lib/catalogRetire.js";
 import { PRINTIFY_TYPES } from "../lib/printifyCatalog.js";
 import * as printify from "../integrations/printify.js";
-import { createPrintifyListing, loadPrintifyCatalog, printifyEntries, printifyLink, printifyOwn, printifySetup, publishPrintify, requestPrintifyPublish } from "./printifyFlow.js";
+import { createPrintifyListing, loadPrintifyCatalog, printifyEntries, printifyLink, printifyOwn, printifyPhotos, printifySetup, publishPrintify, requestPrintifyPublish } from "./printifyFlow.js";
 import { FONT_GUIDE, SHOP_LOOK, STYLE_BRIEFS, STYLES, batchStyles, designRulesFor, personalizedDay, type DesignStyle } from "../lib/designStyles.js";
 import { enqueue, enqueueOnce } from "../lib/tasks.js";
 import type { AgentDefinition, TaskContext } from "./types.js";
@@ -1753,6 +1753,7 @@ export const etsyPodAgent: AgentDefinition = {
     printful_setup: "Bij Printful de API-winkel, de 11 oz mok en de exacte printmaat opzoeken en opslaan",
     retire_printful: "Alle Printful-kleding (hoodies, sweaters, T-shirts) en gepersonaliseerde posters offline halen (inactive op Etsy, niets gewist)",
     printify_setup: "Printify-aanbod klaarzetten: kleuren, maten, printzone en verzending per kledingstuk bij de Europese drukker",
+    printify_photos: "Printify-listings op Etsy aanvullen tot 10 foto's (andere mockups van Printify en het ontwerp zelf)",
     printify_own: "Jarnes eigen Printify-producten prijzen (minstens €5 winst met 20% korting) en ter goedkeuring voorleggen",
     printify_check: "Printify-sleutel controleren: welke winkel, en welke Europese drukkers onze hoodies, sweaters en T-shirts maken",
     eu_shipping: "Verzendprofielen naar Europa (Letland) zetten waar Printful alles in Europa drukt, met eerlijke levertijden per land (prijzen blijven gelijk)",
@@ -1782,6 +1783,7 @@ export const etsyPodAgent: AgentDefinition = {
     printify_check: printifyCheck,
     printify_setup: printifySetup,
     printify_own: printifyOwn,
+    printify_photos: printifyPhotos,
     retire_printful: retirePrintful,
     fulfil_receipt: fulfilReceipt,
     add_photos: addPhotos,

@@ -8,7 +8,12 @@ import * as printify from "../integrations/printify.js";
 import { requestApproval } from "../lib/approvals.js";
 import type { CatalogEntry, CatalogVariant } from "../lib/catalogSetup.js";
 import { designUrl, renderPrintFile, saveDesign } from "../lib/design.js";
-import { PRINTIFY_PROVIDER, PRINTIFY_TYPES, inkFor, pickVariants, productBody, retailPrice } from "../lib/printifyCatalog.js";
+import { PRINTIFY_PROVIDER, PRINTIFY_TYPES, extraPhotos, inkFor, pickVariants, productBody, retailPrice } from "../lib/printifyCatalog.js";
+import * as etsy from "../integrations/etsy.js";
+import sharp from "sharp";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { designsDir } from "../lib/design.js";
 import type { TaskContext } from "./types.js";
 
 const CATALOG_KEY = "printify.catalog";
@@ -214,6 +219,7 @@ export async function printifyLink(): Promise<number> {
     // The hourly Etsy sync may already have found it as an unknown listing: this row replaces that one.
     await db.listing.deleteMany({ where: { etsyListingId: etsyId, id: { not: r.id } } });
     await db.listing.update({ where: { id: r.id }, data: { etsyListingId: etsyId, status: "active" } });
+    await topUpPhotos({ ...r, etsyListingId: etsyId }, p).catch(() => undefined);
     linked++;
   }
   return linked;
@@ -270,4 +276,42 @@ export async function printifyOwn(_payload: Record<string, unknown>, { log, task
 /** Etsy price per size: each variant's own cost plus shipping, at least €5 profit with the 20% sale. */
 export function pricePerVariant(variants: { id: number; cost?: number }[], shippingCents: number) {
   return variants.map((v) => ({ id: v.id, price: retailPrice((v.cost ?? 0) + shippingCents, shippingCents), is_enabled: true }));
+}
+
+/** Fills an Etsy listing up to 10 photos with Printify's other mockups, then the design itself on white. */
+async function topUpPhotos(r: { etsyListingId: string | null; designFile: string; title: string }, product: printify.PrintifyProduct): Promise<number> {
+  if (!r.etsyListingId) return 0;
+  let have = (await etsy.getListingImageIds(r.etsyListingId)).length;
+  let added = 0;
+  for (const src of extraPhotos(product.images, have)) {
+    const img = await fetch(src).then((res) => (res.ok ? res.arrayBuffer() : null)).catch(() => null);
+    if (!img) continue;
+    await etsy.uploadListingImage(r.etsyListingId, await sharp(Buffer.from(img)).png().toBuffer(), ++have);
+    added++;
+  }
+  if (have < 10 && r.designFile) {
+    const art = await readFile(path.join(designsDir(), r.designFile)).catch(() => null);
+    if (art) {
+      const onWhite = await sharp(art).resize(2000, 2000, { fit: "contain", background: "#ffffff" }).flatten({ background: "#ffffff" }).png().toBuffer();
+      await etsy.uploadListingImage(r.etsyListingId, onWhite, ++have);
+      added++;
+    }
+  }
+  return added;
+}
+
+/** Tops up the photos of every Printify listing already on Etsy. */
+export async function printifyPhotos(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
+  const shop = await shopId();
+  const rows = await db.listing.findMany({ where: { supplier: "printify", etsyListingId: { not: null }, printifyProductId: { not: null }, status: "active" } });
+  let added = 0;
+  for (const r of rows) {
+    try {
+      added += await topUpPhotos(r, await printify.getProduct(shop, r.printifyProductId!));
+    } catch (err) {
+      await log.warn(`Foto's aanvullen mislukt voor ${r.title}: ${(err as Error).message.slice(0, 160)}`, undefined, taskId);
+    }
+  }
+  await log.info(`Printify-listings: ${added} foto('s) toegevoegd aan ${rows.length} listing(s), tot 10 per listing`, undefined, taskId);
+  return { added, listings: rows.length };
 }
