@@ -305,13 +305,17 @@ export async function printifyPhotos(_payload: Record<string, unknown>, { log, t
   const shop = await shopId();
   const rows = await db.listing.findMany({ where: { supplier: "printify", etsyListingId: { not: null }, printifyProductId: { not: null }, status: "active" } });
   let added = 0;
+  const counts: string[] = [];
   for (const r of rows) {
     try {
-      added += await topUpPhotos(r, await printify.getProduct(shop, r.printifyProductId!));
+      const product = await printify.getProduct(shop, r.printifyProductId!);
+      const onEtsy = (await etsy.getListingImageIds(r.etsyListingId!)).length;
+      counts.push(`${r.title.slice(0, 40)}: Etsy ${onEtsy}, Printify ${product.images.length} (${product.images.filter((i) => !i.is_selected_for_publishing).length} niet verstuurd)`);
+      added += await topUpPhotos(r, product);
     } catch (err) {
       await log.warn(`Foto's aanvullen mislukt voor ${r.title}: ${(err as Error).message.slice(0, 160)}`, undefined, taskId);
     }
   }
-  await log.info(`Printify-listings: ${added} foto('s) toegevoegd aan ${rows.length} listing(s), tot 10 per listing`, undefined, taskId);
+  await log.info(`Printify-listings: ${added} foto('s) toegevoegd aan ${rows.length} listing(s), tot 10 per listing\n${counts.join("\n")}`, undefined, taskId);
   return { added, listings: rows.length };
 }
