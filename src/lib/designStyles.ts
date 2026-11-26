@@ -61,7 +61,7 @@ export function personalizedDay(d: Date): boolean {
 export const FONT_GUIDE =
   'Fonts you may use (exact font-family names): "Lobster Two" (font-weight bold, font-style italic: retro script), ' +
   '"Dancing Script" (font-weight bold: handwritten script), "Bebas Neue" (font-weight bold: tall condensed block capitals), ' +
-  '"League Spartan" or "Montserrat" (font-weight 900: heavy block), "StayPuft" (bubbly cartoon letters), ' +
+  '"League Spartan" (font-weight 900: heavy block), "StayPuft" (bubbly cartoon letters), ' +
   '"Yanone Kaffeesatz" (font-weight bold: narrow casual). Mix one script with one block font at most. Generic families also work.';
 
 /** The look Jarne liked on Printify: colourful retro and varsity badges. */

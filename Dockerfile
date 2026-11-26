@@ -6,7 +6,7 @@ FROM node:22-bookworm-slim
 # ffmpeg makes the listing videos.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends fonts-dejavu fonts-liberation fonts-noto-core \
-     fonts-lobstertwo fonts-dancingscript fonts-bebas-neue fonts-league-spartan fonts-montserrat fonts-staypuft fonts-yanone-kaffeesatz \
+     fonts-lobstertwo fonts-dancingscript fonts-bebas-neue fonts-league-spartan fonts-staypuft fonts-yanone-kaffeesatz \
      openssl ffmpeg \
   && rm -rf /var/lib/apt/lists/*
 
