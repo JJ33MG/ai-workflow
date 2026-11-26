@@ -1846,3 +1846,4 @@ svg.map .dim {
 /* Screenshots and PDFs waiting to be sent in chat */
 .chat-files { display: flex; flex-wrap: wrap; gap: 0.4rem; padding: 0.4rem 0.6rem 0; }
 .chat-file { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.85em; padding: 0.15rem 0.4rem; border: 1px solid var(--line, #ddd); border-radius: 6px; }
+#section-chat.drag-over { outline: 3px dashed var(--accent, #7c5cff); outline-offset: -6px; }

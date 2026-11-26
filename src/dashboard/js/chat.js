@@ -176,7 +176,7 @@ function renderFiles() {
 
 function addFiles(list) {
   for (const file of list) {
-    if (!/^image\/(png|jpeg|webp|gif)$|^application\/pdf$/.test(file.type)) continue;
+    if (file.size > 20 * 1024 * 1024) continue; // the server says why for other types; giant files never leave the browser
     const reader = new FileReader();
     reader.onload = () => {
       files.push({ name: file.name || `screenshot-${files.length + 1}.png`, type: file.type, data: String(reader.result).split(",")[1] ?? "" });
@@ -225,6 +225,23 @@ export function initChat() {
   $("chat-file").addEventListener("change", (e) => {
     addFiles(e.target.files);
     e.target.value = "";
+  });
+  // Drag files from the downloads straight onto the chat.
+  const drop = $("section-chat");
+  drop.addEventListener("dragover", (e) => {
+    if ([...(e.dataTransfer?.types ?? [])].includes("Files")) {
+      e.preventDefault();
+      drop.classList.add("drag-over");
+    }
+  });
+  drop.addEventListener("dragleave", (e) => {
+    if (e.target === drop) drop.classList.remove("drag-over");
+  });
+  drop.addEventListener("drop", (e) => {
+    if (!e.dataTransfer?.files?.length) return;
+    e.preventDefault();
+    drop.classList.remove("drag-over");
+    addFiles(e.dataTransfer.files);
   });
   // Paste a screenshot straight into the message box.
   $("chat-input").addEventListener("paste", (e) => {

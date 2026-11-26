@@ -101,9 +101,9 @@
               <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
               <div id="chat-files" class="chat-files" hidden></div>
               <form id="chat-form" class="chat-form">
-                <textarea id="chat-input" rows="2" placeholder="Bericht aan de agent… (Enter om te versturen, Shift+Enter voor een nieuwe regel, Ctrl+V plakt een screenshot)" aria-label="Bericht"></textarea>
-                <input id="chat-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf" multiple hidden />
-                <button id="chat-attach" type="button" class="btn" title="Screenshot of PDF meesturen (of plak een screenshot met Ctrl+V)">📎</button>
+                <textarea id="chat-input" rows="2" placeholder="Bericht aan de agent… (Enter om te versturen, Shift+Enter voor een nieuwe regel, Ctrl+V plakt een screenshot, sleep bestanden hierheen)" aria-label="Bericht"></textarea>
+                <input id="chat-file" type="file" accept="image/*,.pdf,.csv,.tsv,.txt,.json,.md,.xlsx,text/*" multiple hidden />
+                <button id="chat-attach" type="button" class="btn" title="Bestand meesturen: screenshot, PDF, CSV, Excel, tekst (of sleep het hierheen, of plak een screenshot met Ctrl+V)">📎</button>
                 <button id="chat-mic" type="button" class="btn" hidden aria-pressed="false" title="Praat met de agent (Engels); het antwoord wordt voorgelezen">🎙 Talk</button>
                 <button id="chat-send" type="submit" class="btn btn-primary">Versturen</button>
               </form>

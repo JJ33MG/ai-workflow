@@ -233,7 +233,7 @@ export async function sendChat(agentId: string, text: string, opts: { voice?: bo
   if (!isClaudeConfigured()) {
     throw new ChatUnavailableError("Chat needs the Claude API key. Set ANTHROPIC_API_KEY on the server and restart it.");
   }
-  const files = attachmentBlocks(opts.attachments);
+  const files = await attachmentBlocks(opts.attachments);
   const typed = text.trim().slice(0, 4000);
   const question = typed || (files.length ? "Bekijk de bijlage(n) en zeg wat je ziet en wat ik ermee moet doen." : "");
   const note = opts.attachments?.length ? `\n📎 ${opts.attachments.map((a) => a.name).join(", ")}` : "";
