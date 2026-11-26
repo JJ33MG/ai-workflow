@@ -213,17 +213,18 @@ export async function renderPrintFile(
 ): Promise<Buffer> {
   const art = ink === "light" ? lightInk(svg) : svg;
   if (layout === "mug-wrap") return mirrorSides(await fitToSide(art, { width: Math.round(width / 2), height }));
-  // On a shirt the design sits on the chest, near the top of the print area: up to 85% of the width and
-  // 58% of the height, so a slogan of four or five lines still prints 10-12 inches wide, not a small patch.
+  // On a garment every design hangs from the same line on the chest, whatever its shape (Jarne: some sat
+  // under the collar, others on the pocket). Printful print files are 150 dpi.
   if (layout === "chest") {
-    // A hoodie's front area is wider than tall (the pouch pocket limits it below): the slogan is
-    // drawn larger and sits lower, centred on the chest the way printed hoodies look, not under the collar.
+    const IN = 150;
     if (width >= height * 0.9) {
-      // Printful print files are 150 dpi: never wider than ~11 in or taller than ~10 in, however large the area.
-      const DPI = 150;
-      return placeContent(art, width, height, Math.min(width * 0.78, 11 * DPI), Math.min(height * 0.66, 10 * DPI), "chest-centre");
+      // Hoodie: the area is wider than tall and the pouch pocket sits below it. Top 1 in below the area's
+      // top edge, at most 11 in wide and 7.5 in tall, so it ends well above the pocket.
+      return placeContent(art, width, height, Math.min(width * 0.78, 11 * IN), Math.min(height * 0.62, 7.5 * IN), Math.round(1 * IN));
     }
-    return placeContent(art, width, height, width * 0.85, height * 0.58, height * 0.06);
+    // T-shirt and sweater: a tall area that starts near the collar. Top 2.5 in down (about 3.5 in below the
+    // collar, where printed shirts put it), up to 11.5 in wide and 9 in tall.
+    return placeContent(art, width, height, Math.min(width * 0.9, 11.5 * IN), Math.min(height * 0.56, 9 * IN), Math.round(2.5 * IN));
   }
   // A round ornament: a square inside the circle is 71% of its width; keep a margin inside that.
   if (layout === "round") return placeContent(art, width, height, width * 0.64, height * 0.64, "center");

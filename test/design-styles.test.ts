@@ -27,3 +27,20 @@ describe("designRulesFor", () => {
     expect(designRulesFor("cartoon")).not.toMatch(/Typography only/);
   });
 });
+
+import { personalizedDay } from "../src/lib/designStyles.js";
+
+describe("personalizedDay: personalized designs only twice a week (Jarne: far too many)", () => {
+  it("is true on Monday and Thursday only", () => {
+    const days = [23, 24, 25, 26, 27, 28, 29].map((d) => personalizedDay(new Date(Date.UTC(2026, 10, d, 9))));
+    // 23 Nov 2026 is a Monday
+    expect(days).toEqual([true, false, false, true, false, false, false]);
+  });
+});
+
+describe("bold lettering", () => {
+  it("asks for heavy fonts and forbids thin and dashed lines", () => {
+    expect(designRulesFor("quote")).toMatch(/font-weight 700/);
+    expect(designRulesFor("cartoon")).toMatch(/no dashed/i);
+  });
+});

@@ -28,6 +28,8 @@ export function batchStyles(count: number, dayIndex: number): DesignStyle[] {
 }
 
 const COMMON =
+  "Bold and clean, like a professional shop: heavy sans-serif lettering (font-weight 700 to 900), or a strong display style; " +
+  "no thin or hairline serif text, no dashed or dotted lines, no strokes thinner than 10 px, no small decorative arcs or squiggles. " +
   "Never use textLength, lengthAdjust or letter squeezing. Every word separated by a real space. " +
   "Nothing smaller than one tenth of the canvas height: tiny captions or fake small print are unreadable on a mug, leave them out. " +
   "Frames, banners and boxes only when every letter stays well inside them with clear space around it; when in doubt, no frame. " +
@@ -47,4 +49,10 @@ const ILLUSTRATION =
 /** The design rules for a style. */
 export function designRulesFor(style: DesignStyle | undefined): string {
   return (style === "cartoon" || style === "print" ? ILLUSTRATION : TYPOGRAPHY) + COMMON;
+}
+
+/** Personalized designs only on Mondays and Thursdays (Jarne: almost everything was personalized). */
+export function personalizedDay(d: Date): boolean {
+  const day = d.getUTCDay();
+  return day === 1 || day === 4;
 }

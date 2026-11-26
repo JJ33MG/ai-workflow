@@ -146,6 +146,13 @@ describe("Orders and mockups", () => {
       expect.objectContaining({ file: "light.png", variantIds: [2, 3] }),
     ]);
   });
+
+  it("starts the photos (and the main photo) on a different colour per listing, not always the first", () => {
+    const vs = [lv(1, "Black", "light.png"), lv(2, "Sport Grey", "dark.png"), lv(3, "Navy", "light.png"), lv(4, "Sand", "dark.png")];
+    const first = new Set([0, 1, 2, 3].map((seed) => mockupGroups(vs, 3, seed)[0].variantIds[0]));
+    expect(first.size).toBeGreaterThan(1);
+    expect(mockupGroups(vs, 3, 1)[0].variantIds[0]).toBe(2);
+  });
 });
 
 describe("Catalog setup", () => {

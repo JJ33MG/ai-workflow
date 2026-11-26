@@ -33,7 +33,7 @@ import {
   templateProblems,
 } from "../lib/personalize.js";
 import { deliveryDays, profileOrigin } from "../lib/euShipping.js";
-import { STYLE_BRIEFS, STYLES, batchStyles, designRulesFor, type DesignStyle } from "../lib/designStyles.js";
+import { STYLE_BRIEFS, STYLES, batchStyles, designRulesFor, personalizedDay, type DesignStyle } from "../lib/designStyles.js";
 import { enqueue, enqueueOnce } from "../lib/tasks.js";
 import type { AgentDefinition, TaskContext } from "./types.js";
 
@@ -373,7 +373,7 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
 
   if (created.length > 0) await enqueue(ID, "upload_listings", { listingIds: created });
   // The daily batch is followed by a small personalized one.
-  if (payload.personalized === undefined && config.pod.personalizedPerRun > 0) {
+  if (payload.personalized === undefined && config.pod.personalizedPerRun > 0 && personalizedDay(new Date())) {
     await enqueue(ID, "create_listings", { personalized: true, count: config.pod.personalizedPerRun });
   }
   return { created: created.length, personalized };
@@ -518,9 +518,12 @@ const MIN_MUG_PHOTOS = 2;
 const MAX_MOCKUPS = 8;
 
 /** Which mockups to make: one variant per colour (up to the type's limit), grouped by print file. */
-export function mockupGroups(variants: ListingVariant[], colors: number): { file: string; placement: string; width: number; height: number; variantIds: number[] }[] {
-  const perColor: ListingVariant[] = [];
-  for (const v of variants) if (!perColor.some((x) => x.color === v.color)) perColor.push(v);
+export function mockupGroups(variants: ListingVariant[], colors: number, seed = 0): { file: string; placement: string; width: number; height: number; variantIds: number[] }[] {
+  const unique: ListingVariant[] = [];
+  for (const v of variants) if (!unique.some((x) => x.color === v.color)) unique.push(v);
+  // Rotate by the listing's seed so the main photo is not the same colour (black) on every listing.
+  const shift = unique.length ? seed % unique.length : 0;
+  const perColor = [...unique.slice(shift), ...unique.slice(0, shift)];
   const groups = new Map<string, { file: string; placement: string; width: number; height: number; variantIds: number[] }>();
   for (const v of perColor.slice(0, Math.max(1, colors))) {
     const g = groups.get(v.file) ?? { file: v.file, placement: v.placement, width: v.width, height: v.height, variantIds: [] };
@@ -546,7 +549,8 @@ async function addMockups(
     if (listing.productType === PRINTABLE.id) {
       photos = (await printableMockups(listing as unknown as { id: string; designSvg: string })).slice(0, 6);
     } else if (variants.length && entry) {
-      const groups = mockupGroups(variants, productType(listing.productType)?.mockupColors ?? 1);
+      const seed = [...listing.title].reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 7);
+      const groups = mockupGroups(variants, productType(listing.productType)?.mockupColors ?? 1, seed);
       const each = Math.max(2, Math.ceil(MAX_MOCKUPS / groups.length));
       photos = [];
       for (const g of groups) {

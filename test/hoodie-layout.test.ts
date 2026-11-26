@@ -15,11 +15,13 @@ async function inkBox(png: Buffer) {
   return { w: info.width / meta.width!, h: info.height / meta.height!, top: -(info.trimOffsetTop ?? 0) / meta.height!, left: -(info.trimOffsetLeft ?? 0) / meta.width! };
 }
 
-describe("chest print on a hoodie (wide print area)", () => {
-  it("prints the slogan large and centred on the chest, not squeezed under the collar", async () => {
+const IN = 150; // Printful print files are 150 dpi
+
+describe("chest print on a hoodie (wide print area, pocket below)", () => {
+  it("starts 1 inch below the top of the area and ends well above the pocket", async () => {
     const box = await inkBox(await renderPrintFile(SLOGAN, "chest", 2250, 1800, "dark"));
-    expect(box.h).toBeGreaterThan(0.6); // large: well over half of the area
-    expect(box.top).toBeGreaterThan(0.18); // was 6% from the top edge: sits mid-chest, below the collar
+    expect(Math.abs(box.top * 1800 - 1 * IN)).toBeLessThan(0.15 * IN); // the same spot for every design
+    expect((box.top + box.h) * 1800).toBeLessThanOrEqual(8.5 * IN + 2); // pocket starts lower
     expect(Math.abs(box.left + box.w / 2 - 0.5)).toBeLessThan(0.02); // centred left to right
   });
 });
@@ -33,9 +35,17 @@ describe("chest print on a large square hoodie area", () => {
   });
 });
 
-describe("chest print on a T-shirt (tall print area)", () => {
-  it("keeps the slogan near the top of the shirt's chest area", async () => {
+describe("chest print on a T-shirt or sweater (tall print area)", () => {
+  it("starts 2.5 inches below the top of the area: on the chest, not under the collar", async () => {
     const box = await inkBox(await renderPrintFile(SLOGAN, "chest", 1800, 2400, "dark"));
-    expect(box.top).toBeLessThan(0.1);
+    expect(Math.abs(box.top * 2400 - 2.5 * IN)).toBeLessThan(0.15 * IN);
+  });
+
+  it("puts a short wide slogan at the same top line as a tall one", async () => {
+    const wide = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 200"><text x="500" y="150" text-anchor="middle" font-family="sans-serif" font-weight="900" font-size="120">COZY SEASON</text></svg>`;
+    const a = await inkBox(await renderPrintFile(wide, "chest", 1800, 2400, "dark"));
+    const b = await inkBox(await renderPrintFile(SLOGAN, "chest", 1800, 2400, "dark"));
+    expect(Math.abs(a.top - b.top) * 2400).toBeLessThan(0.3 * IN);
+    expect(a.w * 1800).toBeGreaterThan(10.5 * IN); // a wide slogan prints big
   });
 });
