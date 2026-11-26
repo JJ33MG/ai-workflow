@@ -155,10 +155,12 @@ export async function createPrintifyListing(i: {
   // A first price to create the product with; the real one follows from Printify's cost.
   const provisional = c.variants.map((v) => ({ ...v, priceCents: 4999 }));
   const created = await printify.createProduct(shop, productBody({ title: i.title, description: i.description, tags: i.tags, blueprintId: c.blueprintId, providerId: c.providerId, variants: provisional, imageIds }));
-  const cost = Math.max(...created.variants.filter((v) => v.is_enabled).map((v) => v.cost ?? 0));
+  // A price per size from Printify's cost (S to XL cost the same; 2XL and 3XL a little more).
   // Printify's costs are treated as euros (if they are dollars, that only overestimates them).
-  const price = retailPrice(cost + c.shippingCents, c.shippingCents);
-  await printify.updateProduct(shop, created.id, { variants: c.variants.map((v) => ({ id: v.id, price, is_enabled: true })) });
+  const priced = pricePerVariant(created.variants.filter((v) => v.is_enabled), c.shippingCents);
+  const price = Math.min(...priced.map((v) => v.price));
+  const cost = Math.min(...created.variants.filter((v) => v.is_enabled).map((v) => v.cost ?? 0));
+  await printify.updateProduct(shop, created.id, { variants: priced });
   if (cost && cost !== c.costCents) {
     c.costCents = cost;
     await setSetting(CATALOG_KEY, catalog);
@@ -221,16 +223,25 @@ export async function printifyLink(): Promise<number> {
 export async function printifyOwn(_payload: Record<string, unknown>, { log, taskId }: TaskContext) {
   const shop = await shopId();
   const products = await printify.listProducts(shop);
-  const known = new Set((await db.listing.findMany({ where: { printifyProductId: { not: null } }, select: { printifyProductId: true } })).map((r) => r.printifyProductId));
+  const known = new Map(
+    (await db.listing.findMany({ where: { printifyProductId: { not: null } }, select: { id: true, printifyProductId: true, status: true } })).map((r) => [r.printifyProductId, r]),
+  );
+  // An earlier request for these products is replaced by this one (with the new prices).
+  await db.approval.updateMany({ where: { kind: "printify_publish", status: "pending", title: { contains: "Printify" } }, data: { status: "rejected", decidedAt: new Date() } });
   const ids: string[] = [];
   for (const p of products) {
-    if (known.has(p.id) || p.external?.id) continue;
+    const row0 = known.get(p.id);
+    if (p.external?.id || (row0 && row0.status !== "uploaded")) continue;
     const c = catalog.find((x) => x.blueprintId === p.blueprint_id);
     const ship = c?.shippingCents ?? 500;
-    const enabled = p.variants.filter((v) => v.is_enabled);
-    const cost = Math.max(0, ...enabled.map((v) => v.cost ?? 0));
-    const price = retailPrice(cost + ship, ship);
-    await printify.updateProduct(shop, p.id, { variants: enabled.map((v) => ({ id: v.id, price, is_enabled: true })) });
+    const priced = pricePerVariant(p.variants.filter((v) => v.is_enabled), ship);
+    const price = Math.min(...priced.map((v) => v.price));
+    await printify.updateProduct(shop, p.id, { variants: priced });
+    if (row0) {
+      await db.listing.update({ where: { id: row0.id }, data: { priceCents: price } });
+      ids.push(row0.id);
+      continue;
+    }
     const row = await db.listing.create({
       data: {
         niche: "jarne",
@@ -254,4 +265,9 @@ export async function printifyOwn(_payload: Record<string, unknown>, { log, task
   if (ids.length) await requestPrintifyPublish(ids, "Jouw eigen Printify-ontwerpen, met een prijs die ook met 20% korting nog minstens €5 winst geeft.");
   await log.info(`Printify: ${ids.length} eigen product(en) geprijsd en klaar voor jouw akkoord`, undefined, taskId);
   return { products: ids.length };
+}
+
+/** Etsy price per size: each variant's own cost plus shipping, at least €5 profit with the 20% sale. */
+export function pricePerVariant(variants: { id: number; cost?: number }[], shippingCents: number) {
+  return variants.map((v) => ({ id: v.id, price: retailPrice((v.cost ?? 0) + shippingCents, shippingCents), is_enabled: true }));
 }
