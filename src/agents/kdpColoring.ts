@@ -102,9 +102,9 @@ export interface DrawIO {
 
 /**
  * Thinking counts against max_tokens: at "medium" it used most of the 16k and cut the SVG off.
- * Low effort and ~20k tokens leave room for the whole drawing (above ~21k the SDK wants streaming).
+ * Low effort and 32k tokens leave room for the whole drawing (askText streams answers above 20k).
  */
-export const PAGE_REQUEST = { effort: "low" as const, maxTokens: 20000 };
+export const PAGE_REQUEST = { effort: "low" as const, maxTokens: 32000 };
 
 const realDraw: DrawIO = {
   ask: (model, prompt) =>

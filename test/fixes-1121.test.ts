@@ -57,9 +57,10 @@ describe("budget warning", () => {
 import { PAGE_REQUEST } from "../src/agents/kdpColoring.js";
 
 describe("drawing a coloring page", () => {
-  it("leaves the answer room for the whole drawing: little thinking, a large token limit that still works without streaming", () => {
+  it("leaves the answer room for the whole drawing: little thinking, a large token limit (streamed)", () => {
     expect(PAGE_REQUEST.effort).toBe("low");
     expect(PAGE_REQUEST.maxTokens).toBeGreaterThanOrEqual(20000);
-    expect(PAGE_REQUEST.maxTokens).toBeLessThanOrEqual(21000);
+    // Above ~21k the SDK needs streaming; askText streams those requests since 26 Nov, so 32k is allowed.
+    expect(PAGE_REQUEST.maxTokens).toBe(32000);
   });
 });
