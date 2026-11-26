@@ -5,6 +5,7 @@ import express, { type NextFunction, type Request, type Response } from "express
 import { collectBriefingData, formatBriefing } from "./agents/ceo.js";
 import { agents, syncAgents } from "./agents/index.js";
 import { handleCommand } from "./commands.js";
+import { type Attachment, AttachmentError } from "./lib/attachments.js";
 import { loadPrintifyCatalog } from "./agents/printifyFlow.js";
 import { isPrintifyConfigured } from "./integrations/printify.js";
 import { config } from "./config.js";
@@ -31,7 +32,8 @@ import { notify, startCommandPolling } from "./lib/telegram.js";
 import { startScheduler } from "./scheduler.js";
 
 const app = express();
-app.use(express.json());
+// Large enough for a screenshot or a PDF sent to an agent in chat.
+app.use(express.json({ limit: "30mb" }));
 
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
   const given = req.header("authorization")?.replace(/^Bearer /, "") ?? String(req.query.token ?? "");
@@ -87,17 +89,22 @@ app.post("/api/agents/:id/chat", requireAdmin, async (req, res) => {
   const { id } = req.params as { id: string };
   const text = String((req.body as { message?: string }).message ?? "").trim();
   const voice = (req.body as { voice?: boolean }).voice === true;
+  const attachments = Array.isArray((req.body as { attachments?: unknown }).attachments) ? ((req.body as { attachments: Attachment[] }).attachments) : [];
   if (!agents.has(id)) {
     res.status(404).json({ error: "No such agent" });
     return;
   }
-  if (!text) {
+  if (!text && !attachments.length) {
     res.status(400).json({ error: "Type a message first" });
     return;
   }
   try {
-    res.json(await sendChat(id, text, { voice }));
+    res.json(await sendChat(id, text, { voice, attachments }));
   } catch (err) {
+    if (err instanceof AttachmentError) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
     if (err instanceof ChatUnavailableError) {
       res.status(503).json({ error: err.message });
       return;
@@ -449,7 +456,7 @@ async function main() {
   if (!(await loadCatalog()) && hasPrintfulToken() && (await etsy.isEtsyConnected())) await enqueueOnce("etsy-pod", "catalog_setup");
   if (!(await loadPrintifyCatalog()).length && isPrintifyConfigured()) await enqueueOnce("etsy-pod", "printify_setup");
   const stopScheduler = startScheduler();
-  const stopPolling = startCommandPolling(handleCommand);
+  const stopPolling = startCommandPolling(handleCommand, async (caption, files) => (await sendChat("ceo", caption, { attachments: files })).reply.content);
   const server = app.listen(config.port, () => {
     console.log(`AI Agency Brain listening on :${config.port} (dryRun=${config.dryRun})`);
   });

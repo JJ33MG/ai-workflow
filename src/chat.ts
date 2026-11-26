@@ -1,3 +1,4 @@
+import { type Attachment, attachmentBlocks } from "./lib/attachments.js";
 import type Anthropic from "@anthropic-ai/sdk";
 import { agents } from "./agents/index.js";
 import { BUSINESSES, businessById } from "./businesses.js";
@@ -227,14 +228,17 @@ function systemPrompt(agentId: string, voice = false): string {
 /** Exposed for tests. */
 export const systemPromptForTest = systemPrompt;
 
-export async function sendChat(agentId: string, text: string, opts: { voice?: boolean } = {}) {
+export async function sendChat(agentId: string, text: string, opts: { voice?: boolean; attachments?: Attachment[] } = {}) {
   if (!agents.has(agentId)) throw new Error(`Unknown agent ${agentId}`);
   if (!isClaudeConfigured()) {
     throw new ChatUnavailableError("Chat needs the Claude API key. Set ANTHROPIC_API_KEY on the server and restart it.");
   }
-  const question = text.trim().slice(0, 4000);
+  const files = attachmentBlocks(opts.attachments);
+  const typed = text.trim().slice(0, 4000);
+  const question = typed || (files.length ? "Bekijk de bijlage(n) en zeg wat je ziet en wat ik ermee moet doen." : "");
+  const note = opts.attachments?.length ? `\n📎 ${opts.attachments.map((a) => a.name).join(", ")}` : "";
   const history = await chatHistory(agentId, HISTORY_TURNS);
-  const userMsg = await db.chatMessage.create({ data: { agentId, role: "user", content: question } });
+  const userMsg = await db.chatMessage.create({ data: { agentId, role: "user", content: `${question}${note}` } });
 
   // Rebuild the conversation from stored text, merging same-role neighbours so roles alternate.
   const messages: Anthropic.MessageParam[] = [];
@@ -247,7 +251,12 @@ export async function sendChat(agentId: string, text: string, opts: { voice?: bo
   if (messages[0]?.role === "assistant") messages.shift();
   const current = `Live data snapshot:\n${JSON.stringify(await snapshot(agentId))}\n\nJarne: ${question}`;
   const last = messages[messages.length - 1];
-  if (last?.role === "user") last.content = `${last.content}\n\n${current}`;
+  if (files.length) {
+    // Screenshots and PDFs go with this turn only (history keeps just their names).
+    const blocks: Anthropic.ContentBlockParam[] = [...files, { type: "text", text: current }];
+    if (last?.role === "user") last.content = [{ type: "text", text: String(last.content) }, ...blocks];
+    else messages.push({ role: "user", content: blocks });
+  } else if (last?.role === "user") last.content = `${last.content}\n\n${current}`;
   else messages.push({ role: "user", content: current });
 
   try {

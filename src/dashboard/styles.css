@@ -1842,3 +1842,7 @@ svg.map .dim {
 .idea-sources { margin: 0.35rem 0; padding-left: 1.1rem; font-size: 0.9em; }
 .idea-sources a { overflow-wrap: anywhere; }
 .idea-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.6rem; }
+
+/* Screenshots and PDFs waiting to be sent in chat */
+.chat-files { display: flex; flex-wrap: wrap; gap: 0.4rem; padding: 0.4rem 0.6rem 0; }
+.chat-file { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.85em; padding: 0.15rem 0.4rem; border: 1px solid var(--line, #ddd); border-radius: 6px; }

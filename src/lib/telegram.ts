@@ -60,17 +60,33 @@ export function splitMessage(text: string, max = MAX_LEN): string[] {
 
 interface Update {
   update_id: number;
-  message?: { chat: { id: number }; text?: string };
+  message?: {
+    chat: { id: number };
+    text?: string;
+    caption?: string;
+    photo?: { file_id: string; file_size?: number }[];
+    document?: { file_id: string; file_name?: string; mime_type?: string };
+  };
   callback_query?: { id: string; data?: string; message?: { chat: { id: number }; message_id: number } };
 }
 
 export type CommandHandler = (command: string, args: string[]) => Promise<string>;
+/** A photo or PDF Jarne sent (with its caption): answered by the CEO agent. */
+export type FileHandler = (caption: string, files: { name: string; type: string; data: string }[]) => Promise<string>;
+
+/** Downloads a file Jarne sent to the bot, as base64. */
+async function downloadFile(fileId: string): Promise<string> {
+  const file = await call<{ file_path: string }>("getFile", { file_id: fileId });
+  const res = await fetch(`https://api.telegram.org/file/bot${config.telegram.botToken}/${file.file_path}`);
+  if (!res.ok) throw new Error(`Telegram download failed: ${res.status}`);
+  return Buffer.from(await res.arrayBuffer()).toString("base64");
+}
 
 /**
  * Long-polls for commands. Only messages from TELEGRAM_CHAT_ID are handled,
  * so nobody else who finds the bot can approve spending.
  */
-export function startCommandPolling(handler: CommandHandler): () => void {
+export function startCommandPolling(handler: CommandHandler, onFile?: FileHandler): () => void {
   if (!isTelegramConfigured()) return () => {};
   let stopped = false;
   let offset = 0;
@@ -95,7 +111,21 @@ export function startCommandPolling(handler: CommandHandler): () => void {
             continue;
           }
           const msg = u.message;
-          if (!msg?.text || String(msg.chat.id) !== config.telegram.chatId) continue;
+          if (!msg || String(msg.chat.id) !== config.telegram.chatId) continue;
+          // A screenshot or PDF: the CEO agent looks at it and answers.
+          if (onFile && (msg.photo?.length || msg.document)) {
+            await notify("📎 Ontvangen, de CEO kijkt ernaar…");
+            try {
+              const files = msg.photo?.length
+                ? [{ name: "screenshot.jpg", type: "image/jpeg", data: await downloadFile(msg.photo[msg.photo.length - 1].file_id) }]
+                : [{ name: msg.document!.file_name ?? "bestand", type: msg.document!.mime_type ?? "", data: await downloadFile(msg.document!.file_id) }];
+              await notify(await onFile(msg.caption ?? "", files));
+            } catch (err) {
+              await notify(`Kon het bestand niet bekijken: ${(err as Error).message}`);
+            }
+            continue;
+          }
+          if (!msg.text) continue;
           const [command, ...args] = msg.text.trim().split(/\s+/);
           if (!command.startsWith("/")) continue;
           const reply = await handler(command.slice(1).split("@")[0].toLowerCase(), args).catch(

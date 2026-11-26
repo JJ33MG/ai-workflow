@@ -161,18 +161,47 @@ function toggleMic() {
   rec.start();
 }
 
+// Screenshots and PDFs waiting to go with the next message.
+let files = [];
+
+function renderFiles() {
+  const box = $("chat-files");
+  box.hidden = files.length === 0;
+  box.replaceChildren(
+    ...files.map((f, i) =>
+      h("span", { class: "chat-file" }, `📎 ${f.name}`, h("button", { type: "button", class: "btn btn-sm", "aria-label": `${f.name} weghalen`, onclick: () => { files.splice(i, 1); renderFiles(); } }, "×")),
+    ),
+  );
+}
+
+function addFiles(list) {
+  for (const file of list) {
+    if (!/^image\/(png|jpeg|webp|gif)$|^application\/pdf$/.test(file.type)) continue;
+    const reader = new FileReader();
+    reader.onload = () => {
+      files.push({ name: file.name || `screenshot-${files.length + 1}.png`, type: file.type, data: String(reader.result).split(",")[1] ?? "" });
+      renderFiles();
+    };
+    reader.readAsDataURL(file);
+  }
+}
+
 async function send(text, opts = {}) {
   const agentId = current;
   const message = text.trim();
-  if (!message || pending.has(agentId)) return;
+  if ((!message && !files.length) || pending.has(agentId)) return;
+  const attachments = files;
+  files = [];
+  renderFiles();
   const thread = threads.get(agentId) ?? [];
-  thread.push({ id: `local-${Date.now()}`, role: "user", content: message, createdAt: new Date().toISOString() });
+  const note = attachments.length ? `\n📎 ${attachments.map((a) => a.name).join(", ")}` : "";
+  thread.push({ id: `local-${Date.now()}`, role: "user", content: `${message}${note}`, createdAt: new Date().toISOString() });
   threads.set(agentId, thread);
   pending.add(agentId);
   $("chat-input").value = "";
   renderThread();
   try {
-    const res = await api(`/api/agents/${agentId}/chat`, { method: "POST", body: JSON.stringify({ message, voice: Boolean(opts.voice) }) });
+    const res = await api(`/api/agents/${agentId}/chat`, { method: "POST", body: JSON.stringify({ message, voice: Boolean(opts.voice), attachments }) });
     thread.pop();
     thread.push(res.question, res.reply);
     if (opts.voice) speak(res.reply.content);
@@ -192,6 +221,19 @@ async function send(text, opts = {}) {
 }
 
 export function initChat() {
+  $("chat-attach").addEventListener("click", () => $("chat-file").click());
+  $("chat-file").addEventListener("change", (e) => {
+    addFiles(e.target.files);
+    e.target.value = "";
+  });
+  // Paste a screenshot straight into the message box.
+  $("chat-input").addEventListener("paste", (e) => {
+    const pasted = [...(e.clipboardData?.files ?? [])];
+    if (pasted.length) {
+      e.preventDefault();
+      addFiles(pasted);
+    }
+  });
   if (Recognition) {
     $("chat-mic").hidden = false;
     $("chat-mic").addEventListener("click", toggleMic);
