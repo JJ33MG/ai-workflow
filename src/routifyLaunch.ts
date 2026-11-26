@@ -91,6 +91,16 @@ export const LAUNCH: LaunchItem[] = [
   { id: "c-legal", stage: "soft", owner: "claude", status: "done", title: "Privacybeleid en voorwaarden", detail: "Op /privacy en /terms. Geen cookiebanner nodig: Routify gebruikt geen tracking-cookies." },
   { id: "c-security", stage: "soft", owner: "claude", status: "done", title: "Geldlekken dicht", detail: "Limieten op alles wat geld kost (3 trips per uur zonder account), Plus niet meer gratis te krijgen, de oude open agents-route weg." },
   { id: "c-cleanup", stage: "soft", owner: "claude", status: "done", title: "Oude RoadGem-pagina's weg", detail: "Templates, agents, oude dag- en hotelpagina's; een eigen titel per pagina en een nieuwe 404." },
+  // Extra inkomsten die nu al kunnen (26 nov), deze week te starten.
+  { id: "c-gift", stage: "soft", owner: "claude", status: "todo", title: "Routify cadeau geven (kerst)", detail: "Cadeaubon voor Plus (een jaar) en de Trip pass: kopen, een mooie bon als pdf/mail, inwisselen met een code. Klaar voor de soft launch half december." },
+  { id: "c-poster", stage: "soft", owner: "claude", status: "todo", title: "Je route als poster", detail: "Een kaart van je eigen route met stops en gems als poster (€29–39), gedrukt en verstuurd via Printify (dezelfde koppeling als de Etsy-agent). Knop op elke trip." },
+  { id: "c-routes", stage: "soft", owner: "claude", status: "todo", title: "Kant-en-klare premium routes", detail: "Uitgewerkte routes (Noorse fjorden met de camper, kerstmarkten, Toscane met kinderen) voor €4,99–9,99 of in Plus; dezelfde routes ook als download in de Etsy-winkel." },
+  { id: "c-buy-costs", stage: "soft", owner: "claude", status: "todo", title: "Knoppen: vignet kopen en reisverzekering", detail: "In het kostenblok van elke dag een knop 'Koop vignet/tolbadge' naar een officiële verkoper, en één keer per trip een reis- en pechverzekering. Wacht op jouw aanmelding bij die partners." },
+  { id: "c-videos", stage: "soft", owner: "claude", status: "doing", title: "Routify-video's (TikTok, Reels, Shorts)", detail: "Elke maandag onderzoek naar wat viraal gaat (Grok op X + web) en ma/wo/vr 3 videoplannen ter goedkeuring; tot half december teasers ('Routify komt eraan'). Volgende stap: de goedgekeurde plannen echt laten maken (professionele montage)." },
+  { id: "j-socials-now", stage: "soft", owner: "jarne", status: "todo", title: "Routify-accounts op TikTok, Instagram en YouTube (nu)", detail: "Op naam van Routify met een apart Routify-e-mailadres, los van jou persoonlijk. Nodig voor de eerste teasers." },
+  { id: "j-videos", stage: "soft", owner: "jarne", status: "todo", title: "Videoplannen goedkeuren (ma, wo, vr)", detail: "In Telegram of op het dashboard bij Akkoorden: tik Goedkeuren of Afwijzen. Een paar minuten per keer." },
+  { id: "j-tolls", stage: "soft", owner: "jarne", status: "todo", title: "Aanmelden: vignetten en tol (partnerprogramma)", detail: "Bijvoorbeeld Tolltickets (vignetten en tolbadges voor heel Europa). Stuur Claude daarna je partnerlink; dan komt de koopknop in het kostenblok." },
+  { id: "j-insurance", stage: "soft", owner: "jarne", status: "todo", title: "Aanmelden: reis- en pechverzekering (partnerprogramma)", detail: "Een reisverzekeraar met een affiliateprogramma (vaak 15–30% commissie). Claude helpt kiezen; stuur daarna je partnerlink." },
   { id: "c-feedback", stage: "soft", owner: "claude", status: "todo", title: "Testronde verwerken", detail: "Alles wat testers tegenkomen oplossen." },
 
   // Hard launch: everything a traveller expects, with marketing (target end of January / February).
@@ -99,9 +109,8 @@ export const LAUNCH: LaunchItem[] = [
   { id: "c-seo", stage: "hard", owner: "claude", status: "todo", title: "Een pagina per populaire route", detail: "\"Amsterdam naar het Gardameer met de camper\": gratis verkeer uit Google, gevuld uit de gem-bibliotheek." },
   { id: "c-yearly", stage: "hard", owner: "claude", status: "todo", title: "Jaarpas en vroegboek-actie", detail: "Plus per jaar; een actie van januari tot maart tegen het seizoensdal." },
   { id: "c-feedback2", stage: "hard", owner: "claude", status: "todo", title: "Tweede verbeterronde", detail: "Op basis van de eerste echte gebruikers." },
-  { id: "c-marketing", stage: "hard", owner: "claude", status: "todo", title: "Routify in de marketing-agent", detail: "Korte video's en posts van echte gems per route, gepland vanuit de Brain." },
+  { id: "c-marketing", stage: "hard", owner: "claude", status: "todo", title: "Routify-video's op volle kracht", detail: "Makers (5.000–50.000 volgers) laten posten, met jouw akkoord per uitgave; meten welke video trips en boekingen oplevert." },
   { id: "j-marketing", stage: "hard", owner: "jarne", status: "todo", title: "Lanceringsplan februari goedkeuren", detail: "Kanalen, budget en planning; Claude schrijft het voorstel." },
-  { id: "j-socials", stage: "hard", owner: "jarne", status: "todo", title: "Routify-accounts op Instagram en TikTok", detail: "Op naam van Routify, los van jou persoonlijk." },
   { id: "j-feedback", stage: "hard", owner: "jarne", status: "todo", title: "Na de soft launch: wat vind je goed en slecht", detail: "Jouw lijst stuurt de tweede verbeterronde." },
 ];
 
