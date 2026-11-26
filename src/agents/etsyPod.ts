@@ -1351,7 +1351,7 @@ async function retirePrintful(_payload: Record<string, unknown>, { log, taskId }
 }
 
 const PRINTIFY_PRODUCTS: [string, RegExp][] = [
-  ["hoodie", /gildan 18500|heavy blend.*hooded/i],
+  ["hoodie", /^(?!.*zip).*(gildan 18500|heavy blend.*hooded sweatshirt)/i],
   ["sweatshirt", /gildan 18000|heavy blend.*crewneck/i],
   ["tshirt", /bella.*3001|canvas 3001/i],
 ];
@@ -1370,13 +1370,26 @@ async function printifyCheck(_payload: Record<string, unknown>, { log, taskId }:
       lines.push(`${typeId}: niet gevonden in de catalogus`);
       continue;
     }
-    const providers = await printify.providersFor(bp.id);
+    const providers = await Promise.all(
+      (await printify.providersFor(bp.id)).map((p) => printify.providerDetail(p.id).catch(() => p)),
+    );
     const eu = providers.filter((p) => euCountry(p.location?.country));
     found[typeId] = { blueprintId: bp.id, title: bp.title, providers: providers.map((p) => ({ id: p.id, title: p.title, country: p.location?.country })) };
     lines.push(`${typeId}: ${bp.title} (#${bp.id}), ${providers.length} drukkers, in Europa: ${eu.map((p) => `${p.title} (${p.location?.country})`).join(", ") || "geen"}`);
   }
-  await setSetting("printify.setup", { shopId: etsyShop?.id ?? null, shops, found, checkedAt: new Date().toISOString() });
-  await log.info(`Printify gekoppeld${etsyShop ? `, Etsy-winkel #${etsyShop.id}` : " (nog geen Etsy-winkel gezien)"}:\n${lines.join("\n")}`, undefined, taskId);
+  const products = etsyShop ? await printify.listProducts(etsyShop.id) : [];
+  const own = products.map((p) => ({
+    id: p.id,
+    title: p.title,
+    blueprintId: p.blueprint_id,
+    providerId: p.print_provider_id,
+    onEtsy: Boolean(p.external?.id),
+    image: p.images.find((i) => i.is_default)?.src ?? p.images[0]?.src ?? null,
+    priceCents: Math.min(...p.variants.filter((v) => v.is_enabled).map((v) => v.price)),
+  }));
+  if (own.length) lines.push(`Jarnes producten in Printify (${own.length}): ${own.map((o) => `${o.title} [bp ${o.blueprintId}, drukker ${o.providerId}${o.onEtsy ? ", op Etsy" : ""}]`).join("; ")}`);
+  await setSetting("printify.setup", { shopId: etsyShop?.id ?? null, shops, found, own, checkedAt: new Date().toISOString() });
+  await log.info(`Printify gekoppeld${etsyShop ? `, Etsy-winkel #${etsyShop.id}` : " (nog geen Etsy-winkel gezien)"}:\n${lines.join("\n")}`, { own, found }, taskId);
   return { shop: etsyShop?.id ?? null };
 }
 

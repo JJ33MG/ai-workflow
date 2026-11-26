@@ -57,3 +57,25 @@ export const shippingFor = (blueprintId: number, providerId: number) =>
     "GET",
     `/catalog/blueprints/${blueprintId}/print_providers/${providerId}/shipping.json`,
   );
+
+/** One print provider with its address (the blueprint's provider list has only id and title). */
+export const providerDetail = (providerId: number) =>
+  printify<PrintProvider & { location?: { country?: string; city?: string } }>("GET", `/catalog/print_providers/${providerId}.json`);
+
+export interface PrintifyProduct {
+  id: string;
+  title: string;
+  description: string;
+  tags: string[];
+  blueprint_id: number;
+  print_provider_id: number;
+  visible: boolean;
+  is_locked?: boolean;
+  images: { src: string; variant_ids: number[]; position: string; is_default: boolean }[];
+  variants: { id: number; price: number; cost?: number; is_enabled: boolean; title: string }[];
+  print_areas?: { placeholders: { position: string; images: { id: string; x: number; y: number; scale: number; angle: number }[] }[] }[];
+  external?: { id: string; handle: string } | null;
+}
+
+export const listProducts = (shopId: number) =>
+  printify<{ data: PrintifyProduct[] }>("GET", `/shops/${shopId}/products.json?limit=50`).then((r) => r.data);
