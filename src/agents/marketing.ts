@@ -298,18 +298,20 @@ async function seoRewriteAll(_payload: Record<string, unknown>, { log, taskId }:
   const rows = await db.listing.findMany({ where: { status: "active", etsyListingId: { not: null } }, orderBy: { createdAt: "desc" } });
   const done = new Set((await getSetting<string[]>(SEO_DONE)) ?? []);
   const previous = (await getSetting<Record<string, { title: string; tags: string[] }>>(SEO_PREVIOUS)) ?? {};
-  const batches = seoBatches(rows.map((r) => r.id), done, SEO_BATCH, SEO_BATCHES_PER_RUN);
+  // Listings in a running marketing test (an SEO play, or the short-title test) are left alone so the test stays clean.
+  const inTest = new Set([
+    ...(await db.marketingPlay.findMany({ where: { tactic: "etsy_seo_refresh", status: "running" }, select: { baseline: true } })).flatMap(
+      (p) => ((p.baseline as { target?: { listingId: string }[] } | null)?.target ?? []).map((t) => t.listingId),
+    ),
+    ...Object.keys((await getSetting<Record<string, unknown>>("etsy.titleTest.before")) ?? {}),
+  ]);
+  const free = rows.filter((r) => !inTest.has(r.etsyListingId!));
+  const batches = seoBatches(free.map((r) => r.id), done, SEO_BATCH, SEO_BATCHES_PER_RUN);
   if (!batches.length) return { done: done.size };
-
-  // Running A/B SEO plays would put their old titles back over this rewrite: end them first.
-  await db.marketingPlay.updateMany({
-    where: { tactic: "etsy_seo_refresh", status: "running" },
-    data: { status: "skipped", note: "Vervangen door de volledige SEO-herschrijving" },
-  });
 
   let changed = 0;
   for (const batch of batches) {
-    const items = batch.map((id) => rows.find((r) => r.id === id)!);
+    const items = batch.map((id) => free.find((r) => r.id === id)!);
     let result;
     try {
       result = await askJson({
@@ -362,7 +364,7 @@ async function seoRewriteAll(_payload: Record<string, unknown>, { log, taskId }:
     await setSetting(SEO_DONE, [...done]);
   }
 
-  const left = rows.filter((r) => !done.has(r.id)).length;
+  const left = free.filter((r) => !done.has(r.id)).length;
   if (left > 0 && changed > 0) await enqueue(ID, "seo_rewrite_all", {}, { runAfter: new Date(Date.now() + 10 * 60 * 1000) });
   await log.info(
     `SEO herschreven: ${changed} listing(s) deze ronde, ${done.size} van ${rows.length} klaar${left ? `, nog ${left} te gaan` : ", alles klaar"}.`,

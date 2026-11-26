@@ -30,6 +30,7 @@ export const SCHEDULE: ScheduleEntry[] = [
   { cron: "0 9 * * 0", agentId: "scout", type: "weekly_review", label: "Elke zondag om 09:00", staleAfterMin: 8 * 24 * 60 },
   { cron: "10 8 * * *", agentId: "routify", type: "sync_stats", label: "Dagelijks om 08:10", staleAfterMin: 26 * 60 },
   { cron: "0 9 * * 1", agentId: "marketing", type: "marketing_review", label: "Elke maandag om 09:00", staleAfterMin: 8 * 24 * 60 },
+  { cron: "0 15 * * *", agentId: "marketing", type: "seo_rewrite_all", label: "Dagelijks om 15:00 (alleen nieuwe listings)", staleAfterMin: 26 * 60 },
   { cron: "0 18 * * *", agentId: "marketing", type: "pinterest_pins", label: "Dagelijks om 18:00", staleAfterMin: 26 * 60 },
   { cron: "0 19 * * *", agentId: "marketing", type: "meta_posts", label: "Dagelijks om 19:00", staleAfterMin: 26 * 60 },
 ];
