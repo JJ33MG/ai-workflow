@@ -16,6 +16,7 @@ Node 22 + TypeScript (ESM, run with `tsx`), Express 5, Prisma 5 + PostgreSQL, no
 - Respect `DRY_RUN`: no external writes while it is true.
 - Imports use `.js` extensions (NodeNext).
 - Businesses live in `src/businesses.ts`; an agent's `businessId` ties its sales and costs to a business.
+- Social posts (Jarne, 27 Nov): every post for every platform, also once automated, is first sent to Jarne on Telegram with the finished video or image itself, the caption and the platforms, and goes online only after his Approve tap. Never post without that approval.
 - Chat tools (`src/chat.ts`) may only start jobs listed in an agent's `chatTasks`. Never add a job that spends money there.
 - Dashboard frontend (`src/dashboard/`) is plain ES modules with no build step. Insert server text with `h()` (text nodes), never `innerHTML`.
 
