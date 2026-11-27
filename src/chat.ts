@@ -1,4 +1,5 @@
 import { config } from "./config.js";
+import { chatModelFor } from "./lib/chatModel.js";
 import { type Attachment, attachmentBlocks } from "./lib/attachments.js";
 import type Anthropic from "@anthropic-ai/sdk";
 import { agents } from "./agents/index.js";
@@ -293,7 +294,7 @@ export async function sendChat(agentId: string, text: string, opts: { voice?: bo
     const { text: answer, toolCalls } = await chatWithTools({
       agentId,
       purpose: "chat",
-      model: config.models.chat,
+      model: chatModelFor(question, files.length > 0, { top: config.claude.model, chat: config.models.chat }),
       system: systemPrompt(agentId, opts.voice),
       messages,
       tools: toolsFor(agentId),

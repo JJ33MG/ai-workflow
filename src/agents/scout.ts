@@ -99,6 +99,8 @@ async function scout(mode: Mode, { log, taskId }: TaskContext) {
   const research = await askResearch({
     agentId: ID,
     purpose: `scout_research_${mode.origin}`,
+    // Reading the web is the costly part (~120k tokens): the mid model; the ideas keep the top model.
+    model: config.models.mid,
     effort: "low",
     maxSearches: 4, // costs: 8 searches read ~170k tokens a run; Grok covers X now
     system:

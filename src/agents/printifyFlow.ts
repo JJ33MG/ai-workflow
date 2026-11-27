@@ -4,11 +4,12 @@
 // Orders for these listings are fulfilled by Printify itself; the Printful order flow skips them
 // (they have no printfulVariant).
 import { getSetting, setSetting, db } from "../db.js";
+import { notify } from "../lib/telegram.js";
 import * as printify from "../integrations/printify.js";
 import { requestApproval } from "../lib/approvals.js";
 import type { CatalogEntry, CatalogVariant } from "../lib/catalogSetup.js";
 import { designUrl, renderPrintFile, saveDesign } from "../lib/design.js";
-import { PRINTIFY_PROVIDER, PRINTIFY_TYPES, extraPhotos, inkFor, pickVariants, productBody, retailPrice } from "../lib/printifyCatalog.js";
+import { PRINTIFY_PROVIDER, PRINTIFY_TYPES, chooseBlueprint, chooseProvider, extraPhotos, inkFor, pickProductVariants, pickVariants, productBody, retailPrice, type PrintifyType } from "../lib/printifyCatalog.js";
 import * as etsy from "../integrations/etsy.js";
 import sharp from "sharp";
 import { readFile } from "node:fs/promises";
@@ -29,14 +30,73 @@ export interface PrintifyCatalogEntry {
   facts: string;
   blueprintId: number;
   providerId: number;
-  placeholder: { width: number; height: number };
+  placeholder: { width: number; height: number; position?: string };
   shippingCents: number;
   /** Last known cost per variant (from a product), in cents; 0 until the first product is made. */
   costCents: number;
   variants: { id: number; color: string; size: string }[];
+  /** How the design sits (clothes: chest; mugs: wrap; posters and totes: centred). */
+  layout?: "chest" | "mug-wrap" | "center";
+  /** Lowest shop price in cents (clothes €24.99). */
+  minPriceCents?: number;
 }
 
+const APPAREL_TYPES = new Set(["tshirt", "hoodie", "sweatshirt"]);
+
 let catalog: PrintifyCatalogEntry[] = [];
+
+/** Print providers' countries, asked once per provider. */
+const providerCountry = new Map<number, string>();
+async function countryOf(id: number): Promise<string> {
+  if (!providerCountry.has(id)) providerCountry.set(id, (await printify.providerDetail(id).catch(() => null))?.location?.country ?? "");
+  return providerCountry.get(id)!;
+}
+
+/** Other Printify products worth selling (Jarne, 27 Nov): which ones an EU provider prints. */
+const EXPLORE: { label: string; include: RegExp[]; exclude?: RegExp }[] = [
+  { label: "Puzzel", include: [/puzzle/i] },
+  { label: "Fleece- of sherpadeken", include: [/blanket/i] },
+  { label: "Kussen", include: [/pillow/i], exclude: /case only/i },
+  { label: "Kerstbal / ornament", include: [/ornament/i] },
+  { label: "Canvas", include: [/canvas/i], exclude: /tote|bag|shoe/i },
+  { label: "Telefoonhoesje", include: [/phone case|iphone|samsung/i] },
+  { label: "Stickers", include: [/sticker/i] },
+  { label: "Notitieboek", include: [/journal|notebook/i] },
+  { label: "Schort", include: [/apron/i] },
+  { label: "Sokken", include: [/socks/i] },
+  { label: "Deurmat", include: [/doormat|door mat/i] },
+  { label: "Thermosbeker / tumbler", include: [/tumbler/i] },
+  { label: "Petje / beanie", include: [/cap\b|hat\b|beanie/i], exclude: /bottle/i },
+  { label: "Kindershirt", include: [/kids|youth|toddler/i, /tee|t-shirt/i] },
+  { label: "Baby-rompertje", include: [/baby|infant/i, /bodysuit|onesie/i] },
+  { label: "Hondenbandana / huisdier", include: [/pet|dog/i] },
+  { label: "Wandklok", include: [/clock/i] },
+  { label: "Speelkaarten", include: [/playing cards/i] },
+];
+
+/** For each idea: the first catalogue product with an EU printer (name, provider, country), or none. */
+export async function printifyExplore(blueprints?: printify.Blueprint[]): Promise<string[]> {
+  const all = blueprints ?? (await printify.listBlueprints());
+  const lines: string[] = [];
+  for (const e of EXPLORE) {
+    const t = { typeId: "x", label: e.label, noun: "", colors: [], facts: "", match: { include: e.include, exclude: e.exclude ?? /^$/ } } as PrintifyType;
+    const found = await findProduct(t, all);
+    const title = found ? all.find((b) => b.id === found.blueprintId)?.title : "";
+    lines.push(found ? `✅ ${e.label}: ${title} · ${found.providerTitle} (${found.country})` : `— ${e.label}: geen drukker in de EU`);
+  }
+  return lines;
+}
+
+/** A product that is not clothing: the first matching catalogue product with an EU print provider. */
+async function findProduct(t: PrintifyType, blueprints: printify.Blueprint[]): Promise<{ blueprintId: number; providerId: number; providerTitle: string; country: string } | null> {
+  for (const bp of chooseBlueprint(blueprints, t).slice(0, 8)) {
+    const providers = await printify.providersFor(bp.id).catch(() => []);
+    const withCountry = await Promise.all(providers.map(async (p) => ({ ...p, country: await countryOf(p.id) })));
+    const eu = chooseProvider(withCountry);
+    if (eu) return { blueprintId: bp.id, providerId: eu.id, providerTitle: eu.title, country: eu.country };
+  }
+  return null;
+}
 export const loadPrintifyCatalog = async () => {
   catalog = (await getSetting<PrintifyCatalogEntry[]>(CATALOG_KEY)) ?? [];
   return catalog;
@@ -57,19 +117,34 @@ export async function printifySetup(_payload: Record<string, unknown>, { log, ta
   const old = new Map((await loadPrintifyCatalog()).map((c) => [c.typeId, c.costCents]));
   const out: PrintifyCatalogEntry[] = [];
   const lines: string[] = [];
+  let blueprints: printify.Blueprint[] | null = null;
   for (const t of PRINTIFY_TYPES) {
-    const all = await printify.variantsWithPlaceholders(t.blueprintId, PRINTIFY_PROVIDER);
-    const picked = pickVariants(all, t.colors, 4);
+    let blueprintId = t.blueprintId ?? 0;
+    let providerId = PRINTIFY_PROVIDER;
+    let where = "";
+    if (!t.blueprintId) {
+      blueprints ??= await printify.listBlueprints();
+      const found = await findProduct(t, blueprints);
+      if (!found) {
+        lines.push(`${t.label}: geen drukker in de EU gevonden`);
+        continue;
+      }
+      ({ blueprintId, providerId } = found);
+      where = ` · ${found.providerTitle} (${found.country})`;
+    }
+    const all = await printify.variantsWithPlaceholders(blueprintId, providerId);
+    const picked = t.blueprintId ? pickVariants(all, t.colors, 4) : pickProductVariants(all, t);
     if (!picked.length) {
-      lines.push(`${t.label}: geen van de gewenste kleuren bij deze drukker`);
+      lines.push(`${t.label}: geen van de gewenste kleuren of maten bij deze drukker`);
       continue;
     }
-    const front = all.find((v) => v.id === picked[0].id)?.placeholders.find((p) => p.position === "front");
+    const zones = all.find((v) => v.id === picked[0].id)?.placeholders ?? [];
+    const front = zones.find((p) => p.position === "front") ?? zones[0];
     if (!front) {
-      lines.push(`${t.label}: geen printzone 'front'`);
+      lines.push(`${t.label}: geen printzone`);
       continue;
     }
-    const ship = await printify.shippingFor(t.blueprintId, PRINTIFY_PROVIDER);
+    const ship = await printify.shippingFor(blueprintId, providerId);
     const ids = new Set(picked.map((p) => p.id));
     const profiles = ship.profiles.filter((p) => p.variant_ids.some((id) => ids.has(id)));
     const eu = profiles.filter((p) => p.countries.includes(EU_PRICE_COUNTRY));
@@ -79,25 +154,36 @@ export async function printifySetup(_payload: Record<string, unknown>, { log, ta
       label: t.label,
       noun: t.noun,
       facts: t.facts,
-      blueprintId: t.blueprintId,
-      providerId: PRINTIFY_PROVIDER,
-      placeholder: { width: front.width, height: front.height },
+      blueprintId,
+      providerId,
+      placeholder: { width: front.width, height: front.height, ...(front.position !== "front" ? { position: front.position } : {}) },
       shippingCents,
       costCents: old.get(t.typeId) ?? 0,
       variants: picked,
+      layout: t.layout ?? "chest",
+      minPriceCents: t.minPriceCents ?? 2499,
     });
-    lines.push(`${t.label}: ${[...new Set(picked.map((p) => p.color))].join(", ")} · ${picked.length} varianten · printzone ${front.width}×${front.height} · verzending EU €${(shippingCents / 100).toFixed(2)}`);
+    lines.push(`${t.label}: ${[...new Set(picked.map((p) => (t.blueprintId ? p.color : p.size)))].join(", ")} · ${picked.length} varianten · printzone ${front.width}×${front.height} · verzending EU €${(shippingCents / 100).toFixed(2)}${where}`);
   }
   await setSetting(CATALOG_KEY, out);
   catalog = out;
   await log.info(`Printify-aanbod klaar:\n${lines.join("\n")}`, undefined, taskId);
+  // Once: tell Jarne what else an EU printer makes (Jarne, 27 Nov: "let me know what's interesting").
+  if (!(await getSetting<boolean>("printify.explored"))) {
+    const ideas = await printifyExplore(blueprints ?? undefined).catch(() => [] as string[]);
+    if (ideas.length) {
+      await notify(`🧵 Printify: mokken, posters en tassen staan nu klaar.\n${lines.join("\n")}\n\nWat een drukker in de EU nog meer maakt:\n${ideas.join("\n")}\n\nZeg welke je erbij wil.`);
+      await setSetting("printify.explored", true);
+    }
+  }
   return { types: out.length };
 }
 
 /** Printify garments as catalogue entries for the daily design batch (prices are estimates until the first product). */
 export function printifyEntries(): (CatalogEntry & { printify: true })[] {
   return catalog.map((c) => {
-    const price = c.costCents ? retailPrice(c.costCents + c.shippingCents, c.shippingCents) : c.typeId === "tshirt" ? 2999 : 4499;
+    const floor = c.minPriceCents ?? 2499;
+    const price = c.costCents ? retailPrice(c.costCents + c.shippingCents, c.shippingCents, floor) : c.typeId === "tshirt" ? 2999 : APPAREL_TYPES.has(c.typeId) ? 4499 : Math.max(floor, 2499);
     const variants: CatalogVariant[] = c.variants.map((v) => ({
       variantId: v.id,
       size: v.size,
@@ -114,7 +200,7 @@ export function printifyEntries(): (CatalogEntry & { printify: true })[] {
       label: c.label,
       enabled: true,
       productId: c.blueprintId,
-      layout: "chest" as const,
+      layout: c.layout ?? ("chest" as const),
       taxonomyId: null,
       shippingProfileId: null,
       shippingProfileTitle: null,
@@ -154,15 +240,15 @@ export async function createPrintifyListing(i: {
   const imageIds: Record<"light" | "dark", string> = { light: "", dark: "" };
   for (const ink of ["light", "dark"] as const) {
     if (!c.variants.some((v) => inkFor(v.color) === ink)) continue;
-    files[ink] = await saveDesign(await renderPrintFile(i.svg, "chest", c.placeholder.width, c.placeholder.height, ink, PRINTIFY_DPI), `${listing.id}-printify-${ink}`);
+    files[ink] = await saveDesign(await renderPrintFile(i.svg, c.layout ?? "chest", c.placeholder.width, c.placeholder.height, ink, PRINTIFY_DPI), `${listing.id}-printify-${ink}`);
     imageIds[ink] = (await printify.uploadImage(files[ink], designUrl(files[ink]))).id;
   }
   // A first price to create the product with; the real one follows from Printify's cost.
   const provisional = c.variants.map((v) => ({ ...v, priceCents: 4999 }));
-  const created = await printify.createProduct(shop, productBody({ title: i.title, description: i.description, tags: i.tags, blueprintId: c.blueprintId, providerId: c.providerId, variants: provisional, imageIds }));
+  const created = await printify.createProduct(shop, productBody({ title: i.title, description: i.description, tags: i.tags, blueprintId: c.blueprintId, providerId: c.providerId, variants: provisional, imageIds, position: c.placeholder.position }));
   // A price per size from Printify's cost (S to XL cost the same; 2XL and 3XL a little more).
   // Printify's costs are treated as euros (if they are dollars, that only overestimates them).
-  const priced = pricePerVariant(created.variants.filter((v) => v.is_enabled), c.shippingCents);
+  const priced = pricePerVariant(created.variants.filter((v) => v.is_enabled), c.shippingCents, c.minPriceCents);
   const price = Math.min(...priced.map((v) => v.price));
   const cost = Math.min(...created.variants.filter((v) => v.is_enabled).map((v) => v.cost ?? 0));
   await printify.updateProduct(shop, created.id, { variants: priced });
@@ -274,12 +360,12 @@ export async function printifyOwn(_payload: Record<string, unknown>, { log, task
 }
 
 /** Etsy price per size: each variant's own cost plus shipping, at least €5 profit with the 20% sale. */
-export function pricePerVariant(variants: { id: number; cost?: number }[], shippingCents: number) {
-  return variants.map((v) => ({ id: v.id, price: retailPrice((v.cost ?? 0) + shippingCents, shippingCents), is_enabled: true }));
+export function pricePerVariant(variants: { id: number; cost?: number }[], shippingCents: number, floorCents = 2499) {
+  return variants.map((v) => ({ id: v.id, price: retailPrice((v.cost ?? 0) + shippingCents, shippingCents, floorCents), is_enabled: true }));
 }
 
 /** Fills an Etsy listing up to 10 photos with Printify's other mockups, then the design itself on white. */
-async function topUpPhotos(r: { etsyListingId: string | null; designFile: string; title: string }, product: printify.PrintifyProduct): Promise<number> {
+async function topUpPhotos(r: { etsyListingId: string | null; designFile: string; title: string; productType?: string }, product: printify.PrintifyProduct): Promise<number> {
   if (!r.etsyListingId) return 0;
   let have = (await etsy.getListingImageIds(r.etsyListingId)).length;
   let added = 0;
@@ -318,7 +404,8 @@ async function topUpPhotos(r: { etsyListingId: string | null; designFile: string
       await etsy.uploadListingImage(r.etsyListingId, collage, ++have);
       added++;
     }
-    if (have < 10) {
+    // The size card is for clothes only.
+    if (have < 10 && APPAREL_TYPES.has(r.productType ?? "tshirt")) {
       await etsy.uploadListingImage(r.etsyListingId, await sizeCard(), ++have);
       added++;
     }

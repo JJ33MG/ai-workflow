@@ -255,6 +255,12 @@ async function createListings(payload: Record<string, unknown>, { log, taskId }:
   // Jarne, 27 Nov: new products only on Printify (no new Printful items, no printables: they looked unprofessional).
   // Existing Printful listings stay live; personalized designs need Printful, so they wait.
   if (!printifyEntries().length) await loadPrintifyCatalog();
+  // New Printify products (mugs, posters, totes since 27 Nov) are looked up the first time they are missing.
+  const have = new Set(printifyEntries().map((e) => e.typeId));
+  if (PRINTIFY_TYPES.some((t) => !have.has(t.typeId)) && !(await getSetting<string>("printify.setupTried"))?.startsWith(todayIso())) {
+    await setSetting("printify.setupTried", todayIso());
+    await printifySetup({}, { log, taskId } as TaskContext).catch((err) => log.warn(`Printify-aanbod bijwerken mislukt: ${(err as Error).message.slice(0, 200)}`, undefined, taskId));
+  }
   const types = NEW_ON_PRINTIFY_ONLY ? printifyEntries() : [...availableTypes().filter((t) => t.variants.length || t.digital), ...printifyEntries()];
   if (!types.length) throw new Error("Printify is not ready: run printify_setup first.");
   const physical = types.filter((t) => !t.digital);
