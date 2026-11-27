@@ -276,13 +276,13 @@ function costLine(byCategory) {
 function routifyPanel(b, detail) {
   if (b.id !== "roadgem") return null;
   const r = detail?.routify;
-  if (!detail) return h("div", { class: "panel" }, h("h2", {}, "Routify-app"), empty("Laden…"));
-  if (!r) return h("div", { class: "panel" }, h("h2", {}, "Routify-app"), empty("Nog geen cijfers. Zet ROUTIFY_URL en ROUTIFY_STATS_TOKEN in Railway; de agent leest ze elke ochtend om 08:10."));
+  if (!detail) return h("div", { class: "panel" }, h("h2", {}, "RoamGem-app"), empty("Laden…"));
+  if (!r) return h("div", { class: "panel" }, h("h2", {}, "RoamGem-app"), empty("Nog geen cijfers. Zet ROUTIFY_URL en ROUTIFY_STATS_TOKEN in Railway; de agent leest ze elke ochtend om 08:10."));
   const partners = Object.entries(r.affiliateClicks.byPartner).map(([k, v]) => `${v} ${k}`).join(" · ") || "Nog geen";
   return h(
     "div",
     { class: "panel" },
-    h("h2", {}, "Routify-app"),
+    h("h2", {}, "RoamGem-app"),
     h(
       "div",
       { class: "kpis" },

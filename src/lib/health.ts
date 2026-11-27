@@ -225,10 +225,10 @@ export async function runHealthChecks(now = new Date()): Promise<HealthCheck[]> 
   if (!isRoutifyConfigured()) {
     checks.push({
       id: "routify",
-      label: "Routify",
+      label: "RoamGem",
       status: "off",
-      detail: "Niet gekoppeld: de Brain leest de Routify-cijfers nog niet",
-      fix: "Zet ROUTIFY_URL (adres van de Routify-site) en ROUTIFY_STATS_TOKEN (gelijk aan STATS_TOKEN van Routify) in Railway.",
+      detail: "Niet gekoppeld: de Brain leest de RoamGem-cijfers nog niet",
+      fix: "Zet ROUTIFY_URL (adres van de RoamGem-site) en ROUTIFY_STATS_TOKEN (gelijk aan STATS_TOKEN van RoamGem) in Railway.",
     });
   } else {
     const last = await getSetting<RoutifyHealthStats>("routify.stats");
@@ -338,19 +338,19 @@ type RoutifyHealthStats = { generatedAt: string; health?: { errors24h: number; l
 export function routifyCheck(last: RoutifyHealthStats | null, up: boolean): HealthCheck {
   const when = last ? `Cijfers van ${new Date(last.generatedAt).toLocaleString("nl-BE", { timeZone: config.timezone })}` : "Gekoppeld; de eerste cijfers komen om 08:10";
   if (!up) {
-    return { id: "routify", label: "Routify", status: "error", detail: "De Routify-site antwoordt niet (of de database is onbereikbaar)", fix: "Kijk in Railway bij de Routify-service naar de logs en de laatste deploy." };
+    return { id: "routify", label: "RoamGem", status: "error", detail: "De RoamGem-site antwoordt niet (of de database is onbereikbaar)", fix: "Kijk in Railway bij de RoamGem-service naar de logs en de laatste deploy." };
   }
   const h = last?.health;
   if (h && h.errors24h > 0) {
     return {
       id: "routify",
-      label: "Routify",
+      label: "RoamGem",
       status: "warn",
       detail: `${h.errors24h} serverfout(en) in de laatste 24 uur${h.lastError ? `; laatste: ${h.lastError.message}` : ""}. ${when}`,
-      fix: "Vraag Claude de Routify-logs in Railway te bekijken.",
+      fix: "Vraag Claude de RoamGem-logs in Railway te bekijken.",
     };
   }
-  return { id: "routify", label: "Routify", status: "ok", detail: `Online. ${when}` };
+  return { id: "routify", label: "RoamGem", status: "ok", detail: `Online. ${when}` };
 }
 
 export type EbayStatus = { at: string; live: number; offers: number; limit: { quantity: number | null; amount: string | null } | null };

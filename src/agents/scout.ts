@@ -84,7 +84,7 @@ async function scout(mode: Mode, { log, taskId }: TaskContext) {
         system: "You scan X (Twitter) for a small online company's owner. Report concrete posts, numbers and dates; say what is rising now. Be brief.",
         prompt:
           `Today: ${today}. The company: print-on-demand gifts on Etsy (shirts, hoodies, mugs, ornaments, printables), a road-trip planner app ` +
-          `(Routify, Europe), eBay, and maybe coloring books on Amazon KDP. Look at X posts from the last 7 days and report: ` +
+          `(RoamGem, Europe), eBay, and maybe coloring books on Amazon KDP. Look at X posts from the last 7 days and report: ` +
           `(1) gift and design trends, sayings and memes people want on shirts and mugs right now; (2) what Etsy and print-on-demand sellers ` +
           `say works (marketing, Etsy Ads, SEO, prices); (3) new tools, platforms or ways to earn money solo founders talk about; ` +
           `(4) one surprising opportunity. Focus on: ${mode.focus}`,
@@ -170,7 +170,7 @@ async function scout(mode: Mode, { log, taskId }: TaskContext) {
 
 const DAILY_FOCUS =
   "Three ideas, one of each (Jarne, 26 Nov): " +
-  "(A) OPTIMIZE something already live (Etsy shop, Printify garments, eBay, Routify): a concrete change that should bring sales or visitors soon. " +
+  "(A) OPTIMIZE something already live (Etsy shop, Printify garments, eBay, RoamGem): a concrete change that should bring sales or visitors soon. " +
   "(B) VIRAL OR RISING NOW: something going viral or clearly rising this week on X or the web (a saying, meme, event, product type, niche) " +
   "that the agents can turn into money within days, e.g. trend merch, a printable, a quick digital product. Say how fast the window closes. " +
   "(C) WILD NEW BUSINESS: an up-and-coming niche or money-making model a solo founder with AI agents could start; far-fetched is fine, " +

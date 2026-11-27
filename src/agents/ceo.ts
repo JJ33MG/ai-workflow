@@ -99,7 +99,7 @@ export function formatBriefing(d: BriefingData, focus?: string): string {
     `Omzet: ${formatEur(d.revenue.yesterday)} gisteren · ${formatEur(d.revenue.monthToDate)} deze maand`,
     `Kosten: ${formatEur(d.costs.yesterday)} gisteren · ${formatEur(d.costs.monthToDate)} deze maand`,
     `Netto deze maand: ${formatEur(net)} — ${pct}% van €10.000`,
-    ...(d.routify ? ["", "🚗 Routify", routifyLine(d.routify)] : []),
+    ...(d.routify ? ["", "🚗 RoamGem", routifyLine(d.routify)] : []),
     "",
     "🤖 Agents (laatste 24 uur)",
     ...d.agents.map(

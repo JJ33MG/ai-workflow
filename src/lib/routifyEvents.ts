@@ -18,8 +18,8 @@ export function routifyEventMessage(body: Record<string, unknown>): string | nul
     const type = clip(body.type, 20) || "overig";
     const page = clip(body.page, 200);
     const email = clip(body.email, 120);
-    return [`💬 Routify-feedback (${type})`, message, page && `Pagina: ${page}`, email && `Van: ${email}`].filter(Boolean).join("\n");
+    return [`💬 RoamGem-feedback (${type})`, message, page && `Pagina: ${page}`, email && `Van: ${email}`].filter(Boolean).join("\n");
   }
-  if (body.kind === "error") return `🚨 Routify-fout\n${message}`;
+  if (body.kind === "error") return `🚨 RoamGem-fout\n${message}`;
   return null;
 }

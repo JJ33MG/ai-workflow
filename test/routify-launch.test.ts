@@ -13,12 +13,13 @@ describe("Routify launch list", () => {
   });
 
   it("ticks off a step by itself when Routify reports it is set up", () => {
-    const v = launchView(stats({ mapsStatic: "ok", stripe: false, partners: ["booking"], adminEmails: true }), {});
+    const v = launchView(stats({ partners: ["booking"], adminEmails: true }), {});
     const status = (id: string) => v.items.find((i) => i.id === id)!.status;
-    expect(status("j-maps")).toBe("done");
+    expect(status("j-admin")).toBe("done");
     expect(status("j-booking")).toBe("done");
-    expect(status("j-stripe")).toBe("todo");
-    expect(v.items.find((i) => i.id === "j-maps")!.auto).toBe(true);
+    expect(v.items.find((i) => i.id === "j-admin")!.auto).toBe(true);
+    const off = launchView(stats({ partners: [], adminEmails: false }), {});
+    expect(off.items.find((i) => i.id === "j-admin")!.status).toBe("todo");
   });
 
   it("keeps Jarne's own ticks, and counts what is left per launch", () => {

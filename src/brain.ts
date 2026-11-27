@@ -112,7 +112,7 @@ export function buildBrain({ checks, agents, businesses, approvals, plan }: Inpu
         label: "Live",
         detail: `${live} product(en) live${waiting ? `, ${waiting} wachten op jouw akkoord` : ""}; nog geen verkoop in 30 dagen.`,
       };
-    } else if (b.id === "roadgem") status[id] = { state: "test", label: "Preview", detail: "Routify-preview staat online om te testen; de cijfers komen elke ochtend binnen." };
+    } else if (b.id === "roadgem") status[id] = { state: "test", label: "Preview", detail: "RoamGem staat live op roamgem.com (soft launch half december); de cijfers komen elke ochtend binnen." };
     else if (b.id === "etsy-pod" && done("etsy-live")) status[id] = { state: "manual", label: "Live (handmatig)", detail: "Mokken staan op Etsy; verkopen verschijnen hier zodra het systeem gekoppeld is." };
     else if (b.id === "kdp-coloring" && done("first-book")) status[id] = { state: "manual", label: "Live (handmatig)", detail: "Boek staat op Amazon." };
     else status[id] = { state: "test", label: "In opbouw", detail: `${b.products.total} product(en) klaar, nog niet live.` };

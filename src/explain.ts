@@ -192,11 +192,11 @@ export const NODES: BrainNode[] = [
   {
     id: "biz:roadgem",
     kind: "business",
-    label: "Routify",
+    label: "RoamGem",
     explain: {
       what: "Je roadtrip-app (voorheen RoadGem): routes per dag, gems onderweg, slaapplekken, Plus-abonnement en affiliate-links.",
-      how: ["De Routify-agent leest elke ochtend om 08:10 de cijfers van de app: nieuwe gebruikers, trips, Plus-leden en affiliate-kliks.", "Die cijfers staan in de ochtendbriefing en bij Bedrijven → Routify."],
-      where: "Bedrijven → Routify.",
+      how: ["De RoamGem-agent leest elke ochtend om 08:10 de cijfers van de app: nieuwe gebruikers, trips, Plus-leden en affiliate-kliks.", "Die cijfers staan in de ochtendbriefing en bij Bedrijven → RoamGem."],
+      where: "Bedrijven → RoamGem.",
     },
   },
   {
@@ -416,5 +416,5 @@ export const PLAN: PlanItem[] = [
   { id: "routing", phase: "Groei", title: "Problemen doorgeven tussen agents", detail: "De CEO wijst een probleem toe aan de agent die het best kan oplossen.", owner: "systeem", status: "todo" },
   { id: "dropshipping", phase: "Dropshipping", title: "Dropshipping-agent en eerste winkel", detail: "Fase 3; vraagt advertentiebudget met harde limiet.", owner: "systeem", status: "todo" },
   { id: "cartoon", phase: "AI-cartoonkanaal", title: "AI-cartoonkanaal", detail: "Fase 4.", owner: "systeem", status: "todo" },
-  { id: "roadgem", phase: "Routify", title: "Routify-agent", detail: "Leest elke ochtend de cijfers van de Routify-app voor het dashboard en de briefing.", owner: "systeem", status: "done" },
+  { id: "roadgem", phase: "RoamGem", title: "RoamGem-agent", detail: "Leest elke ochtend de cijfers van de RoamGem-app voor het dashboard en de briefing.", owner: "systeem", status: "done" },
 ];

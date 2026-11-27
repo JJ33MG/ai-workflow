@@ -36,11 +36,11 @@ export const SOFT_LAUNCH = new Date("2026-12-15T00:00:00Z");
 export const launchPhase = (now = new Date()): "teaser" | "live" => (now < SOFT_LAUNCH ? "teaser" : "live");
 
 const SERIES_LABEL: Record<(typeof SERIES)[number], string> = {
-  teaser: "Teaser (Routify komt eraan)",
+  teaser: "Teaser (RoamGem komt eraan)",
   cost: "Wat kost het echt",
   gems: "Gems onderweg",
   route: "Route van de week",
-  "ai-checks": "AI bedenkt, Routify checkt",
+  "ai-checks": "AI bedenkt, RoamGem checkt",
   behind: "Achter de schermen",
 };
 
