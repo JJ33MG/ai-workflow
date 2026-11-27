@@ -302,6 +302,9 @@ async function createDigital(payload: Record<string, unknown>, { log, taskId }: 
   }
 }
 
+/** No new printables until their design is redone (Jarne, 27 Nov). */
+export const DIGITAL_PAUSED = true;
+
 export const etsyDigitalAgent: AgentDefinition = {
   id: ID,
   name: "Download-agent",
@@ -312,7 +315,8 @@ export const etsyDigitalAgent: AgentDefinition = {
   chatTasks: ["create_digital"],
   // Every try plans and draws a whole new product; a failed one is reported, not silently paid for again.
   maxAttempts: { create_digital: 1 },
-  handlers: { create_digital: createDigital },
+  // Jarne, 27 Nov: the printables look unprofessional; no new ones until the design is redone.
+  handlers: { create_digital: (p, ctx) => (DIGITAL_PAUSED ? Promise.resolve({ skipped: "Gepauzeerd: nieuwe printables pas na een nieuw ontwerp (Jarne, 27 nov)" }) : createDigital(p, ctx)) },
   taskInfo: {
     create_digital:
       "Een digitale download maken en als concept op Etsy zetten: kleurplaten, een activiteitenpakket voor kinderen of een planner " +

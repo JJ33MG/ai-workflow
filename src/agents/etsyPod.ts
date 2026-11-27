@@ -240,18 +240,23 @@ async function knowledgeDigest(): Promise<string> {
   ].join("\n");
 }
 
+/** Jarne, 27 Nov: everything new goes through Printify; Printful only keeps what is already live. */
+export const NEW_ON_PRINTIFY_ONLY = true;
+
 async function createListings(payload: Record<string, unknown>, { log, taskId }: TaskContext) {
   const count = Number(payload.count ?? config.pod.listingsPerRun);
   const instructions = typeof payload.instructions === "string" ? payload.instructions.slice(0, 500) : "";
   // Personalized: the buyer's name is printed in the design (no printables: a download can't wait for a name).
-  const personalized = payload.personalized === true;
+  // Personalized designs need Printful (Printify has no name field here): off while new products go to Printify only.
+  const personalized = payload.personalized === true && !NEW_ON_PRINTIFY_ONLY;
   // A mix every day: job gifts, broad quotes, cartoons, art prints and seasonal designs (personalized stays job/hobby gifts).
   const styles: DesignStyle[] = personalized ? Array(count).fill("niche") : batchStyles(count, Math.floor(Date.now() / 86_400_000));
   const digest = await knowledgeDigest();
-  // Garments come from Printify (when its catalogue is set up); the rest from Printful.
+  // Jarne, 27 Nov: new products only on Printify (no new Printful items, no printables: they looked unprofessional).
+  // Existing Printful listings stay live; personalized designs need Printful, so they wait.
   if (!printifyEntries().length) await loadPrintifyCatalog();
-  const types = [...availableTypes().filter((t) => t.variants.length || t.digital), ...(personalized ? [] : printifyEntries())];
-  if (!types.length) throw new Error("No product type is ready: run printful_setup and catalog_setup first.");
+  const types = NEW_ON_PRINTIFY_ONLY ? printifyEntries() : [...availableTypes().filter((t) => t.variants.length || t.digital), ...printifyEntries()];
+  if (!types.length) throw new Error("Printify is not ready: run printify_setup first.");
   const physical = types.filter((t) => !t.digital);
   const printable = personalized ? undefined : types.find((t) => t.digital);
   const perDesign = Math.max(1, Math.min(config.pod.productsPerDesign, physical.length));
