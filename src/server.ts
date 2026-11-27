@@ -16,6 +16,7 @@ import { ChatUnavailableError, chatHistory, sendChat } from "./chat.js";
 import { buildBusinessDetail, buildDashboard } from "./dashboard.js";
 import { db, getSetting, setSetting } from "./db.js";
 import { LAUNCH, LAUNCH_KEY, type LaunchStatus } from "./routifyLaunch.js";
+import { routifyEventMessage, routifyTokenOk } from "./lib/routifyEvents.js";
 import * as etsy from "./integrations/etsy.js";
 import * as ebay from "./integrations/ebay.js";
 import * as meta from "./integrations/meta.js";
@@ -150,6 +151,22 @@ app.post("/api/ideas/:id/:vote", requireAdmin, async (req, res) => {
 });
 
 // Jarne uploads Etsy Stats / Etsy Ads exports (CSV, Excel, screenshots, PDF) and/or a note.
+// Routify reports tester feedback and server errors here (signed with the stats token); Jarne gets them on Telegram.
+app.post("/api/routify/event", async (req, res) => {
+  if (!routifyTokenOk(req.headers["x-stats-token"], config.routify.statsToken)) {
+    res.status(401).json({ error: "unauthorized" });
+    return;
+  }
+  const text = routifyEventMessage((req.body ?? {}) as Record<string, unknown>);
+  if (!text) {
+    res.status(400).json({ error: "kind must be feedback or error, with a message" });
+    return;
+  }
+  await notify(text);
+  await agentLogger("routify").info(text.slice(0, 500));
+  res.json({ ok: true });
+});
+
 app.post("/api/marketing/etsy-stats", requireAdmin, async (req, res) => {
   const body = req.body as { attachments?: Attachment[]; note?: string };
   const files = Array.isArray(body.attachments) ? body.attachments : [];
