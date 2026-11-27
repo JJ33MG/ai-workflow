@@ -121,6 +121,7 @@ export const LAUNCH: LaunchItem[] = [
 
 /** Ideas from earlier talks and new ones: not planned yet. */
 export const IDEAS: { title: string; detail: string }[] = [
+  { title: "Wandelroutes bij je stops (idee van Jarne, 27 nov)", detail: "Veel roadtrippers stoppen een nacht of een paar uur en gaan wandelen (bv. Brussel–Luxemburg–Zwitserland). In de trip: wandelroutes rond je overnachting of een gem, met lengte, hoogtemeters en de gems onderweg. Nog uit te werken met Jarne (bron van routes, gratis of Plus)." },
   { title: "Elektrische auto: bereik en laadpalen", detail: "Laadstops op de route op basis van het bereik van je auto; daarna de camper met elektrische aandrijving." },
   { title: "Live verkeer (TomTom)", detail: "Files en wegwerkzaamheden op de dag van vertrek." },
   { title: "Beperkingen voor campers", detail: "Hoogte, gewicht en breedte: tunnels, smalle bergwegen en ZTL-zones vermijden." },
