@@ -19,20 +19,20 @@ export interface RoutifyConfig {
 export const isRoutifyConfigured = (c: RoutifyConfig = config.routify) => Boolean(c.url && c.statsToken);
 
 export async function fetchRoutifyStats(c: RoutifyConfig = config.routify, fetchImpl: typeof fetch = fetch): Promise<RoutifyStats> {
-  if (!isRoutifyConfigured(c)) throw new Error("Routify is niet ingesteld: zet ROUTIFY_URL en ROUTIFY_STATS_TOKEN in Railway.");
+  if (!isRoutifyConfigured(c)) throw new Error("RoamGem is niet ingesteld: zet ROUTIFY_URL en ROUTIFY_STATS_TOKEN in Railway.");
   const res = await fetchImpl(`${c.url.replace(/\/+$/, "")}/api/stats`, {
     headers: { "x-stats-token": c.statsToken },
     signal: AbortSignal.timeout(15_000),
   });
-  if (res.status === 401) throw new Error("Routify weigert de sleutel: ROUTIFY_STATS_TOKEN moet gelijk zijn aan STATS_TOKEN van Routify.");
-  if (!res.ok) throw new Error(`Routify-cijfers ophalen mislukt (HTTP ${res.status}).`);
+  if (res.status === 401) throw new Error("RoamGem weigert de sleutel: ROUTIFY_STATS_TOKEN moet gelijk zijn aan STATS_TOKEN van RoamGem.");
+  if (!res.ok) throw new Error(`RoamGem-cijfers ophalen mislukt (HTTP ${res.status}).`);
   const body = (await res.json().catch(() => null)) as RoutifyStats | null;
-  if (!isStats(body)) throw new Error("Routify gaf een onverwacht antwoord op /api/stats.");
+  if (!isStats(body)) throw new Error("RoamGem gaf een onverwacht antwoord op /api/stats.");
   return body;
 }
 
 export const routifyLine = (s: RoutifyStats) =>
-  `Routify: ${s.users.last7d} nieuwe gebruikers, ${s.trips.last7d} trips, ${s.plus} Plus, ${s.affiliateClicks.last7d} affiliate-kliks deze week`;
+  `RoamGem: ${s.users.last7d} nieuwe gebruikers, ${s.trips.last7d} trips, ${s.plus} Plus, ${s.affiliateClicks.last7d} affiliate-kliks deze week`;
 
 const isCount = (n: unknown) => typeof n === "number" && Number.isFinite(n);
 

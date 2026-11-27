@@ -356,7 +356,7 @@ describe.skipIf(!url)("with database", async () => {
     const log = { info: async (m: string) => void logged.push(m), warn: async () => {}, error: async () => {} };
     await syncRoutifyStats({ log }, { url: "https://routify.test", statsToken: "t" }, fake);
     expect(await getSetting("routify.stats")).toEqual(stats);
-    expect(logged).toEqual(["Routify: 3 nieuwe gebruikers, 4 trips, 1 Plus, 7 affiliate-kliks deze week"]);
+    expect(logged).toEqual(["RoamGem: 3 nieuwe gebruikers, 4 trips, 1 Plus, 7 affiliate-kliks deze week"]);
     expect((await collectBriefingData()).routify).toEqual(stats);
   });
 });

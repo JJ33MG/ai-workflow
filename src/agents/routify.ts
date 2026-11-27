@@ -1,4 +1,4 @@
-// Routify reports in: once a day the Brain reads the app's numbers so the dashboard and the
+// RoamGem reports in: once a day the Brain reads the app's numbers so the dashboard and the
 // morning briefing show users, trips, Plus members and affiliate clicks next to the shops.
 import { z } from "zod";
 import { config } from "../config.js";
@@ -15,7 +15,7 @@ export const ROUTIFY_STATS_KEY = "routify.stats";
 
 export async function syncRoutifyStats({ log }: Pick<TaskContext, "log">, c: RoutifyConfig = config.routify, fetchImpl: typeof fetch = fetch) {
   // Not set up yet: nothing to read, and not a failure for the Debug Agent to chase.
-  if (!isRoutifyConfigured(c)) return { skipped: "Routify is niet ingesteld" };
+  if (!isRoutifyConfigured(c)) return { skipped: "RoamGem is niet ingesteld" };
   const stats = await fetchRoutifyStats(c, fetchImpl);
   await setSetting(ROUTIFY_STATS_KEY, stats);
   await log.info(routifyLine(stats));
@@ -23,10 +23,10 @@ export async function syncRoutifyStats({ log }: Pick<TaskContext, "log">, c: Rou
 }
 
 const ABOUT =
-  "Routify is a road-trip planner for Europe (car, electric car, campervan, caravan). It plans the route in seconds, shows real costs per day " +
+  "RoamGem is a road-trip planner for Europe (car, electric car, campervan, caravan). It plans the route in seconds, shows real costs per day " +
   "(fuel, tolls, vignettes, low-emission zones), places to sleep, and 'gems' on the way that are checked on Google (real place, rating, photo), " +
-  "plus experiences for families, couples and friends. Core message: AI suggests, Routify checks. Free plan, Plus (EUR 9/month or 59/year), Trip pass (EUR 4.99). " +
-  "Soft launch mid-December 2026. Accounts are in Routify's name, never the founder's.";
+  "plus experiences for families, couples and friends. Core message: AI suggests, RoamGem checks. Free plan, Plus (EUR 9/month or 59/year), Trip pass (EUR 4.99). " +
+  "Soft launch mid-December 2026. Accounts are in RoamGem's name, never the founder's.";
 
 /** Once a week: what goes viral now on TikTok, Reels and Shorts for travel and apps (Grok on X, Claude on the web). */
 async function viralResearch({ log, taskId }: TaskContext) {
@@ -60,11 +60,11 @@ async function viralResearch({ log, taskId }: TaskContext) {
     purpose: "routify_playbook",
     effort: "medium",
     schema: PlaybookSchema,
-    system: `You are the head of short-video marketing for Routify. ${ABOUT} Turn research into a practical playbook in English. No fake reviews, fake accounts, bots or misleading claims.`,
-    prompt: `Research notes:\n${web.text}\n\n${xNotes ? `X notes:\n${xNotes}` : ""}\n\nWrite the playbook: 5-8 formats that fit Routify (with why, a real example and how Routify does it), 10 hooks, do's, don'ts, best posting times (Europe), current trends.`,
+    system: `You are the head of short-video marketing for RoamGem. ${ABOUT} Turn research into a practical playbook in English. No fake reviews, fake accounts, bots or misleading claims.`,
+    prompt: `Research notes:\n${web.text}\n\n${xNotes ? `X notes:\n${xNotes}` : ""}\n\nWrite the playbook: 5-8 formats that fit RoamGem (with why, a real example and how RoamGem does it), 10 hooks, do's, don'ts, best posting times (Europe), current trends.`,
   });
   await setSetting(PLAYBOOK_KEY, { ...playbook, at: new Date().toISOString() });
-  await notify(`📈 Routify viral-playbook bijgewerkt\n${playbook.formats.slice(0, 5).map((f) => `• ${f.name}: ${f.forRoutify}`).join("\n")}\nHooks: ${playbook.hooks.slice(0, 3).join(" | ")}`);
+  await notify(`📈 RoamGem viral-playbook bijgewerkt\n${playbook.formats.slice(0, 5).map((f) => `• ${f.name}: ${f.forRoutify}`).join("\n")}\nHooks: ${playbook.hooks.slice(0, 3).join(" | ")}`);
   await log.info(`Viral-playbook: ${playbook.formats.length} formats, ${playbook.hooks.length} hooks`, undefined, taskId);
   return { formats: playbook.formats.length };
 }
@@ -79,30 +79,32 @@ async function videoPlans({ log, taskId }: TaskContext, count = 3) {
     effort: "medium",
     schema: z.object({ plans: z.array(VideoPlanSchema) }),
     system:
-      `You are Routify's short-video director. ${ABOUT} Plan vertical videos (9:16, 12-30 s) that look premium: clean motion, ` +
+      `You are RoamGem's short-video director. ${ABOUT} Plan vertical videos (9:16, 12-30 s) that look premium: clean motion, ` +
       "screen recordings of the real app (the globe that draws the route, the day blocks, costs, checked gems), real places and real numbers, " +
-      "bold short on-screen text, no talking head needed. Every claim must be true. Hook in the first 1-2 seconds. English on screen.",
+      "bold short on-screen text, no talking head needed. Every claim must be true. Hook in the first 1-2 seconds. English on screen. " +
+      "Every video has sound: name a fitting royalty-free track (mood and tempo) or a trending in-app sound in 'sound'; never silent. " +
+      "Show the community too: travellers share their own gems and photos, and the gems people love rise for everyone.",
     prompt:
       (playbook ? `This week's playbook:\n${JSON.stringify(playbook).slice(0, 6000)}\n\n` : "") +
       (phase === "teaser"
-        ? "Phase: TEASER. Routify is not public yet (soft launch mid-December). Announce it: build curiosity, show the app, ask people to follow for the launch. At least one plan uses series 'teaser'."
-        : "Phase: LIVE. Send people to plan their trip on Routify.") +
-      `\nWrite ${count} different plans, each from a different series (teaser, cost, gems, route, ai-checks, behind).`,
+        ? "Phase: TEASER. RoamGem is not public yet (soft launch mid-December). Announce it: build curiosity, show the app, ask people to follow for the launch. At least one plan uses series 'teaser'."
+        : "Phase: LIVE. Send people to plan their trip on RoamGem.") +
+      `\nWrite ${count} different plans, each from a different series (teaser, cost, gems, route, ai-checks, community, behind); about one in three plans uses 'community'.`,
   });
   const made = plans.slice(0, count);
   for (const [i, p] of made.entries()) {
-    await requestApproval({ agentId: "routify", kind: "routify_video", title: `Routify-video: ${p.title}`, details: formatVideoPlan(p, i + 1), payload: { plan: p } });
+    await requestApproval({ agentId: "routify", kind: "routify_video", title: `RoamGem-video: ${p.title}`, details: formatVideoPlan(p, i + 1), payload: { plan: p } });
   }
-  await log.info(`Routify-video's: ${made.map((p) => p.title).join(" · ")}`, undefined, taskId);
+  await log.info(`RoamGem-video's: ${made.map((p) => p.title).join(" · ")}`, undefined, taskId);
   return { plans: made.length, phase };
 }
 
 export const routifyAgent: AgentDefinition = {
   id: "routify",
-  name: "Routify",
+  name: "RoamGem",
   phase: 5,
   businessId: "roadgem",
-  description: "Leest elke ochtend de cijfers van de Routify-app en maakt de korte video's: wekelijks onderzoek naar wat viraal gaat, en videoplannen die op jouw akkoord wachten.",
+  description: "Leest elke ochtend de cijfers van de RoamGem-app en maakt de korte video's: wekelijks onderzoek naar wat viraal gaat, en videoplannen die op jouw akkoord wachten.",
   dependsOn: ["routify"],
   handlers: {
     sync_stats: (_p, ctx) => syncRoutifyStats(ctx),
@@ -110,7 +112,7 @@ export const routifyAgent: AgentDefinition = {
     video_plans: (_p, ctx) => videoPlans(ctx),
   },
   taskInfo: {
-    sync_stats: "Haalt de cijfers van de afgelopen week op bij Routify.",
+    sync_stats: "Haalt de cijfers van de afgelopen week op bij RoamGem.",
     viral_research: "Elke maandag: wat gaat nu viraal op TikTok, Reels en Shorts (Grok op X, Claude op het web) en maakt er een playbook van",
     video_plans: "Ma, wo, vr: 3 videoplannen (hook, scènes per seconde, tekst, caption, hashtags) die op jouw akkoord wachten",
   },

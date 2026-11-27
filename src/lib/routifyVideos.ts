@@ -3,7 +3,7 @@
 // already announce that the website is coming".
 import { z } from "zod";
 
-export const SERIES = ["teaser", "cost", "gems", "route", "ai-checks", "behind"] as const;
+export const SERIES = ["teaser", "cost", "gems", "route", "ai-checks", "community", "behind"] as const;
 
 export const VideoPlanSchema = z.object({
   series: z.enum(SERIES),
@@ -41,6 +41,7 @@ const SERIES_LABEL: Record<(typeof SERIES)[number], string> = {
   gems: "Gems onderweg",
   route: "Route van de week",
   "ai-checks": "AI bedenkt, RoamGem checkt",
+  community: "Community (reizigers delen hun gems)",
   behind: "Achter de schermen",
 };
 

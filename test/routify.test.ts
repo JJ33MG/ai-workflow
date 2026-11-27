@@ -37,12 +37,12 @@ describe("Routify stats", () => {
   });
 
   it("sums the week up in one Dutch line", () => {
-    expect(routifyLine(STATS)).toBe("Routify: 12 nieuwe gebruikers, 30 trips, 2 Plus, 41 affiliate-kliks deze week");
+    expect(routifyLine(STATS)).toBe("RoamGem: 12 nieuwe gebruikers, 30 trips, 2 Plus, 41 affiliate-kliks deze week");
   });
 
   it("skips quietly while Routify is not set up", async () => {
     const log = { info: async () => {}, warn: async () => {}, error: async () => {} };
-    await expect(syncRoutifyStats({ log }, { url: "", statsToken: "" })).resolves.toEqual({ skipped: "Routify is niet ingesteld" });
+    await expect(syncRoutifyStats({ log }, { url: "", statsToken: "" })).resolves.toEqual({ skipped: "RoamGem is niet ingesteld" });
   });
 
   it("refuses a reply that is not Routify's stats", async () => {
