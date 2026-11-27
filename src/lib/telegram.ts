@@ -45,6 +45,29 @@ export async function notify(text: string, buttons?: Button[][]): Promise<void> 
   }
 }
 
+export type Photo = { url: string; caption?: string };
+
+/** Telegram albums: at most 10 photos each, captions cut to 1024 characters, photos without an address skipped. */
+export function mediaGroups(photos: Photo[]): { type: "photo"; media: string; caption?: string }[][] {
+  const items = photos.filter((p) => p.url).map((p) => ({ type: "photo" as const, media: p.url, ...(p.caption ? { caption: p.caption.slice(0, 1024) } : {}) }));
+  const groups: (typeof items)[] = [];
+  for (let i = 0; i < items.length; i += 10) groups.push(items.slice(i, i + 10));
+  return groups;
+}
+
+/** Sends photos (by public URL) to Jarne's chat: one photo alone, more as albums. A failing photo never blocks the rest. */
+export async function notifyPhotos(photos: Photo[]): Promise<void> {
+  if (!isTelegramConfigured()) return;
+  for (const group of mediaGroups(photos)) {
+    try {
+      if (group.length === 1) await call("sendPhoto", { chat_id: config.telegram.chatId, photo: group[0].media, caption: group[0].caption });
+      else await call("sendMediaGroup", { chat_id: config.telegram.chatId, media: group });
+    } catch (err) {
+      console.warn(`[telegram] photos not sent: ${(err as Error).message}`);
+    }
+  }
+}
+
 export function splitMessage(text: string, max = MAX_LEN): string[] {
   const chunks: string[] = [];
   let rest = text;

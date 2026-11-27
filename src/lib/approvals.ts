@@ -1,6 +1,7 @@
 import { db } from "../db.js";
 import { formatEur, toEurCents } from "./money.js";
-import { approvalButtons, notify } from "./telegram.js";
+import { approvalButtons, notify, notifyPhotos, type Photo } from "./telegram.js";
+import * as etsy from "../integrations/etsy.js";
 
 const STATUS_NL: Record<string, string> = {
   approved: "goedgekeurd",
@@ -16,6 +17,17 @@ const executors = new Map<string, ApprovalExecutor>();
 /** Agents register what should happen when Jarne approves a given kind. */
 export function registerApprovalExecutor(kind: string, fn: ApprovalExecutor) {
   executors.set(kind, fn);
+}
+
+/** A photo per listing (Printify's mockup or the listing's main photo on Etsy), with its title and price. */
+async function listingPhotos(ids: string[]): Promise<Photo[]> {
+  const rows = await db.listing.findMany({ where: { id: { in: ids.slice(0, 20) } }, select: { title: true, priceCents: true, imageUrl: true, etsyListingId: true } });
+  const out: Photo[] = [];
+  for (const r of rows) {
+    const url = r.imageUrl ?? (r.etsyListingId ? await etsy.getLargeImageUrl(r.etsyListingId).catch(() => null) : null);
+    if (url) out.push({ url, caption: `${r.title}${r.priceCents ? ` · €${(r.priceCents / 100).toFixed(2)}` : ""}` });
+  }
+  return out;
 }
 
 export async function requestApproval(input: {
@@ -34,6 +46,9 @@ export async function requestApproval(input: {
     input.amountCents != null && input.currency
       ? ` (${formatEur(toEurCents(input.amountCents, input.currency))})`
       : "";
+  // Jarne, 27 Nov: an approval about listings first shows the products themselves, then the buttons.
+  const listingIds = Array.isArray(input.payload?.listingIds) ? (input.payload!.listingIds as string[]) : [];
+  if (listingIds.length) await notifyPhotos(await listingPhotos(listingIds)).catch(() => undefined);
   await notify(`🟡 Jouw akkoord nodig${amount}: ${input.title}\n${input.details}`, approvalButtons(approval.id, input.kind));
   return approval;
 }
