@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { config } from "../config.js";
 import { getSetting, setSetting } from "../db.js";
+import { runPrizeRound } from "./routifyPrize.js";
 import { askJson, askResearch } from "../lib/claude.js";
 import { askGrok, isGrokConfigured } from "../lib/grok.js";
 import { requestApproval } from "../lib/approvals.js";
@@ -110,11 +111,17 @@ export const routifyAgent: AgentDefinition = {
     sync_stats: (_p, ctx) => syncRoutifyStats(ctx),
     viral_research: (_p, ctx) => viralResearch(ctx),
     video_plans: (_p, ctx) => videoPlans(ctx),
+    community_prize: async (_p, ctx) => {
+      const r = await runPrizeRound();
+      await ctx.log.info(r.asked ? `RoamGem: explorer van ${r.month} ter goedkeuring gestuurd` : `RoamGem: geen prijsvraag voor ${r.month} (${r.reason})`, undefined, ctx.taskId);
+      return r;
+    },
   },
   taskInfo: {
     sync_stats: "Haalt de cijfers van de afgelopen week op bij RoamGem.",
     viral_research: "Elke maandag: wat gaat nu viraal op TikTok, Reels en Shorts (Grok op X, Claude op het web) en maakt er een playbook van",
     video_plans: "Ma, wo, vr: 3 videoplannen (hook, scènes per seconde, tekst, caption, hashtags) die op jouw akkoord wachten",
+    community_prize: "De 1e van de maand: de beste ontdekker van vorige maand; met jouw Goedkeuren krijgt die een jaar Plus",
   },
   chatTasks: ["sync_stats", "viral_research", "video_plans"],
   maxAttempts: { viral_research: 2, video_plans: 2 },

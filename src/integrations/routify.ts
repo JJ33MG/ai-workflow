@@ -48,3 +48,28 @@ function isStats(b: unknown): b is RoutifyStats {
       isCount(s.community?.pending) && isCount(s.community?.approved),
   );
 }
+
+export type PrizeWinner = { userId: string; name: string; points: number };
+
+const base = (c: RoutifyConfig) => c.url.replace(/\/+$/, "");
+
+/** The explorer of a month (YYYY-MM) on RoamGem, or null when nobody scored. */
+export async function fetchPrizeWinner(month: string, c: RoutifyConfig = config.routify, fetchImpl: typeof fetch = fetch): Promise<PrizeWinner | null> {
+  if (!isRoutifyConfigured(c)) throw new Error("RoamGem is niet ingesteld: zet ROUTIFY_URL en ROUTIFY_STATS_TOKEN in Railway.");
+  const res = await fetchImpl(`${base(c)}/api/community/prize?month=${encodeURIComponent(month)}`, { headers: { "x-stats-token": c.statsToken }, signal: AbortSignal.timeout(15_000) });
+  if (!res.ok) throw new Error(`RoamGem-winnaar ophalen mislukt (HTTP ${res.status}).`);
+  const body = (await res.json().catch(() => null)) as { winner?: PrizeWinner | null } | null;
+  return body?.winner ?? null;
+}
+
+/** Gives the winner a year of Plus (RoamGem grants each month only once). */
+export async function grantPrize(userId: string, month: string, c: RoutifyConfig = config.routify, fetchImpl: typeof fetch = fetch): Promise<{ granted: boolean }> {
+  const res = await fetchImpl(`${base(c)}/api/community/prize/grant`, {
+    method: "POST",
+    headers: { "x-stats-token": c.statsToken, "content-type": "application/json" },
+    body: JSON.stringify({ userId, month }),
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) throw new Error(`Prijs toekennen mislukt (HTTP ${res.status}).`);
+  return (await res.json()) as { granted: boolean };
+}

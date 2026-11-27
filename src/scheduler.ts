@@ -31,6 +31,7 @@ export const SCHEDULE: ScheduleEntry[] = [
   { cron: "10 8 * * *", agentId: "routify", type: "sync_stats", label: "Dagelijks om 08:10", staleAfterMin: 26 * 60 },
   { cron: "40 7 * * 1", agentId: "routify", type: "viral_research", label: "Maandag om 07:40", staleAfterMin: 8 * 24 * 60 },
   { cron: "20 9 * * 1,3,5", agentId: "routify", type: "video_plans", label: "Ma, wo, vr om 09:20", staleAfterMin: 3 * 24 * 60 },
+  { cron: "5 9 1 * *", agentId: "routify", type: "community_prize", label: "De 1e van de maand om 09:05", staleAfterMin: 32 * 24 * 60 },
   { cron: "0 9 * * 1", agentId: "marketing", type: "marketing_review", label: "Elke maandag om 09:00", staleAfterMin: 8 * 24 * 60 },
   { cron: "0 15 * * *", agentId: "marketing", type: "seo_rewrite_all", label: "Dagelijks om 15:00 (alleen nieuwe listings)", staleAfterMin: 26 * 60 },
   { cron: "0 18 * * *", agentId: "marketing", type: "pinterest_pins", label: "Dagelijks om 18:00", staleAfterMin: 26 * 60 },
