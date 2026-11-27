@@ -12,14 +12,15 @@ describe("monthly explorer prize", () => {
   });
 
   it("asks Jarne once for the winner of the month", async () => {
-    const ask = vi.fn(async () => undefined);
-    const deps = { winner: async () => ({ userId: "u1", name: "anna_roams", points: 640 }), asked: vi.fn(async () => false), ask };
+    const ask = vi.fn(async (_a: { details: string }) => undefined);
+    const deps = { winner: async () => ({ userId: "u1", name: "anna_roams", points: 640, moments: 9, likes: 290, inTrips: 12 }), asked: vi.fn(async () => false), ask };
     expect(await prizeRound("2026-11", deps)).toEqual({ asked: true, month: "2026-11" });
     expect(ask).toHaveBeenCalledWith(expect.objectContaining({
       kind: "roamgem_prize",
       title: "Explorer van november 2026: anna_roams",
       payload: { userId: "u1", month: "2026-11" },
     }));
+    expect(ask.mock.calls[0][0].details).toContain("9 momenten, 290 likes, 12 keer in een trip");
     deps.asked.mockResolvedValue(true);
     expect(await prizeRound("2026-11", deps)).toEqual({ asked: false, month: "2026-11", reason: "al gevraagd" });
     expect(ask).toHaveBeenCalledTimes(1);

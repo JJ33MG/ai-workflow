@@ -29,7 +29,7 @@ export async function prizeRound(month: string, deps: Deps) {
     agentId: "routify",
     kind: PRIZE_KIND,
     title: `Explorer van ${monthName(month)}: ${w.name}`,
-    details: `${w.name} haalde ${w.points} punten in de RoamGem-community. Een jaar RoamGem Plus geven? Pas na jouw Goedkeuren wordt het toegekend.`,
+    details: `${w.name} haalde ${w.points} punten in de RoamGem-community (${w.moments ?? 0} momenten, ${w.likes ?? 0} likes, ${w.inTrips ?? 0} keer in een trip). Een jaar RoamGem Plus geven? Pas na jouw Goedkeuren wordt het toegekend.`,
     payload: { userId: w.userId, month },
   });
   return { asked: true, month };

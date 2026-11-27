@@ -49,7 +49,7 @@ function isStats(b: unknown): b is RoutifyStats {
   );
 }
 
-export type PrizeWinner = { userId: string; name: string; points: number };
+export type PrizeWinner = { userId: string; name: string; points: number; moments?: number; likes?: number; inTrips?: number };
 
 const base = (c: RoutifyConfig) => c.url.replace(/\/+$/, "");
 
