@@ -89,6 +89,12 @@ export async function collectBriefingData(now = new Date()): Promise<BriefingDat
   };
 }
 
+/** What Claude reads for the focus bullets: money as written euros, because raw cents were read as euros (28 Nov: "€8.136"). */
+export function focusInput(d: BriefingData): string {
+  const money = (m: { yesterday: number; monthToDate: number }) => ({ yesterday: formatEur(m.yesterday), monthToDate: formatEur(m.monthToDate) });
+  return JSON.stringify({ ...d, revenue: money(d.revenue), costs: money(d.costs) });
+}
+
 export function formatBriefing(d: BriefingData, focus?: string): string {
   const net = d.revenue.monthToDate - d.costs.monthToDate;
   const pct = Math.max(0, Math.round((net / MONTHLY_GOAL_CENTS) * 100));
@@ -139,7 +145,7 @@ async function briefing(_payload: Record<string, unknown>, { log, taskId }: Task
           "You are the CEO agent of a small set of AI-run online businesses aiming for €10,000/month net profit. " +
           "Principles: cash first; one business earning before the next starts; human approval for money and risk. " +
           "Given yesterday's data, write 2–4 short bullet points in Dutch (plain text, starting with •) on what Jarne should focus on today. Be specific and honest; no filler.",
-        prompt: JSON.stringify(data),
+        prompt: focusInput(data),
       });
     } catch (err) {
       await log.warn(`CEO focus skipped: ${(err as Error).message}`, undefined, taskId);

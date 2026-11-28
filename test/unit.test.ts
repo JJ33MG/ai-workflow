@@ -177,3 +177,17 @@ describe("formatBriefing", () => {
     expect(text).toContain("Focus voor vandaag");
   });
 });
+
+describe("CEO focus input", () => {
+  it("gives Claude money as written euros, never raw cents", async () => {
+    const { focusInput } = await import("../src/agents/ceo.js");
+    const input = focusInput({
+      date: "zaterdag", revenue: { yesterday: 0, monthToDate: 2000 }, costs: { yesterday: 489, monthToDate: 8136 },
+      agents: [], incidents: [], opportunities: [], approvals: [], routify: null,
+    });
+    expect(input).toContain('"monthToDate":"€81,36"');
+    expect(input).toContain('"yesterday":"€4,89"');
+    expect(input).toContain('"monthToDate":"€20,00"');
+    expect(input).not.toContain("8136");
+  });
+});
