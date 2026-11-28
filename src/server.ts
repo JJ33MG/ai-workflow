@@ -33,6 +33,7 @@ import { designsDir } from "./lib/design.js";
 import { enqueue, enqueueOnce, requeueInterrupted } from "./lib/tasks.js";
 import { notify, startCommandPolling } from "./lib/telegram.js";
 import { startScheduler } from "./scheduler.js";
+import { startCopyFeed } from "./agents/copytrade.js";
 
 const app = express();
 // Large enough for a screenshot or a PDF sent to an agent in chat.
@@ -518,6 +519,7 @@ async function main() {
   if (!(await loadCatalog()) && hasPrintfulToken() && (await etsy.isEtsyConnected())) await enqueueOnce("etsy-pod", "catalog_setup");
   if (!(await loadPrintifyCatalog()).length && isPrintifyConfigured()) await enqueueOnce("etsy-pod", "printify_setup");
   const stopScheduler = startScheduler();
+  const stopFeed = startCopyFeed();
   const stopPolling = startCommandPolling(handleCommand, async (caption, files) => (await sendChat("ceo", caption, { attachments: files })).reply.content);
   const server = app.listen(config.port, () => {
     console.log(`AI Agency Brain listening on :${config.port} (dryRun=${config.dryRun})`);
@@ -530,6 +532,7 @@ async function main() {
     console.log("Shutting down");
     stopScheduler();
     stopPolling();
+    stopFeed();
     setTimeout(() => process.exit(0), 8000).unref();
     server.close(() => void db.$disconnect().finally(() => process.exit(0)));
     server.closeAllConnections();

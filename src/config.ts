@@ -26,6 +26,9 @@ export const config = {
   // Nothing touches a real platform or spends money while this is true.
   dryRun: bool("DRY_RUN", true),
 
+  /** FOMO trade data for the copy-trade paper test (free key at fomoapi.io). */
+  fomo: { apiKey: str("FOMO_API_KEY") },
+
   claude: {
     model: str("CLAUDE_MODEL", "claude-opus-5-5"),
   },

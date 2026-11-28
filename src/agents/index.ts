@@ -1,5 +1,6 @@
 import { db } from "../db.js";
 import { ceoAgent } from "./ceo.js";
+import { copyTradeAgent } from "./copytrade.js";
 import { debugAgent } from "./debug.js";
 import { ebayAgent } from "./ebay.js";
 import { etsyDigitalAgent } from "./etsyDigital.js";
@@ -11,7 +12,7 @@ import { scoutAgent } from "./scout.js";
 import type { AgentDefinition } from "./types.js";
 
 export const agents = new Map<string, AgentDefinition>(
-  [ceoAgent, etsyPodAgent, etsyDigitalAgent, ebayAgent, kdpColoringAgent, marketingAgent, routifyAgent, scoutAgent, debugAgent].map((a) => [a.id, a]),
+  [ceoAgent, etsyPodAgent, etsyDigitalAgent, ebayAgent, kdpColoringAgent, marketingAgent, routifyAgent, scoutAgent, copyTradeAgent, debugAgent].map((a) => [a.id, a]),
 );
 
 /** Make sure every registered agent has a row (logs and costs reference it). */

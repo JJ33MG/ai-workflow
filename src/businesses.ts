@@ -93,6 +93,16 @@ export const BUSINESSES: BusinessDefinition[] = [
     },
   },
   {
+    id: "copy-trade",
+    name: "Copy-trade (test op papier)",
+    kind: "Trading-test",
+    description: "Volgt de beste traders van FOMO 21 dagen op papier en vergelijkt 3 strategieën met gewoon SOL vasthouden. Er gaat geen geld in.",
+    phase: 1,
+    channels: ["FOMO (alleen lezen)", "DexScreener-prijzen"],
+    targetCents: [0, 0],
+    plan: "3 weken papieren test met een dagrapport op Telegram. Alleen als een strategie duidelijk wint, vraagt de Brain Jarne om live te gaan met het minimumbedrag en een harde limiet.",
+  },
+  {
     id: "kdp-coloring",
     name: "Kleurboeken",
     kind: "Zelfpublicatie",

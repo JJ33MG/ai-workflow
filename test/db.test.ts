@@ -70,7 +70,7 @@ describe.skipIf(!url)("with database", async () => {
     const d = await collectBriefingData();
     expect(d.revenue.monthToDate).toBe(2000);
     expect(d.costs.monthToDate).toBe(50);
-    expect(d.agents.map((a) => a.id).sort()).toEqual(["ceo", "debug", "ebay", "etsy-digital", "etsy-pod", "kdp-coloring", "marketing", "routify", "scout"]);
+    expect(d.agents.map((a) => a.id).sort()).toEqual(["ceo", "copytrade", "debug", "ebay", "etsy-digital", "etsy-pod", "kdp-coloring", "marketing", "routify", "scout"]);
   });
 
   it("shows an escalated task on the dashboard with its fix", async () => {

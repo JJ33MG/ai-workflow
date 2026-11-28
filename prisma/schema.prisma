@@ -275,3 +275,60 @@ model Idea {
 
   @@index([status, createdAt])
 }
+
+/// Copy-trade paper test: one buy or sell from FOMO's app feed.
+model CopyAlert {
+  id           String   @id @default(cuid())
+  eventId      String   @unique
+  userId       String
+  handle       String
+  side         String // buy | sell
+  token        String
+  tokenAddress String
+  chain        String
+  ts           DateTime
+  receivedAt   DateTime @default(now())
+  priceUsd     Float?
+  liquidityUsd Float?
+  /// What the paper trader did with it (opened 2, closed 1, skipped: chain not priced …).
+  note         String?
+
+  @@index([receivedAt])
+}
+
+/// Copy-trade paper test: one row of a daily leaderboard snapshot.
+model CopyTrader {
+  id        String   @id @default(cuid())
+  day       String // YYYY-MM-DD
+  window    String // 30d | 7d
+  rank      Int
+  userId    String
+  handle    String
+  pnlUsd    Float
+  trades    Int
+  createdAt DateTime @default(now())
+
+  @@unique([day, window, userId])
+}
+
+/// Copy-trade paper test: one paper position of one strategy.
+model CopyPosition {
+  id           String    @id @default(cuid())
+  strategy     String
+  userId       String
+  handle       String
+  token        String
+  tokenAddress String
+  chain        String
+  stakeEur     Float     @default(10)
+  entryPrice   Float
+  openedAt     DateTime  @default(now())
+  lastPrice    Float?
+  lastPriceAt  DateTime?
+  exitPrice    Float?
+  closedAt     DateTime?
+  exitReason   String?
+
+  @@index([strategy, closedAt])
+  @@index([userId, tokenAddress])
+}
