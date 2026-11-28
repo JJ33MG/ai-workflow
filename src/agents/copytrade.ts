@@ -257,7 +257,7 @@ const defaultAssess = (facts: string) =>
 export async function sendReport() {
   const text = await buildReport();
   await notify(text);
-  return { sent: true };
+  return { sent: true, health: text.split("\n").find((l) => l.startsWith("Gezondheid")) ?? "" };
 }
 
 /** Started by the server: the live feed (only with a key). */
@@ -282,7 +282,11 @@ export const copyTradeAgent: AgentDefinition = {
       return r;
     },
     mark: async () => markOpen(),
-    report: async () => sendReport(),
+    report: async (_p, ctx) => {
+      const r = await sendReport();
+      await ctx.log.info(`Copy-trade: rapport verstuurd. ${r.health}`, undefined, ctx.taskId);
+      return r;
+    },
   },
   taskInfo: {
     board: "Elke ochtend de FOMO-ranglijsten (30 en 7 dagen) ophalen en kiezen wie we volgen",
